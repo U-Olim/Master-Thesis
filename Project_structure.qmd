@@ -1,0 +1,440 @@
+﻿\begin{center}
+\Large \textbf{High-Dimensional Instrumental Variable Quantile Regression under Weak Instruments: A Monte Carlo Study}
+\end{center}
+
+This thesis studies how IVQR-based estimators behave when two problems occur jointly:
+
+1. the number of controls is large relative to sample size;
+2. the instruments are weak or moderately weak.
+   
+The objective is to compare the finite-sample performance of several IVQR-type estimators under controlled Monte Carlo designs with high-dimensional controls and varying instrument strength.
+
+a. Full-control IVQR - uses all controls in the IVQR/GMM-IVQR estimation.
+b. Post-selection IVQR - selects controls first, then runs IVQR.
+c. DML-IVQR - uses penalized quantile regression and orthogonalized moments.
+
+The central estimator is DML-IVQR, which uses Neyman-orthogonal moment conditions and regularization to reduce sensitivity to nuisance-parameter estimation.
+
+## 1. The Research Question
+
+***How reliable is DML-IVQR for estimating structural quantile treatment effects under high-dimensional controls and weak instruments?***
+
+This general question is divided into four more specific questions:
+
+1. How does IVQR perform when the number of controls is large relative to the sample size?
+
+2. At what level of instrument strength does IVQR inference begin to break down?
+
+3. Does using regularization improve IVQR performance compared with using all controls?
+
+4. Are weak-instrument problems more severe at tail quantiles than at the median?
+
+
+## 2. The Model.
+
+We use a partially linear structural IVQR framework. The main object of interest is the structural quantile treatment effect: $\alpha(\tau)$, $\qquad \tau \in \{0.25, 0.50, 0.75\}$.
+
+The structural quantile function is written as:
+$$
+q_{\tau}(D, W) = \alpha(\tau)D + g_{\tau}(W),
+$$
+where $\alpha(\tau)$ is the target structural quantile treatment effect and $g_{\tau}(W)$ is an unknown nuisance function.
+
+The nuisance function $g_{\tau}(W)$ is approximated by a high-dimensional dictionary of technical controls $g_{\tau}(W) \approx X'\beta(\tau)$, where $X = h(W)$. Working IVQR specification becomes:
+$$
+q_{\tau}(D, W) \approx \alpha(\tau)D + X'\beta(\tau).
+$$
+
+**IVQR Moment Condition**
+
+Identification is based on the IVQR conditional moment restriction
+$$
+P\left[Y \leq D\alpha(\tau) + X'\beta(\tau) \mid X, Z \right] = \tau.
+$$
+Equivalently,
+$$
+E\left[\tau - \mathbf{1}\{Y \leq D\alpha(\tau) + X'\beta(\tau)\} \mid X, Z \right] = 0.
+$$
+For estimation, this conditional moment restriction can be transformed into unconditional moments:
+$$
+E\left[
+\left(
+\tau - \mathbf{1}\{Y \leq D\alpha(\tau) + X'\beta(\tau)\}
+\right)
+\Psi(X, Z)
+\right] = 0,
+$$
+where $\Psi(X, Z)$ is a vector of instruments and functions of the controls.
+
+The low-dimensional parameter of interest is $\alpha(\tau)$, while $\beta(\tau)$ is a high-dimensional nuisance parameter.
+
+**Endogeneity**
+
+The treatment variable $D$ is endogenous. This means that $D$ is correlated with unobserved determinants of the outcome $Y$. Because of this endogeneity, ordinary quantile regression is generally not valid for estimating the structural quantile treatment effect $\alpha(\tau)$.
+
+The instrumental variable $Z$ is used to address this problem. The instrument must affect the endogenous treatment $D$, but it should not directly affect the outcome $Y$ except through $D$. The causal structure can be summarized as:
+$$
+Z \rightarrow D \rightarrow Y.
+$$
+The excluded direct path
+$$
+Z \rightarrow Y
+$$
+is ruled out by the instrumental variable assumption.
+
+**Weak-Instrument Design**
+
+In the Monte Carlo design, instrument strength is controlled through the first-stage equation
+$$
+D = \pi Z + X'\gamma + v,
+$$
+where $\pi \in \{1.0, 0.5, 0.25, 0.10\}$ measures the strength of the instrument.
+
+As $\pi$ decreases, the relationship between $Z$ and $D$ becomes weaker. This allows the thesis to study when IVQR-based estimation and inference begin to deteriorate.
+
+## 3. Estimators
+
+We compare three IVQR-based estimators:
+
+1. Full-control IVQR;
+2. Post-selection IVQR;
+3. DML-IVQR.
+
+All three estimators target the same structural quantile treatment effect,
+$$
+\alpha(\tau), \qquad \tau \in \{0.25, 0.50, 0.75\}.
+$$
+They differ in how they handle the high-dimensional nuisance component $X'\beta(\tau)$.
+
+**Full-Control IVQR**
+
+The Full-control IVQR estimator uses the complete set of technical controls $X$ in the IVQR estimation. For each quantile $\tau$, the working model is
+$$
+q_{\tau}(D,W) \approx \alpha(\tau)D + X'\beta(\tau).
+$$
+The estimator solves the sample analogue of the IVQR moment condition using all available controls:
+$$
+\widehat{\alpha}_{Full}(\tau)
+=
+\arg\min_{a \in \mathcal{A}}
+\widehat{g}_{n}(a)' \widehat{\Sigma}(a)^{-1} \widehat{g}_{n}(a),
+$$
+where
+$$
+\widehat{g}_{n}(a)
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left(
+\tau - \mathbf{1}\{Y_i \leq D_i a + X_i'\widehat{\beta}(a)\}
+\right)
+\Psi(X_i,Z_i).
+$$
+Here, $\widehat{\beta}(a)$ is obtained by profiling out the nuisance coefficient for each candidate value $a$ of the structural parameter.
+
+The main advantage of Full-control IVQR is that it does not discard potentially relevant controls. It uses the full information contained in the control dictionary.
+
+However, its main weakness is high-dimensional instability. When the number of controls $p$ is large relative to the sample size $n$, estimating $\beta(\tau)$ can become noisy, unstable, or computationally difficult. This nuisance-estimation error may contaminate estimation of $\alpha(\tau)$. Therefore, Full-control IVQR is useful as a benchmark.
+
+**Post-Selection IVQR**
+
+The Post-selection IVQR estimator uses a two-step procedure.
+
+First, a regularization method is used to select a subset of controls from the high-dimensional dictionary $X$. Denote the selected set by $\widehat{S}_{\tau} \subset \{1,\ldots,p\}$. The selected control vector is $X_{\widehat{S}_{\tau}}$.
+
+Second, IVQR is estimated using only the selected controls:
+$$
+q_{\tau}(D,W)
+\approx
+\alpha(\tau)D + X_{\widehat{S}_{\tau}}'\beta_{\widehat{S}_{\tau}}(\tau).
+$$
+The estimator is therefore
+$$
+\widehat{\alpha}_{PS}(\tau)
+=
+\arg\min_{a \in \mathcal{A}}
+\widehat{g}_{PS,n}(a)' \widehat{\Sigma}_{PS}(a)^{-1} \widehat{g}_{PS,n}(a),
+$$
+where
+$$
+\widehat{g}_{PS,n}(a)
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left(
+\tau - \mathbf{1}
+\{Y_i \leq D_i a + X_{i,\widehat{S}_{\tau}}'\widehat{\beta}_{\widehat{S}_{\tau}}(a)\}
+\right)
+\Psi(X_{i,\widehat{S}_{\tau}},Z_i).
+$$
+
+The purpose of Post-selection IVQR is to reduce dimensionality before estimating the IVQR model. This may improve numerical stability and reduce overfitting relative to Full-control IVQR.
+
+The main weakness is that the first-stage selection step can make mistakes. Relevant controls may be excluded, or irrelevant controls may be included. That is why, Post-selection IVQR is used as an intermediate estimator between Full-control IVQR and DML-IVQR.
+
+**DML-IVQR**
+
+The DML-IVQR estimator is the central estimator of the thesis.
+
+Its purpose is to estimate the low-dimensional structural quantile treatment effect $\alpha(\tau)$ in the presence of high-dimensional nuisance parameters.
+
+The key idea is to use an orthogonalized IVQR moment condition of the form
+$$
+E[g_{\tau}(V,\alpha(\tau),\eta(\tau))] = 0,
+$$
+where $V = (Y,D,Z,X)$ and $\eta(\tau)$ collects nuisance parameters such as $\beta(\tau)$ and additional components used to residualize or orthogonalize the instruments.
+
+A generic DML-IVQR score can be written as
+$$
+g_{\tau}(V,\alpha,\eta)
+=
+\left(
+\tau - \mathbf{1}\{Y \leq D\alpha + X'\beta\}
+\right)
+\Psi(\alpha,\delta),
+$$
+where $\Psi(\alpha,\delta) = Z - \delta(\alpha)X$.
+
+The nuisance parameter $\delta(\alpha)$ adjusts the instrument by removing the part that is explained by the controls. This produces an orthogonalized moment condition that is less sensitive to first-order errors in nuisance-parameter estimation.
+
+The DML-IVQR estimator uses regularized methods to estimate the nuisance components. For each candidate value $a$ of $\alpha(\tau)$, the nuisance coefficient $\beta(a)$ is estimated by penalized quantile regression:
+$$
+\widehat{\beta}(a)
+=
+\arg\min_{b}
+\frac{1}{n}
+\sum_{i=1}^{n}
+\rho_{\tau}
+\left(
+Y_i - D_i a - X_i'b
+\right)
++
+\lambda
+\sum_{j=1}^{p}
+\widehat{\sigma}_j |b_j|,
+$$
+where $\rho_{\tau}(\cdot)$ is the quantile check loss function, $\lambda$ is a penalty parameter, and $\widehat{\sigma}_j$ is a scale normalization factor.
+
+The sample moment is
+$$
+\widehat{g}_{DML,n}(a)
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left(
+\tau - \mathbf{1}
+\{Y_i \leq D_i a + X_i'\widehat{\beta}(a)\}
+\right)
+\widehat{\Psi}_i(a),
+$$
+where $\widehat{\Psi}_i(a)=Z_i - \widehat{\delta}(a)X_i$.
+
+The DML-IVQR estimator is then obtained by minimizing a GMM-type criterion:
+$$
+\widehat{\alpha}_{DML}(\tau)
+=
+\arg\min_{a \in \mathcal{A}}
+n
+\widehat{g}_{DML,n}(a)'
+\widehat{\Sigma}_{DML}(a)^{-1}
+\widehat{g}_{DML,n}(a).
+$$
+The main advantage of DML-IVQR is that it combines three ideas:
+
+1. regularization for high-dimensional nuisance estimation;
+2. orthogonalized moment conditions to reduce first-order sensitivity to nuisance-estimation error;
+3. weak-identification robust inference through a grid-search or GMM-type objective.
+
+The expected benefit is that DML-IVQR should be more stable than Full-control IVQR when $p$ is large and should be less sensitive to variable-selection mistakes than simple Post-selection IVQR.
+
+Its weakness is computational complexity. It requires tuning choices, penalized quantile regression, instrument residualization, and repeated optimization over candidate values of $\alpha(\tau)$. Therefore, numerical stability must be evaluated explicitly in the Monte Carlo study.
+
+## 4. Performance Measures
+
+The main performance measures are: Bias, Median Bias, RMSE, MAE, Coverage, Confidence interval/region length, Non convergence rate.
+
+## 5. Monte Carlo Design
+
+**DGP 1: Baseline Sparse Gaussian Design**
+
+For each Monte Carlo replication, observations are generated as 
+$$\{Y_i, D_i, Z_i, X_i\}_{i=1}^{n}
+\qquad i = 1,\ldots,n.
+$$
+Here, $Y_i$ is the outcome, $D_i$ is the endogenous regressor, $Z_i$ is the instrument, and $X_i$ is a $p$-dimensional vector of controls.
+
+The controls are generated as $X_i = (X_{i1},\ldots,X_{ip})'$, with $X_i \sim N(0, \Sigma_X)$. The covariance matrix $\Sigma_X$ follows an autoregressive correlation structure:
+$$
+(\Sigma_X)_{jk} = \rho_X^{|j-k|},
+\qquad \rho_X = 0.5.
+$$
+This creates correlation among controls and makes the simulation more realistic than a design with fully independent covariates.
+
+The instrument is generated as $Z_i \sim N(0,1)$, independently of $X_i$ and the structural disturbances.
+
+The structural disturbances are generated as a bivariate normal vector with $\rho_{uv} = 0.5$:
+$$
+\begin{pmatrix}
+u_i \\
+v_i
+\end{pmatrix}
+\sim
+N
+\left(
+0,
+\begin{pmatrix}
+1 & \rho_{uv} \\
+\rho_{uv} & 1
+\end{pmatrix}
+\right),
+$$
+
+The correlation between $u_i$ and $v_i$ creates endogeneity. Since $D_i$ depends on $v_i$, and $v_i$ is correlated with $u_i$, the treatment variable is correlated with unobserved determinants of the outcome.
+
+The outcome is generated as $Y_i = 1 + X_i'\beta + D_i(1 + u_i)$. This specification implies a structural quantile function of the form $q_{\tau}(D_i,X_i)=1 + X_i'\beta + D_i\alpha_0(\tau)$, where the true structural quantile treatment effect is
+$$
+\alpha_0(\tau) = 1 + \Phi^{-1}(\tau).
+$$
+Therefore, for the three quantiles used in the thesis, $\tau \in \{0.25,0.50,0.75\}$, the true treatment effects are:
+
+| Quantile $\tau$ | True value $\alpha_0(\tau)$ |
+|---:|---:|
+| $0.25$ | approximately $0.326$ |
+| $0.50$ | $1.000$ |
+| $0.75$ | approximately $1.674$ |
+
+This design creates heterogeneous structural quantile effects. The effect of $D_i$ differs across the conditional outcome distribution, which is exactly the reason for using IVQR instead of mean-based IV methods.
+
+**DGP 2: Weaker Sparsity Design**
+
+DGP 2 keeps the same structure as DGP 1 but makes the nuisance component less sparse. This is done by increasing the number of relevant controls to $s = 20$.
+
+The coefficient vectors are $\beta_j = \begin{cases} 0.5/\sqrt{j}, & j=1,\ldots,s,\\ 0, & j>s, \end{cases}$
+
+and $\gamma_j = \begin{cases} 0.4/\sqrt{j}, & j=1,\ldots,s,\\ 0, & j>s. \end{cases}$.
+
+This design tests whether the estimators remain reliable when the approximate sparsity assumption becomes weaker.
+
+**DGP 3: Heavy-Tailed Error Design**
+
+DGP 3 keeps the same structural equations as DGP 1, but replaces Gaussian disturbances with heavy-tailed disturbances. The purpose is to test whether estimator performance deteriorates when extreme observations are more likely.
+
+A simple implementation is to generate $u_i$ and $v_i$ from scaled Student-$t$ disturbances with five degrees of freedom, while preserving positive correlation between them.
+
+This design is used as a robustness check for the tail quantile results.
+
+### Simulation Scenarios
+$n \in \{250, 500, 1000\},$ and $p \in \{200, 300, 500\}$.
+
+$R=1000$ Monte Carlo replications.
+
+## 6. Estimators Computed in Each Replication
+
+For each replication, quantile level, and simulation scenario, the following estimators are computed: $\widehat{\alpha}_ {Full}(\tau), \widehat{\alpha}_{PS}(\tau), \widehat{\alpha}_{DML}(\tau)$. 
+
+The estimators are compared to the true value $\alpha_0(\tau) = 1 + \Phi^{-1}(\tau)$.
+
+The same simulated dataset is used for all three estimators within a given replication. This ensures that performance differences are due to estimator behavior rather than differences in simulated samples.
+
+For the DML-IVQR estimator, nuisance components are estimated using $K$-fold cross-fitting with $K = 5$.
+
+In each fold, the nuisance parameters are estimated using the observations outside the fold and then evaluated on the held-out fold. The fold-specific orthogonal moments are then combined to estimate $\alpha(\tau)$. Cross-fitting is used only inside the DML-IVQR estimator. Full-control IVQR and Post-selection IVQR are estimated on the full simulated sample without cross-fitting.
+
+**Performance Measures**
+
+Let $\widehat{\alpha}_r(\tau)$ denote the estimate in replication $r$, and let $\alpha_0(\tau)$ denote the true structural quantile treatment effect. Then:
+$$
+Bias(\tau)
+=
+\frac{1}{R}
+\sum_{r=1}^{R}
+\left(
+\widehat{\alpha}_r(\tau) - \alpha_0(\tau)
+\right).
+$$
+$$
+Median\ Bias(\tau)
+=
+median_{r=1,\ldots,R}
+\left(
+\widehat{\alpha}_r(\tau) - \alpha_0(\tau)
+\right).
+$$
+$$
+RMSE(\tau)
+=
+\sqrt{
+\frac{1}{R}
+\sum_{r=1}^{R}
+\left(
+\widehat{\alpha}_r(\tau) - \alpha_0(\tau)
+\right)^2
+}.
+$$
+$$
+MAE(\tau)
+=
+\frac{1}{R}
+\sum_{r=1}^{R}
+\left|
+\widehat{\alpha}_r(\tau) - \alpha_0(\tau)
+\right|.
+$$
+$$
+Coverage(\tau)
+=
+\frac{1}{R}
+\sum_{r=1}^{R}
+\mathbf{1}
+\left\{
+\alpha_0(\tau) \in CI_r(\tau)
+\right\},
+$$
+$$
+Length_r(\tau)
+=
+Upper_r(\tau) - Lower_r(\tau),
+$$
+$$
+Average\ Length(\tau)
+=
+\frac{1}{R}
+\sum_{r=1}^{R}
+Length_r(\tau).
+$$
+$$
+Non\text{-}convergence\ Rate
+=
+\frac{
+Number\ of\ failed\ replications
+}{
+R
+}.
+$$
+
+## 7. Expected Results
+
+**High-Dimensional Controls**
+
+As the number of controls $p$ increases relative to the sample size $n$, Full-control IVQR is expected to become less stable. This may appear through larger RMSE, wider confidence regions, or higher non-convergence rates.
+
+Post-selection IVQR is expected to reduce dimensionality and improve stability, but it may suffer from selection mistakes.
+
+DML-IVQR is expected to perform better in high-dimensional settings because it combines regularization with orthogonalized moments.
+
+**Weak Instruments**
+
+As the instrument-strength parameter $\pi$ decreases, all IVQR-based estimators are expected to become less reliable.
+
+Weak instruments may lead to: larger bias, RMSE and MAE; wider confidence regions; lower or unstable coverage.
+
+**Quantile Differences**
+
+Estimator performance may differ across quantiles. Tail quantiles, $\tau = 0.25 \quad \text{and} \quad \tau = 0.75$, are expected to be more difficult than the median, $\tau = 0.50$. This is because tail quantiles are more sensitive to extreme observations and may have weaker identification.
+
+An estimator is considered better only if it has:
+
+1. lower bias, RMSE, and MAE;
+2. coverage close to the nominal level;
+3. reasonably short confidence intervals or regions;
+4. low non-convergence rate;
