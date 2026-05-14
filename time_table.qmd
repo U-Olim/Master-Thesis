@@ -1,0 +1,121 @@
+# Time Table for Thesis Project
+
+| Week | Main task | Output |
+|---|---|---|
+| Week 1 | Study related literature and define the structure of the thesis | Clear thesis outline and reading notes |
+| Week 2 | Write **Introduction and Related Literature** | First draft of Introduction + Literature Review |
+| Week 3 | Improve the literature section, especially weak instruments and confidence regions | Stronger literature review with focus on weak identification and robust inference |
+| Week 4 | Write the theoretical framework: IVQR, structural quantile effects, identification assumptions | Draft of Methodology section |
+| Week 5 | Write the simulation design: DGPs, parameters, true effects, estimators, and evaluation metrics | Complete Simulation Design section |
+| Weeks 6–8 | Write the full project code and run simulations | Working code, Monte Carlo results, tables, graphs |
+| Week 9 | Work with empirical data and apply the estimators | Empirical application section + preliminary results |
+| Week 10 | Write the Simulation Results section | Draft of Results section |
+| Week 11 | Write conclusion, limitations, robustness checks | Full first draft of thesis |
+| Week 12 | Final editing, formatting, references, and preparation for professor’s questions | Final version + defence notes |
+
+
+**Week 1 — Literature Preparation**
+
+Study the main related literature:
+
+- IVQR model and structural quantile treatment effects.
+- DML and Neyman orthogonality.
+- DML-IVQR with high-dimensional controls.
+- Weak instruments and weak-identification robust inference.
+
+**Week 2 — Introduction and Related Literature**
+
+Write:
+
+- motivation of the thesis;
+- research questions;
+- why IVQR is useful;
+- why high-dimensional controls create a problem;
+- why DML/post-selection methods are relevant.
+
+**Week 3 — Weak Instruments and Confidence Regions**
+
+Add a focused discussion on:
+
+- weak instruments in IVQR;
+- why point estimates may be unreliable under weak identification;
+- why confidence intervals may be misleading;
+- why weak-identification robust confidence regions are important.
+
+**Week 4 — Methodology**
+
+Write the methodology section:
+
+- standard IVQR;
+- full-control IVQR;
+- post-selection IVQR;
+- DML-IVQR;
+- role of high-dimensional controls;
+- role of orthogonal moments.
+
+DML is based on sample splitting/cross-fitting and Neyman orthogonality, which makes inference less sensitive to first-stage nuisance estimation.
+
+**Week 5 — Simulation Design**
+
+Fix the complete simulation design:
+
+- DGP1: baseline design;
+- DGP2: higher sparsity / more relevant controls;
+- DGP3: weak instruments;
+- sample sizes;
+- number of controls;
+- number of Monte Carlo repetitions;
+- true structural quantile treatment effect;
+- metrics: median bias, MAE, RMSE, non-convergence rate, possibly coverage.
+
+**Weeks 6–8 — Coding and Running Simulations**
+
+Use three full weeks for:
+
+- writing clean code;
+- testing each estimator separately;
+- debugging convergence problems;
+- running small simulations first;
+- running full Monte Carlo simulations;
+- saving tables and graphs automatically;
+- checking whether results are stable.
+
+**Week 9 — Empirical Data**
+
+Add an empirical application:
+
+- describe the dataset;
+- define outcome, treatment, instruments, and controls;
+- apply the estimators;
+- compare empirical results with simulation findings;
+- discuss whether the empirical results show signs of weak identification.
+
+**Week 10 — Simulation Results**
+
+Write the results section:
+
+- compare estimators across DGPs;
+- explain bias, MAE, RMSE, and convergence;
+- discuss performance under weak instruments;
+- interpret confidence regions;
+- explain why DML-IVQR should perform better with many controls.
+
+**Week 11 — Conclusion and Limitations**
+
+Write:
+
+- main findings;
+- what DML-IVQR improves;
+- where it still fails;
+- limitations: computational cost, convergence, weak instruments, finite-sample instability;
+- possible extensions.
+
+**Week 12 — Final Checking**
+
+Finalize:
+
+- formatting;
+- references;
+- tables;
+- appendix;
+- code documentation.
