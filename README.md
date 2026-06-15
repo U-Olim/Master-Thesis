@@ -22,11 +22,32 @@ The planned Monte Carlo design includes:
 
 ## Current Status
 
-Phase 1 architecture rewrite.
+Current status: Phase 2 complete.
 
-The repository currently contains a clean package skeleton only. Econometric logic for DGPs, estimators, inference, metrics, and simulation runners will be implemented in later phases.
+Implemented:
 
-Old prototype code has been archived in `archive_old/` so useful ideas can be recovered without mixing prototype modules into the new package.
+- Project package architecture
+- True structural quantile treatment effects
+- `SimData` object
+- DGP1, DGP2, and DGP3 data generation
+- Corrected nonseparable outcome equation
+- Phase 1/Phase 2 tests
+
+The corrected DGP outcome equation is
+
+```text
+Y_i = D_i + X_i' beta + (1 + D_i) u_i
+```
+
+This implies
+
+```text
+alpha_0(tau) = 1 + F_u^{-1}(tau).
+```
+
+For DGP1 and DGP2, `F_u` is standard normal. For DGP3, `F_u` is the scaled Student-t distribution used in the heavy-tailed design.
+
+Estimator, inference, metrics, and simulation-runner logic will be implemented in later phases.
 
 ## Installation
 

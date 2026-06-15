@@ -49,6 +49,12 @@ def test_invalid_dgp_raises_value_error() -> None:
         true_alpha(0.5, "wrong_dgp")
 
 
+@pytest.mark.parametrize("dgp", [None, 123])
+def test_non_string_dgp_raises_value_error(dgp: object) -> None:
+    with pytest.raises(ValueError):
+        true_alpha(0.5, dgp)  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize("df", [2, 1])
 def test_invalid_student_t_degrees_of_freedom_raise_value_error(df: int) -> None:
     with pytest.raises(ValueError):

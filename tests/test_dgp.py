@@ -89,6 +89,22 @@ def test_dgp3_errors_are_finite() -> None:
     assert np.all(np.isfinite(v))
 
 
+def test_dgp3_has_heavier_structural_error_tails_than_dgp1() -> None:
+    design_dgp1 = Design(dgp="dgp1", n=20_000, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
+    design_dgp3 = Design(dgp="dgp3", n=20_000, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
+
+    data_dgp1 = generate_data(design_dgp1)
+    data_dgp3 = generate_data(design_dgp3)
+
+    assert data_dgp1.u is not None
+    assert data_dgp3.u is not None
+
+    tail_dgp1 = np.mean(np.abs(data_dgp1.u) > 3.0)
+    tail_dgp3 = np.mean(np.abs(data_dgp3.u) > 3.0)
+
+    assert tail_dgp3 > tail_dgp1
+
+
 def test_full_data_generation_shapes() -> None:
     design = Design(dgp="dgp1", n=100, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
 
@@ -110,6 +126,16 @@ def test_binary_treatment() -> None:
     data = generate_data(design)
 
     assert set(np.unique(data.d)).issubset({0, 1})
+
+
+@pytest.mark.parametrize("pi", [1.0, 0.5, 0.25, 0.10])
+def test_treatment_share_is_nondegenerate_for_dgp1(pi: float) -> None:
+    design = Design(dgp="dgp1", n=2000, p=50, pi=pi, tau=0.5, rep=0, seed=123)
+
+    data = generate_data(design)
+    share = data.d.mean()
+
+    assert 0.10 < share < 0.90
 
 
 def test_generate_data_is_reproducible() -> None:
@@ -204,6 +230,15 @@ def test_dgp3_outcome_is_invariant_to_tau_for_same_seed() -> None:
 def test_invalid_dgp_raises_value_error() -> None:
     with pytest.raises(ValueError):
         generate_coefficients("wrong_dgp", p=10)
+
+
+def test_non_string_dgp_raises_value_error() -> None:
+    rng = np.random.default_rng(123)
+
+    with pytest.raises(ValueError):
+        generate_coefficients(None, p=20)  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        generate_errors(123, n=100, rho_uv=0.5, df=5, rng=rng)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("n", [0, -1])

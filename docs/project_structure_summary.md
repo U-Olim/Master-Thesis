@@ -11,6 +11,31 @@ This repository uses a `src/` package layout. The main package is `ivqr_sim`.
 - `estimators/`: Full-control IVQR, Post-selection IVQR, and DML-IVQR.
 - `simulation/`: design identifiers, runner orchestration, and aggregation.
 - `reporting/`: final thesis tables and figures.
-- `tests/`: verification tests for the package architecture and later logic.
+- `tests/`: Phase 1/Phase 2 verification tests.
 
-Old prototype code is archived in `archive_old/`.
+## Current Status
+
+Phase 2 is complete.
+
+Implemented:
+
+- Project package architecture.
+- True structural quantile treatment effects.
+- `SimData` object.
+- DGP1, DGP2, and DGP3 data generation.
+- Corrected nonseparable outcome equation.
+- Phase 1/Phase 2 tests.
+
+The corrected DGP outcome equation is
+
+```text
+Y_i = D_i + X_i' beta + (1 + D_i) u_i.
+```
+
+This implies
+
+```text
+alpha_0(tau) = 1 + F_u^{-1}(tau).
+```
+
+For DGP1 and DGP2, `F_u` is standard normal. For DGP3, `F_u` is the scaled Student-t distribution used in the heavy-tailed design.

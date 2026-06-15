@@ -8,19 +8,7 @@ from scipy.stats import norm, t
 from ivqr_sim.config import DF_T, RHO_UV, RHO_X
 from ivqr_sim.data import SimData
 from ivqr_sim.simulation.design import Design
-from ivqr_sim.true_effects import true_alpha
-
-
-VALID_DGPS = {"dgp1", "dgp2", "dgp3"}
-
-
-def _normalize_dgp(dgp: str) -> str:
-    """Return a validated lowercase DGP name."""
-
-    normalized = dgp.lower()
-    if normalized not in VALID_DGPS:
-        raise ValueError(f"Unknown DGP: {dgp}")
-    return normalized
+from ivqr_sim.true_effects import _normalize_dgp, true_alpha
 
 
 def make_covariance_matrix(p: int, rho_x: float) -> np.ndarray:
