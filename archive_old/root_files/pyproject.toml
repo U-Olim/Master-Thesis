@@ -1,0 +1,8 @@
+[project]
+name = "master-thesis"
+version = "0.1.0"
+description = "Monte Carlo simulation study for high-dimensional IVQR under weak instruments."
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

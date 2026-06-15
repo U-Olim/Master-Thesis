@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# VS Code
+.vscode/
+
+# Quarto and generated outputs
+/.quarto/
+*_files/
+*.html
+
+# Generated project outputs
+results/raw/
+results/processed/
+results/logs/
+tables/
+figures/
