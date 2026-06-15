@@ -142,6 +142,65 @@ def test_median_true_alpha_is_one() -> None:
     assert data.alpha_true == pytest.approx(1.0)
 
 
+def test_data_arrays_are_invariant_to_tau_for_same_seed() -> None:
+    design_25 = Design(dgp="dgp1", n=500, p=50, pi=0.5, tau=0.25, rep=0, seed=123)
+    design_50 = Design(dgp="dgp1", n=500, p=50, pi=0.5, tau=0.50, rep=0, seed=123)
+    design_75 = Design(dgp="dgp1", n=500, p=50, pi=0.5, tau=0.75, rep=0, seed=123)
+
+    data_25 = generate_data(design_25)
+    data_50 = generate_data(design_50)
+    data_75 = generate_data(design_75)
+
+    assert np.allclose(data_25.x, data_50.x)
+    assert np.allclose(data_50.x, data_75.x)
+    assert np.allclose(data_25.z, data_50.z)
+    assert np.allclose(data_50.z, data_75.z)
+    assert np.allclose(data_25.d, data_50.d)
+    assert np.allclose(data_50.d, data_75.d)
+    assert data_25.u is not None
+    assert data_50.u is not None
+    assert data_75.u is not None
+    assert data_25.v is not None
+    assert data_50.v is not None
+    assert data_75.v is not None
+    assert np.allclose(data_25.u, data_50.u)
+    assert np.allclose(data_50.u, data_75.u)
+    assert np.allclose(data_25.v, data_50.v)
+    assert np.allclose(data_50.v, data_75.v)
+    assert np.allclose(data_25.y, data_50.y)
+    assert np.allclose(data_50.y, data_75.y)
+
+    assert data_25.alpha_true != data_50.alpha_true
+    assert data_50.alpha_true != data_75.alpha_true
+    assert data_50.alpha_true == pytest.approx(1.0)
+
+
+def test_outcome_equation_is_nonseparable_structural_design() -> None:
+    design = Design(dgp="dgp1", n=500, p=50, pi=0.5, tau=0.5, rep=0, seed=123)
+    data = generate_data(design)
+    beta = generate_coefficients("dgp1", 50)["beta"]
+
+    assert data.u is not None
+    expected_y = data.d + data.x @ beta + (1.0 + data.d) * data.u
+
+    assert np.allclose(data.y, expected_y)
+
+
+def test_dgp3_outcome_is_invariant_to_tau_for_same_seed() -> None:
+    design_25 = Design(dgp="dgp3", n=500, p=50, pi=0.5, tau=0.25, rep=0, seed=123)
+    design_50 = Design(dgp="dgp3", n=500, p=50, pi=0.5, tau=0.50, rep=0, seed=123)
+    design_75 = Design(dgp="dgp3", n=500, p=50, pi=0.5, tau=0.75, rep=0, seed=123)
+
+    data_25 = generate_data(design_25)
+    data_50 = generate_data(design_50)
+    data_75 = generate_data(design_75)
+
+    assert np.allclose(data_25.y, data_50.y)
+    assert np.allclose(data_50.y, data_75.y)
+    assert data_25.alpha_true != data_50.alpha_true
+    assert data_50.alpha_true != data_75.alpha_true
+
+
 def test_invalid_dgp_raises_value_error() -> None:
     with pytest.raises(ValueError):
         generate_coefficients("wrong_dgp", p=10)

@@ -131,6 +131,6 @@ def generate_data(design: Design) -> SimData:
     d_latent = design.pi * z + x @ gamma + v
     d = (d_latent > 0).astype(int)
     alpha = true_alpha(design.tau, design.dgp, df=DF_T)
-    y = alpha * d + x @ beta + u
+    y = d + x @ beta + (1.0 + d) * u
 
     return SimData(y=y, d=d, z=z, x=x, alpha_true=alpha, u=u, v=v)
