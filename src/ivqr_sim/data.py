@@ -1,5 +1,18 @@
-"""Data container helpers for simulation inputs and outputs.
+"""Data objects for simulated IVQR Monte Carlo samples."""
 
-TODO: Define typed data structures for generated samples once DGPs are
-implemented in Phase 2.
-"""
+from dataclasses import dataclass
+
+import numpy as np
+
+
+@dataclass
+class SimData:
+    """Container for one simulated IVQR dataset."""
+
+    y: np.ndarray
+    d: np.ndarray
+    z: np.ndarray
+    x: np.ndarray
+    alpha_true: float
+    u: np.ndarray | None = None
+    v: np.ndarray | None = None
