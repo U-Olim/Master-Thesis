@@ -52,15 +52,15 @@ def generate_coefficients(dgp: str, p: int) -> dict[str, np.ndarray]:
 
     if normalized_dgp == "dgp2":
         s = min(20, p)
-        indices = np.arange(1, s + 1)
-        values = 0.7 / np.sqrt(indices)
+        indices = np.arange(1, s + 1, dtype=float)
+        beta[:s] = 0.5 / np.sqrt(indices)
+        gamma[:s] = 0.4 / np.sqrt(indices)
     else:
         s = min(10, p)
         indices = np.arange(1, s + 1)
         values = 0.5 / indices
-
-    beta[:s] = values
-    gamma[:s] = values
+        beta[:s] = values
+        gamma[:s] = values
     return {"beta": beta, "gamma": gamma}
 
 
@@ -119,6 +119,9 @@ def generate_data(design: Design) -> SimData:
     d_latent = design.pi * z + x @ gamma + v
     d = (d_latent > 0).astype(int)
     alpha = true_alpha(design.tau, design.dgp, df=DF_T)
-    y = d + x @ beta + (1.0 + d) * u
+    # Project_structure.pdf DGP outcome:
+    # Y_i = 1 + X_i' beta + D_i(1 + u_i),
+    # which implies alpha_0(tau) = 1 + F_u^{-1}(tau).
+    y = 1.0 + x @ beta + d * (1.0 + u)
 
     return SimData(y=y, d=d, z=z, x=x, alpha_true=alpha, u=u, v=v)

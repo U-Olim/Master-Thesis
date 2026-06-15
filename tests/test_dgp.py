@@ -56,6 +56,29 @@ def test_dgp2_coefficient_sparsity() -> None:
     assert np.count_nonzero(coefs["gamma"]) == 20
 
 
+def test_dgp2_coefficients_match_project_structure() -> None:
+    coefs = generate_coefficients("dgp2", p=30)
+    beta = coefs["beta"]
+    gamma = coefs["gamma"]
+
+    assert np.count_nonzero(beta) == 20
+    assert np.count_nonzero(gamma) == 20
+
+    for j in range(1, 21):
+        assert beta[j - 1] == pytest.approx(0.5 / np.sqrt(j))
+        assert gamma[j - 1] == pytest.approx(0.4 / np.sqrt(j))
+
+    assert np.all(beta[20:] == 0.0)
+    assert np.all(gamma[20:] == 0.0)
+
+
+def test_dgp2_effective_sparsity_is_capped_by_p() -> None:
+    coefs = generate_coefficients("dgp2", p=5)
+
+    assert np.count_nonzero(coefs["beta"]) == 5
+    assert np.count_nonzero(coefs["gamma"]) == 5
+
+
 def test_dgp3_coefficient_sparsity() -> None:
     coefs = generate_coefficients("dgp3", p=30)
 
@@ -207,7 +230,7 @@ def test_outcome_equation_is_nonseparable_structural_design() -> None:
     beta = generate_coefficients("dgp1", 50)["beta"]
 
     assert data.u is not None
-    expected_y = data.d + data.x @ beta + (1.0 + data.d) * data.u
+    expected_y = 1.0 + data.x @ beta + data.d * (1.0 + data.u)
 
     assert np.allclose(data.y, expected_y)
 

@@ -36,7 +36,7 @@ Implemented:
 The corrected DGP outcome equation is
 
 ```text
-Y_i = D_i + X_i' beta + (1 + D_i) u_i
+Y_i = 1 + X_i' beta + D_i(1 + u_i)
 ```
 
 This implies
@@ -46,6 +46,15 @@ alpha_0(tau) = 1 + F_u^{-1}(tau).
 ```
 
 For DGP1 and DGP2, `F_u` is standard normal. For DGP3, `F_u` is the scaled Student-t distribution used in the heavy-tailed design.
+
+DGP2 uses effective sparsity `s = min(p, 20)` with coefficients
+
+```text
+beta_j = 0.5 / sqrt(j)
+gamma_j = 0.4 / sqrt(j)
+```
+
+for `j = 1, ..., s`, and zero coefficients for `j > s`.
 
 Estimator, inference, metrics, and simulation-runner logic will be implemented in later phases.
 
