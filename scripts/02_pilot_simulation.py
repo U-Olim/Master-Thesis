@@ -2,14 +2,65 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import warnings
 
-import numpy as np
 import pandas as pd
 from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from ivqr_sim.simulation.runner import run_pilot_simulation
+
+
+VALID_ESTIMATORS = ("full", "post_selection", "dml")
+MODE_CONFIGS = {
+    "quick": {
+        "dgp": "dgp1",
+        "n": 100,
+        "p": 20,
+        "pi": 1.0,
+        "tau": 0.5,
+        "reps": 3,
+        "alpha_grid_size": 9,
+        "quantreg_max_iter": 500,
+        "selection_cv": 3,
+        "dml_k_folds": 3,
+        "estimators": VALID_ESTIMATORS,
+        "output_path": Path("results/raw/pilot_quick_results.csv"),
+    },
+    "stress": {
+        "dgp": "dgp1",
+        "n": 250,
+        "p": 200,
+        "pi": 1.0,
+        "tau": 0.5,
+        "reps": 2,
+        "alpha_grid_size": 9,
+        "quantreg_max_iter": 500,
+        "selection_cv": 3,
+        "dml_k_folds": 3,
+        "estimators": VALID_ESTIMATORS,
+        "output_path": Path("results/raw/pilot_stress_results.csv"),
+    },
+}
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run a Phase 5A pilot simulation.")
+    parser.add_argument(
+        "--mode",
+        choices=tuple(MODE_CONFIGS),
+        default="quick",
+        help="Pilot configuration to run.",
+    )
+    parser.add_argument(
+        "--estimators",
+        nargs="+",
+        choices=VALID_ESTIMATORS,
+        default=None,
+        help="Optional estimator subset.",
+    )
+    return parser.parse_args()
 
 
 def _summarize(results: pd.DataFrame) -> pd.DataFrame:
@@ -70,23 +121,44 @@ def _print_warnings(summary: pd.DataFrame) -> None:
             )
 
 
-def main() -> None:
-    warnings.filterwarnings("ignore", category=IterationLimitWarning)
-    # Pilot grid. Final Monte Carlo may use a denser grid depending on runtime.
-    alphas = np.linspace(-1.0, 3.0, 17)
-    print(f"Pilot alpha grid: size={alphas.size}, min={alphas.min()}, max={alphas.max()}")
-
-    results = run_pilot_simulation(
-        dgp="dgp1",
-        n=250,
-        p=200,
-        pi=1.0,
-        tau=0.5,
-        reps=10,
-        alphas=alphas,
+def _print_config(mode: str, config: dict[str, object], estimators: tuple[str, ...]) -> None:
+    print(f"Pilot mode: {mode}")
+    print(
+        "Configuration: "
+        f"dgp={config['dgp']}, n={config['n']}, p={config['p']}, "
+        f"pi={config['pi']}, tau={config['tau']}, reps={config['reps']}"
+    )
+    print(
+        "Grid and controls: "
+        f"alpha_grid_size={config['alpha_grid_size']}, "
+        f"estimators={','.join(estimators)}, "
+        f"quantreg_max_iter={config['quantreg_max_iter']}"
     )
 
-    output_path = Path("results/raw/pilot_results.csv")
+
+def main() -> None:
+    args = _parse_args()
+    config = MODE_CONFIGS[args.mode]
+    estimators = tuple(args.estimators) if args.estimators is not None else config["estimators"]
+
+    warnings.filterwarnings("ignore", category=IterationLimitWarning)
+    _print_config(args.mode, config, estimators)
+
+    results = run_pilot_simulation(
+        dgp=config["dgp"],
+        n=config["n"],
+        p=config["p"],
+        pi=config["pi"],
+        tau=config["tau"],
+        reps=config["reps"],
+        estimators=estimators,
+        alpha_grid_size=config["alpha_grid_size"],
+        quantreg_max_iter=config["quantreg_max_iter"],
+        selection_cv=config["selection_cv"],
+        dml_k_folds=config["dml_k_folds"],
+    )
+
+    output_path = config["output_path"]
     output_path.parent.mkdir(parents=True, exist_ok=True)
     results.to_csv(output_path, index=False)
 

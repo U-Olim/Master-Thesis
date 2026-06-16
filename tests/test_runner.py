@@ -1,8 +1,11 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+from ivqr_sim.estimators.base import EstimationResult
 from ivqr_sim.simulation.design import Design
+from ivqr_sim.simulation import runner as runner_module
 from ivqr_sim.simulation.runner import run_pilot_simulation, run_single_replication
 
 
@@ -65,7 +68,7 @@ def test_run_pilot_simulation_returns_dataframe() -> None:
     )
 
 
-def test_run_pilot_simulation_default_grid_has_17_points() -> None:
+def test_run_pilot_simulation_default_grid_has_9_points() -> None:
     results = run_pilot_simulation(
         dgp="dgp1",
         n=80,
@@ -77,7 +80,88 @@ def test_run_pilot_simulation_default_grid_has_17_points() -> None:
         alphas=None,
     )
 
+    assert results["alpha_grid_size"].dropna().unique().tolist() == [9]
+
+
+def test_run_pilot_simulation_explicit_grid_size_has_17_points() -> None:
+    results = run_pilot_simulation(
+        dgp="dgp1",
+        n=80,
+        p=5,
+        pi=1.0,
+        tau=0.5,
+        reps=1,
+        base_seed=123,
+        alphas=None,
+        alpha_grid_size=17,
+    )
+
     assert results["alpha_grid_size"].dropna().unique().tolist() == [17]
+
+
+def test_run_pilot_simulation_estimator_subset() -> None:
+    results = run_pilot_simulation(
+        reps=2,
+        n=80,
+        p=5,
+        alphas=np.linspace(0.0, 2.0, 5),
+        estimators=("post_selection",),
+    )
+
+    assert len(results) == 2
+    assert set(results["estimator"]) == {"post_selection_ivqr"}
+
+
+def test_run_pilot_simulation_invalid_estimator_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown estimator"):
+        run_pilot_simulation(
+            reps=1,
+            n=80,
+            p=5,
+            alphas=np.linspace(0.0, 2.0, 5),
+            estimators=("bad_estimator",),
+        )
+
+
+def test_quantreg_max_iter_is_passed_to_full_estimator(monkeypatch) -> None:
+    captured: dict[str, int] = {}
+
+    def fake_full_estimator(data, tau, alphas, max_iter, gmm_ridge):
+        captured["max_iter"] = max_iter
+        return EstimationResult(
+            estimator="full_ivqr",
+            alpha_hat=1.0,
+            alpha_true=data.alpha_true,
+            tau=tau,
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(alphas),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=None,
+            runtime_seconds=0.0,
+        )
+
+    monkeypatch.setattr(runner_module, "estimate_full_ivqr", fake_full_estimator)
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+
+    rows = run_single_replication(
+        design,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("full",),
+        quantreg_max_iter=123,
+    )
+
+    assert len(rows) == 1
+    assert captured["max_iter"] == 123
 
 
 def test_run_pilot_simulation_bias_logic() -> None:

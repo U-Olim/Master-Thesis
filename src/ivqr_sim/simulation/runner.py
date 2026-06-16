@@ -16,7 +16,17 @@ from ivqr_sim.simulation.design import Design
 
 
 EstimatorFn = Callable[..., EstimationResult]
-PILOT_QUANTREG_MAX_ITER = 5
+VALID_ESTIMATORS = ("full", "post_selection", "dml")
+
+
+def _validate_estimators(estimators: tuple[str, ...]) -> None:
+    if len(estimators) == 0:
+        raise ValueError("estimators must contain at least one estimator name")
+
+    invalid = sorted(set(estimators) - set(VALID_ESTIMATORS))
+    if invalid:
+        valid = ", ".join(VALID_ESTIMATORS)
+        raise ValueError(f"Unknown estimator(s): {invalid}. Valid estimators: {valid}")
 
 
 def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object]:
@@ -56,8 +66,17 @@ def run_single_replication(
     design: Design,
     alphas: np.ndarray,
     estimators: tuple[str, ...] = ("full", "post_selection", "dml"),
+    quantreg_max_iter: int = 500,
+    selection_cv: int = 3,
+    selection_max_iter: int = 10000,
+    dml_k_folds: int = 3,
+    dml_quantile_penalty: float = 0.01,
+    dml_ridge_alpha: float = 1.0,
+    dml_fold_random_state: int = 123,
+    gmm_ridge: float = 1e-8,
 ) -> list[dict[str, object]]:
     """Generate one dataset and run requested estimators on it."""
+    _validate_estimators(estimators)
     alphas = np.asarray(alphas, dtype=float)
     if alphas.ndim != 1 or alphas.size == 0:
         raise ValueError("alphas must be a nonempty one-dimensional array")
@@ -80,17 +99,29 @@ def run_single_replication(
                 data,
                 tau=design.tau,
                 alphas=alphas,
-                selection_cv=3,
-                quantreg_max_iter=PILOT_QUANTREG_MAX_ITER,
+                selection_cv=selection_cv,
+                selection_max_iter=selection_max_iter,
+                quantreg_max_iter=quantreg_max_iter,
+                gmm_ridge=gmm_ridge,
             )
         elif estimator_name == "dml":
-            result = estimator(data, tau=design.tau, alphas=alphas, k_folds=3)
+            result = estimator(
+                data,
+                tau=design.tau,
+                alphas=alphas,
+                k_folds=dml_k_folds,
+                fold_random_state=dml_fold_random_state,
+                quantile_penalty=dml_quantile_penalty,
+                ridge_alpha=dml_ridge_alpha,
+                gmm_ridge=gmm_ridge,
+            )
         else:
             result = estimator(
                 data,
                 tau=design.tau,
                 alphas=alphas,
-                max_iter=PILOT_QUANTREG_MAX_ITER,
+                max_iter=quantreg_max_iter,
+                gmm_ridge=gmm_ridge,
             )
         rows.append(_result_to_row(design, result))
 
@@ -106,12 +137,27 @@ def run_pilot_simulation(
     reps: int = 10,
     base_seed: int = 12345,
     alphas: np.ndarray | None = None,
+    estimators: tuple[str, ...] = ("full", "post_selection", "dml"),
+    alpha_grid_size: int = 9,
+    alpha_min: float = -1.0,
+    alpha_max: float = 3.0,
+    quantreg_max_iter: int = 500,
+    selection_cv: int = 3,
+    selection_max_iter: int = 10000,
+    dml_k_folds: int = 3,
+    dml_quantile_penalty: float = 0.01,
+    dml_ridge_alpha: float = 1.0,
+    gmm_ridge: float = 1e-8,
 ) -> pd.DataFrame:
     """Run a small pilot simulation and return raw estimator-level rows."""
-    if reps <= 0:
+    if reps < 1:
         raise ValueError("reps must be positive")
+    if alpha_grid_size < 3:
+        raise ValueError("alpha_grid_size must be at least 3")
+    _validate_estimators(estimators)
+
     if alphas is None:
-        alphas = np.linspace(-1.0, 3.0, 17)
+        alphas = np.linspace(alpha_min, alpha_max, alpha_grid_size)
     else:
         alphas = np.asarray(alphas, dtype=float)
 
@@ -126,6 +172,19 @@ def run_pilot_simulation(
             rep=rep,
             seed=base_seed + rep,
         )
-        rows.extend(run_single_replication(design, alphas))
+        rows.extend(
+            run_single_replication(
+                design,
+                alphas,
+                estimators=estimators,
+                quantreg_max_iter=quantreg_max_iter,
+                selection_cv=selection_cv,
+                selection_max_iter=selection_max_iter,
+                dml_k_folds=dml_k_folds,
+                dml_quantile_penalty=dml_quantile_penalty,
+                dml_ridge_alpha=dml_ridge_alpha,
+                gmm_ridge=gmm_ridge,
+            )
+        )
 
     return pd.DataFrame(rows)

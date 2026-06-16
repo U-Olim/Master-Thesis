@@ -50,11 +50,21 @@ practical implementation aligned with the score structure in
 The default confidence-region critical value uses `df=1` for scalar-alpha
 score inversion. It is not presented as a full overidentification J-test.
 
-The pilot simulation uses a diagnostic alpha grid
-`np.linspace(-1.0, 3.0, 17)`. This pilot is for checking estimator behavior
-and runtime, not for final Monte Carlo conclusions. Full-control IVQR may
-produce empty confidence regions or be slow in high-dimensional settings; this
-is recorded rather than hidden.
+The pilot simulation has two diagnostic modes:
+
+```bash
+python scripts/02_pilot_simulation.py --mode quick
+python scripts/02_pilot_simulation.py --mode stress
+python scripts/02_pilot_simulation.py --mode quick --estimators post_selection dml
+```
+
+Quick mode uses `n=100`, `p=20`, `reps=3`, and a 9-point alpha grid. Stress
+mode uses `n=250`, `p=200`, `reps=2`, and the same 9-point grid. These pilots
+are for checking estimator behavior and runtime, not for final Monte Carlo
+conclusions. Estimator iteration limits use realistic pilot defaults rather
+than an artificially tiny cap. Full-control IVQR may produce empty confidence
+regions or be slow in high-dimensional settings; this is recorded rather than
+hidden.
 
 Estimator result status fields use the following convention:
 
@@ -72,7 +82,7 @@ pip install -e .
 python -c "import ivqr_sim"
 pytest -v
 python scripts/01_smoke_test.py
-python scripts/02_pilot_simulation.py
+python scripts/02_pilot_simulation.py --mode quick
 ```
 
 The corrected DGP outcome equation is
