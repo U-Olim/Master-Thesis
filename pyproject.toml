@@ -16,6 +16,11 @@ dependencies = [
     "matplotlib",
 ]
 
+[project.scripts]
+ivqr-smoke-test = "ivqr_sim.scripts.smoke_test:main"
+ivqr-pilot = "ivqr_sim.scripts.pilot_simulation:main"
+ivqr-full-simulation = "ivqr_sim.scripts.full_simulation:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

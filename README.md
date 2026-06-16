@@ -122,19 +122,30 @@ Final metrics aggregation will be implemented in a later phase.
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 pip install -e .
 ```
 
+Direct script execution requires the editable install. Without it, the scripts
+display a clear installation message instead of a raw `ModuleNotFoundError`.
+
 ## Checks
 
 ```bash
-python -c "import ivqr_sim"
+python -c "import ivqr_sim; print('import ok')"
 pytest -v
 python scripts/01_smoke_test.py
 python scripts/02_pilot_simulation.py --mode quick
 python scripts/03_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
+```
+
+After installation, equivalent console commands are available:
+
+```bash
+ivqr-smoke-test
+ivqr-pilot --mode quick
+ivqr-full-simulation --quick-test --output results/raw/full_quick_test.csv
 ```
 
 ## Result Status
