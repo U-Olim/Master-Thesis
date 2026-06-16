@@ -11,11 +11,11 @@ This repository uses a `src/` package layout. The main package is `ivqr_sim`.
 - `estimators/`: Full-control IVQR, Post-selection IVQR, and DML-IVQR.
 - `simulation/`: design identifiers, runner orchestration, and aggregation.
 - `reporting/`: final thesis tables and figures.
-- `tests/`: Phase 1/Phase 2 verification tests.
+- `tests/`: verification tests for implemented phases.
 
 ## Current Status
 
-Phase 2 is complete.
+Current status: Phase 4 complete.
 
 Implemented:
 
@@ -24,7 +24,12 @@ Implemented:
 - `SimData` object.
 - DGP1, DGP2, and DGP3 data generation.
 - Corrected nonseparable outcome equation.
-- Phase 1/Phase 2 tests.
+- Core IVQR moments.
+- Confidence-region inversion.
+- Full-control IVQR.
+- Post-selection IVQR.
+- DML-IVQR.
+- Weighted GMM objective.
 
 Phase 4 estimators use the covariance-weighted GMM objective
 
@@ -35,6 +40,14 @@ n * g_hat(alpha)' Sigma_hat(alpha)^(-1) g_hat(alpha)
 with a small ridge added to the estimated moment covariance for numerical
 stability. The older unweighted quadratic score remains only as a prototype
 helper.
+
+DML-IVQR uses cross-fitting, penalized quantile regression via sklearn
+`QuantileRegressor`, and Ridge residualization of `Z` on `X`. This is a
+practical implementation aligned with the score structure in
+`Project_structure.pdf`.
+
+The default confidence-region critical value uses `df=1` for scalar-alpha
+score inversion. It is not presented as a full overidentification J-test.
 
 The corrected DGP outcome equation is
 

@@ -17,6 +17,7 @@ def test_estimation_result_can_be_instantiated() -> None:
         cr_length=None,
         cr_covers_true=None,
         cr_empty=True,
+        cr_disconnected=None,
         selected_controls=None,
         runtime_seconds=0.0,
     )
@@ -24,3 +25,4 @@ def test_estimation_result_can_be_instantiated() -> None:
     assert result.estimator == "full_ivqr"
     assert result.failed is True
     assert result.cr_empty is True
+    assert result.cr_disconnected is None

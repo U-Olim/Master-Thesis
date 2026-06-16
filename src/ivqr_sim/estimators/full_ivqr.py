@@ -13,6 +13,7 @@ from ivqr_sim.inference import (
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
+    sanitize_grid_statistics,
 )
 from ivqr_sim.moments import (
     alpha_grid,
@@ -103,6 +104,7 @@ def _failed_result(
         cr_length=None,
         cr_covers_true=None,
         cr_empty=True,
+        cr_disconnected=None,
         selected_controls=None,
         runtime_seconds=runtime_seconds,
     )
@@ -214,21 +216,24 @@ def estimate_full_ivqr(
     converged_flags: list[bool] = []
 
     for j, alpha in enumerate(alphas):
-        statistic, converged, message = evaluate_full_ivqr_alpha(
-            y=y,
-            d=d,
-            z=z,
-            x=x,
-            alpha=float(alpha),
-            tau=tau,
-            max_iter=max_iter,
-            gmm_ridge=gmm_ridge,
-        )
+        try:
+            statistic, converged, message = evaluate_full_ivqr_alpha(
+                y=y,
+                d=d,
+                z=z,
+                x=x,
+                alpha=float(alpha),
+                tau=tau,
+                max_iter=max_iter,
+                gmm_ridge=gmm_ridge,
+            )
+        except Exception as exc:  # noqa: BLE001 - failed grid points are recorded.
+            statistic, converged, message = np.inf, False, str(exc)
         statistics[j] = statistic
         converged_flags.append(converged)
 
-    finite_mask = np.isfinite(statistics)
-    if not np.any(finite_mask):
+    statistics, num_failed = sanitize_grid_statistics(statistics, converged_flags)
+    if num_failed == len(alphas):
         return _failed_result(
             data=data,
             tau=tau,
@@ -236,25 +241,24 @@ def estimate_full_ivqr(
             runtime_seconds=perf_counter() - start,
         )
 
-    finite_alphas = alphas[finite_mask]
-    finite_statistics = statistics[finite_mask]
-    alpha_hat, min_statistic, at_boundary = argmin_grid(finite_alphas, finite_statistics)
+    alpha_hat, min_statistic, at_boundary = argmin_grid(alphas, statistics)
     critical = critical_value_chi_square(confidence_level, df=1)
     region = invert_score_test(
-        alphas=finite_alphas,
-        statistics=finite_statistics,
+        alphas=alphas,
+        statistics=statistics,
         critical_value=critical,
         alpha_true=data.alpha_true,
     )
+    all_converged = num_failed == 0
 
     return EstimationResult(
         estimator="full_ivqr",
         alpha_hat=alpha_hat,
         alpha_true=data.alpha_true,
         tau=tau,
-        converged=all(converged_flags),
+        converged=all_converged,
         failed=False,
-        message="ok" if all(converged_flags) else "Some alpha-grid evaluations failed.",
+        message=f"ok; failed_alpha_points={num_failed}/{len(alphas)}",
         objective_value=min_statistic,
         at_grid_boundary=at_boundary,
         cr_lower=region.lower,
@@ -262,6 +266,7 @@ def estimate_full_ivqr(
         cr_length=region.length,
         cr_covers_true=region.covers_true,
         cr_empty=region.empty,
+        cr_disconnected=region.disconnected,
         selected_controls=None,
         runtime_seconds=perf_counter() - start,
     )

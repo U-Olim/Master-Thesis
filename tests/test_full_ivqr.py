@@ -73,6 +73,7 @@ def test_estimate_full_ivqr_returns_estimation_result() -> None:
     assert result.alpha_hat is not None
     assert result.objective_value is not None
     assert np.isfinite(result.objective_value)
+    assert result.cr_disconnected is not None
     assert result.runtime_seconds >= 0.0
 
 

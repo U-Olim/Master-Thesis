@@ -22,7 +22,7 @@ The planned Monte Carlo design includes:
 
 ## Current Status
 
-Current status: Phase 2 complete.
+Current status: Phase 4 complete.
 
 Implemented:
 
@@ -31,7 +31,12 @@ Implemented:
 - `SimData` object
 - DGP1, DGP2, and DGP3 data generation
 - Corrected nonseparable outcome equation
-- Phase 1/Phase 2 tests
+- Core IVQR moment functions
+- Confidence-region inversion
+- Full-control IVQR
+- Post-selection IVQR
+- DML-IVQR
+- Covariance-weighted GMM objective
 
 The corrected DGP outcome equation is
 
@@ -56,7 +61,25 @@ gamma_j = 0.4 / sqrt(j)
 
 for `j = 1, ..., s`, and zero coefficients for `j > s`.
 
-Estimator, inference, metrics, and simulation-runner logic will be implemented in later phases.
+Implemented estimators use the covariance-weighted GMM objective
+
+```text
+n * g_hat(a)' * Sigma_hat(a)^(-1) * g_hat(a)
+```
+
+with ridge regularization of the estimated moment covariance for numerical
+stability.
+
+DML-IVQR uses cross-fitting, penalized quantile regression via sklearn
+`QuantileRegressor`, and Ridge residualization of `Z` on `X`. This is a
+practical implementation aligned with the score structure in
+`Project_structure.pdf`.
+
+The default confidence-region critical value uses `df=1` for scalar-alpha
+score inversion. It is not presented as a full overidentification J-test.
+
+Simulation-runner and metrics aggregation logic will be implemented in later
+phases.
 
 ## Installation
 

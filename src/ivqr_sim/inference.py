@@ -8,6 +8,9 @@ import numpy as np
 from scipy.stats import chi2
 
 
+FAILED_ALPHA_STATISTIC = 1e12
+
+
 @dataclass(frozen=True)
 class ConfidenceRegion:
     """Grid-based confidence region from score-test inversion."""
@@ -64,7 +67,12 @@ def invert_score_test(
     critical_value: float,
     alpha_true: float | None = None,
 ) -> ConfidenceRegion:
-    """Invert a grid-evaluated score test into a confidence region."""
+    """Invert a grid-evaluated score test into a confidence region.
+
+    In this project, confidence regions are formed by inverting the scalar
+    alpha objective over a grid. Failed alpha evaluations should be represented
+    by large finite statistics before calling this function.
+    """
     alphas, statistics = _validate_grid_and_statistics(alphas, statistics)
     critical_value = _validate_critical_value(critical_value)
 
@@ -132,7 +140,9 @@ def critical_value_chi_square(
     """Return a chi-square critical value.
 
     The default df=1 is used for scalar alpha score inversion. For fully
-    overidentified GMM J-tests, df may differ and should be supplied explicitly.
+    overidentified GMM J-tests, the relevant degrees of freedom may differ and
+    should be supplied explicitly. In this project, confidence regions are
+    formed by inverting the scalar alpha objective over a grid.
     """
     if not 0 < level < 1:
         raise ValueError("level must satisfy 0 < level < 1")
@@ -142,6 +152,35 @@ def critical_value_chi_square(
         raise ValueError("df must be at least 1")
 
     return float(chi2.ppf(level, df=df))
+
+
+def sanitize_grid_statistics(
+    statistics: np.ndarray,
+    converged: np.ndarray | list[bool],
+    failed_value: float = FAILED_ALPHA_STATISTIC,
+) -> tuple[np.ndarray, int]:
+    """Replace failed or non-finite alpha-grid statistics with a finite value."""
+    statistics = np.asarray(statistics, dtype=float)
+    converged = np.asarray(converged, dtype=bool)
+
+    if statistics.ndim != 1:
+        raise ValueError("statistics must be one-dimensional")
+    if converged.ndim != 1:
+        raise ValueError("converged must be one-dimensional")
+    if statistics.size != converged.size:
+        raise ValueError("statistics and converged must have equal length")
+    if statistics.size == 0:
+        raise ValueError("statistics must be nonempty")
+    if not np.isfinite(failed_value) or failed_value <= 0:
+        raise ValueError("failed_value must be positive and finite")
+
+    sanitized = statistics.copy()
+    failed_mask = (~converged) | (~np.isfinite(sanitized))
+    sanitized[failed_mask] = failed_value
+    if not np.all(np.isfinite(sanitized)):
+        raise ValueError("sanitized statistics must be finite")
+
+    return sanitized, int(failed_mask.sum())
 
 
 def argmin_grid(

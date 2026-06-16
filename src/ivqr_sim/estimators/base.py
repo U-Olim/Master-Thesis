@@ -28,6 +28,7 @@ class EstimationResult:
     cr_length: float | None
     cr_covers_true: bool | None
     cr_empty: bool
+    cr_disconnected: bool | None
 
     selected_controls: int | None
     runtime_seconds: float

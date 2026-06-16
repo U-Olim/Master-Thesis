@@ -146,11 +146,11 @@ def weighted_gmm_statistic(
 
 
 def score_statistic(moment_vector: np.ndarray) -> float:
-    """Unweighted prototype statistic: n * g'g.
+    """Unweighted prototype statistic based on g'g.
 
     This function returns g'g for backward compatibility because it only
     receives the moment vector. For final estimator objectives, use
-    weighted_gmm_statistic().
+    weighted_gmm_statistic(), which implements n * g_hat' Sigma_hat^{-1} g_hat.
     """
     moment_vector = np.asarray(moment_vector)
     return float(np.dot(moment_vector, moment_vector))

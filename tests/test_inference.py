@@ -2,10 +2,12 @@ import numpy as np
 import pytest
 
 from ivqr_sim.inference import (
+    FAILED_ALPHA_STATISTIC,
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
     is_disconnected_region,
+    sanitize_grid_statistics,
     summarize_region,
 )
 
@@ -102,6 +104,14 @@ def test_invert_score_test_coverage_false() -> None:
     assert region.covers_true is False
 
 
+def test_invert_score_test_rejects_nonfinite_statistics() -> None:
+    alphas = np.array([0.0, 1.0, 2.0])
+    stats = np.array([1.0, np.inf, 2.0])
+
+    with pytest.raises(ValueError):
+        invert_score_test(alphas, stats, critical_value=3.0)
+
+
 def test_is_disconnected_region_examples() -> None:
     full_grid = np.array([0, 1, 2, 3, 4], dtype=float)
 
@@ -147,6 +157,25 @@ def test_invert_score_test_validates_inputs(
 def test_argmin_grid_validates_inputs(alphas: np.ndarray, stats: np.ndarray) -> None:
     with pytest.raises(ValueError):
         argmin_grid(alphas, stats)
+
+
+def test_sanitize_grid_statistics_replaces_failed_points() -> None:
+    statistics = np.array([1.0, np.inf, 3.0, np.nan])
+    converged = [True, True, False, True]
+
+    sanitized, num_failed = sanitize_grid_statistics(statistics, converged)
+
+    assert np.all(np.isfinite(sanitized))
+    assert sanitized[0] == pytest.approx(1.0)
+    assert sanitized[1] == pytest.approx(FAILED_ALPHA_STATISTIC)
+    assert sanitized[2] == pytest.approx(FAILED_ALPHA_STATISTIC)
+    assert sanitized[3] == pytest.approx(FAILED_ALPHA_STATISTIC)
+    assert num_failed == 3
+
+
+def test_sanitize_grid_statistics_validates_lengths() -> None:
+    with pytest.raises(ValueError):
+        sanitize_grid_statistics(np.array([1.0, 2.0]), [True])
 
 
 def test_summarize_region_returns_estimation_result_fields() -> None:
