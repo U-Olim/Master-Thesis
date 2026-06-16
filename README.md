@@ -22,7 +22,7 @@ The planned Monte Carlo design includes:
 
 ## Current Status
 
-Current status: Phase 4 complete.
+Current status: Phase 5A pilot runner implemented.
 
 Implemented:
 
@@ -37,6 +37,7 @@ Implemented:
 - Post-selection IVQR
 - DML-IVQR
 - Covariance-weighted GMM objective
+- Pilot simulation runner
 
 The corrected DGP outcome equation is
 
@@ -78,8 +79,14 @@ practical implementation aligned with the score structure in
 The default confidence-region critical value uses `df=1` for scalar-alpha
 score inversion. It is not presented as a full overidentification J-test.
 
-Simulation-runner and metrics aggregation logic will be implemented in later
-phases.
+The pilot simulation uses a diagnostic alpha grid
+`np.linspace(-1.0, 3.0, 17)`. This pilot is for checking estimator behavior
+and runtime, not for final Monte Carlo conclusions. Full-control IVQR may
+produce empty confidence regions or be slow in high-dimensional settings; this
+is recorded rather than hidden.
+
+Full simulation grid execution and metrics aggregation will be implemented in
+later phases.
 
 ## Installation
 
@@ -96,6 +103,7 @@ pip install -e .
 python -c "import ivqr_sim"
 pytest -v
 python scripts/01_smoke_test.py
+python scripts/02_pilot_simulation.py
 ```
 
 ## Result Status
