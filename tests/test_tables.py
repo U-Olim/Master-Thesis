@@ -36,6 +36,7 @@ def _summary() -> pd.DataFrame:
                     "mae": 0.2,
                     "coverage": 0.95,
                     "avg_cr_length": 1.23456,
+                    "avg_cr_length_valid_only": 1.5,
                     "failure_rate": 0.0,
                     "non_convergence_rate": 0.0,
                     "cr_empty_rate": 0.0,
@@ -63,6 +64,7 @@ def _summary() -> pd.DataFrame:
                     "mae": 0.25,
                     "coverage": 0.9,
                     "avg_cr_length": 1.5,
+                    "avg_cr_length_valid_only": 2.0,
                     "failure_rate": 0.1,
                     "non_convergence_rate": 0.1,
                     "cr_empty_rate": 0.05,
@@ -173,8 +175,17 @@ def test_make_diagnostic_table_includes_available_columns_only() -> None:
 
     assert "replications" in table.columns
     assert "completion_rate" in table.columns
+    assert "avg_cr_length_valid_only" in table.columns
     assert "boundary_rate" not in table.columns
     assert "mean_selected_controls" not in table.columns
+
+
+def test_cr_length_wide_uses_strict_avg_cr_length(tmp_path: Path) -> None:
+    written = write_tables(_summary(), tmp_path, round_digits=3)
+
+    cr_length = pd.read_csv(written["cr_length"])
+
+    assert cr_length.iloc[0]["DML-IVQR"] == pytest.approx(1.235)
 
 
 def test_write_tables_writes_expected_csv_files(tmp_path: Path) -> None:

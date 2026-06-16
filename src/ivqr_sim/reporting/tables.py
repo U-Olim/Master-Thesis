@@ -42,6 +42,7 @@ DIAGNOSTIC_COLUMNS = [
     "non_convergence_rate",
     "cr_empty_rate",
     "cr_disconnected_rate",
+    "avg_cr_length_valid_only",
     "boundary_rate",
     "mean_failed_alpha_count",
     "mean_selected_controls",

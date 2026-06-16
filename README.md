@@ -106,6 +106,29 @@ python scripts/03_run_full_simulation.py --quick-test --output results/raw/full_
 python scripts/03_run_full_simulation.py --estimators post_selection dml --reps 10 --resume
 ```
 
+Safe final-run planning and chunking examples:
+
+```bash
+python scripts/03_run_full_simulation.py --dry-run
+
+python scripts/03_run_full_simulation.py \
+  --resume \
+  --num-chunks 4 \
+  --chunk-index 0 \
+  --manifest results/raw/full_chunk_0_manifest.json \
+  --output results/raw/full_simulation_results.csv
+
+python scripts/03_run_full_simulation.py \
+  --dgps dgp1 \
+  --n-values 250 \
+  --p-values 200 \
+  --pi-values 1.0 0.5 0.25 0.10 \
+  --taus 0.5 \
+  --reps 50 \
+  --estimators post_selection dml \
+  --output results/raw/mini_weak_iv.csv
+```
+
 The default full grid follows `Project_structure.pdf` and can be
 computationally expensive: 3 DGPs, 3 sample sizes, 3 control dimensions, 4
 instrument strengths, 3 quantiles, and 1000 replications. `--resume` skips
@@ -123,8 +146,11 @@ completeness diagnostics such as observed replications and completion rate.
 Coverage is computed over all replications: failed or missing
 confidence-region indicators count as non-coverage. The
 `coverage_valid_only` field is reported only as a diagnostic conditional on
-available confidence-region indicators. Aggregation rejects duplicate raw rows
-for the same `dgp`, `n`, `p`, `pi`, `tau`, `rep`, `seed`, `estimator` key.
+available confidence-region indicators. `avg_cr_length` also uses all
+replications, treating missing confidence-region lengths as zero; the
+`avg_cr_length_valid_only` field is a diagnostic over available lengths only.
+Aggregation rejects duplicate raw rows for the same `dgp`, `n`, `p`, `pi`,
+`tau`, `rep`, `seed`, `estimator` key.
 
 ```python
 from ivqr_sim.simulation.aggregate import aggregate_results_file

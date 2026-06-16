@@ -63,6 +63,14 @@ def test_aggregate_results_preserves_group_columns() -> None:
     assert all(column in summary.columns for column in SUMMARY_METRIC_COLUMNS)
 
 
+def test_aggregate_results_includes_strict_and_valid_only_length_metrics() -> None:
+    summary = aggregate_results(_raw_results(), expected_replications=2)
+    row = _row(summary, "post_selection_ivqr")
+
+    assert row["avg_cr_length"] == pytest.approx(1.5 / 2)
+    assert row["avg_cr_length_valid_only"] == pytest.approx(1.5)
+
+
 def test_aggregate_results_dml_metrics() -> None:
     summary = aggregate_results(_raw_results(), expected_replications=2)
     row = _row(summary, "dml_ivqr")

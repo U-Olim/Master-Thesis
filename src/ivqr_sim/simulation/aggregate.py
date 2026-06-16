@@ -21,6 +21,7 @@ SUMMARY_METRIC_COLUMNS = [
     "coverage",
     "coverage_valid_only",
     "avg_cr_length",
+    "avg_cr_length_valid_only",
     "failure_rate",
     "non_convergence_rate",
     "cr_empty_rate",

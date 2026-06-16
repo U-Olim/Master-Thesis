@@ -4,6 +4,8 @@ import pytest
 
 from ivqr_sim.metrics import (
     average_cr_length,
+    average_cr_length_all,
+    average_cr_length_valid_only,
     bias,
     boundary_rate,
     coverage,
@@ -102,6 +104,18 @@ def test_average_cr_length_ignores_missing_values() -> None:
     assert average_cr_length(df) == pytest.approx(1.5)
 
 
+def test_average_cr_length_all_uses_all_rows_denominator() -> None:
+    df = _base_df(cr_length=[1.0, None, 3.0])
+
+    assert average_cr_length_all(df) == pytest.approx(4.0 / 3)
+
+
+def test_average_cr_length_valid_only_ignores_missing_lengths() -> None:
+    df = _base_df(cr_length=[1.0, None, 3.0])
+
+    assert average_cr_length_valid_only(df) == pytest.approx(2.0)
+
+
 def test_failure_and_non_convergence_rates() -> None:
     df = _base_df(
         failed=[False, True, False],
@@ -168,6 +182,7 @@ def test_summarize_group_returns_expected_keys() -> None:
         "coverage",
         "coverage_valid_only",
         "avg_cr_length",
+        "avg_cr_length_valid_only",
         "failure_rate",
         "non_convergence_rate",
         "cr_empty_rate",

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+from datetime import UTC, datetime
+import json
 from pathlib import Path
 import time
 import warnings
@@ -45,6 +47,11 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--rerun-failed", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--chunk-index", type=int, default=None)
+    parser.add_argument("--num-chunks", type=int, default=None)
+    parser.add_argument("--max-designs", type=int, default=None)
+    parser.add_argument("--manifest", default=None)
     parser.add_argument("--quick-test", action="store_true")
     parser.add_argument("--dgps", nargs="+", default=list(DEFAULT_DGPS))
     parser.add_argument("--n-values", nargs="+", type=int, default=list(DEFAULT_N_VALUES))
@@ -69,21 +76,50 @@ def _apply_quick_test(args: argparse.Namespace) -> None:
     args.batch_size = 2
 
 
+def _validate_chunk_args(chunk_index: int | None, num_chunks: int | None) -> None:
+    if (chunk_index is None) != (num_chunks is None):
+        raise ValueError("--chunk-index and --num-chunks must be provided together")
+    if chunk_index is None or num_chunks is None:
+        return
+    if num_chunks < 1:
+        raise ValueError("--num-chunks must be at least 1")
+    if chunk_index < 0 or chunk_index >= num_chunks:
+        raise ValueError("--chunk-index must satisfy 0 <= chunk_index < num_chunks")
+
+
+def select_design_chunk(designs: list, chunk_index: int | None, num_chunks: int | None) -> list:
+    """Select one deterministic strided chunk of designs."""
+    _validate_chunk_args(chunk_index, num_chunks)
+    if chunk_index is None or num_chunks is None:
+        return list(designs)
+    return list(designs[chunk_index::num_chunks])
+
+
 def _print_plan(
     output_path: Path,
     total_designs: int,
     pending_designs: int,
+    designs_in_run: int,
     estimators: tuple[str, ...],
     alphas: np.ndarray,
     batch_size: int,
     resume: bool,
     rerun_failed: bool,
+    dry_run: bool,
+    chunk_index: int | None,
+    num_chunks: int | None,
 ) -> None:
-    expected_rows = pending_designs * len(estimators)
+    expected_rows = designs_in_run * len(estimators)
     print("Full simulation plan")
     print(f"total designs: {total_designs}")
-    print(f"pending designs: {pending_designs}")
-    print(f"expected new rows: {expected_rows}")
+    print(f"pending designs after resume: {pending_designs}")
+    if chunk_index is not None and num_chunks is not None:
+        print(f"chunk: {chunk_index}/{num_chunks}")
+    else:
+        print("chunk: none")
+    print(f"designs in this run: {designs_in_run}")
+    print(f"expected rows: {expected_rows}")
+    print(f"dry_run: {dry_run}")
     print(f"output path: {output_path}")
     print(f"estimators: {','.join(estimators)}")
     print(
@@ -97,6 +133,43 @@ def _print_plan(
         "Full-control IVQR is included by default; infeasible high-dimensional "
         "cases are recorded as failures."
     )
+
+
+def _write_manifest(
+    manifest_path: str | Path | None,
+    args: argparse.Namespace,
+    output_path: Path,
+    total_designs: int,
+    pending_designs: int,
+    designs_in_run: int,
+    estimators: tuple[str, ...],
+    alphas: np.ndarray,
+) -> None:
+    if manifest_path is None:
+        return
+
+    path = Path(manifest_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "parameters": vars(args),
+        "total_designs": total_designs,
+        "pending_designs": pending_designs,
+        "selected_chunk": {
+            "chunk_index": args.chunk_index,
+            "num_chunks": args.num_chunks,
+        },
+        "designs_in_run": designs_in_run,
+        "estimators": list(estimators),
+        "alpha_grid": {
+            "size": int(alphas.size),
+            "min": float(alphas.min()),
+            "max": float(alphas.max()),
+            "values": [float(value) for value in alphas],
+        },
+        "output_path": str(output_path),
+    }
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def _count_rows(path: Path) -> int | None:
@@ -118,6 +191,9 @@ def main() -> None:
         raise ValueError("--alpha-grid-size must be at least 3")
     if args.alpha_max <= args.alpha_min:
         raise ValueError("--alpha-max must exceed --alpha-min")
+    _validate_chunk_args(args.chunk_index, args.num_chunks)
+    if args.max_designs is not None and args.max_designs < 1:
+        raise ValueError("--max-designs must be at least 1")
     if args.rerun_failed and not args.resume:
         print("--rerun-failed has no effect without --resume.")
 
@@ -146,22 +222,42 @@ def main() -> None:
         if args.resume
         else designs
     )
+    designs_to_run = select_design_chunk(pending_designs, args.chunk_index, args.num_chunks)
+    if args.max_designs is not None:
+        designs_to_run = designs_to_run[: args.max_designs]
 
     _print_plan(
         output_path=output_path,
         total_designs=total_designs,
         pending_designs=len(pending_designs),
+        designs_in_run=len(designs_to_run),
         estimators=estimators,
         alphas=alphas,
         batch_size=args.batch_size,
         resume=args.resume,
         rerun_failed=args.rerun_failed,
+        dry_run=args.dry_run,
+        chunk_index=args.chunk_index,
+        num_chunks=args.num_chunks,
     )
+    _write_manifest(
+        args.manifest,
+        args,
+        output_path,
+        total_designs,
+        len(pending_designs),
+        len(designs_to_run),
+        estimators,
+        alphas,
+    )
+    if args.dry_run:
+        print("Dry run requested; no result rows written.")
+        return
 
     start = time.perf_counter()
     completed = 0
-    for batch_start in range(0, len(pending_designs), args.batch_size):
-        batch = pending_designs[batch_start : batch_start + args.batch_size]
+    for batch_start in range(0, len(designs_to_run), args.batch_size):
+        batch = designs_to_run[batch_start : batch_start + args.batch_size]
         append = output_path.exists() if args.resume else completed > 0
         run_simulation_batch(
             batch,
@@ -174,7 +270,7 @@ def main() -> None:
         completed += len(batch)
         elapsed = time.perf_counter() - start
         print(
-            f"completed {completed}/{len(pending_designs)} designs, "
+            f"completed {completed}/{len(designs_to_run)} designs, "
             f"elapsed {elapsed:.2f} seconds"
         )
 

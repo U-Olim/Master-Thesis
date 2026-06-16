@@ -122,9 +122,21 @@ def coverage_valid_only(df: pd.DataFrame) -> float:
     return _mean_bool(df["cr_covers_true"])
 
 
-def average_cr_length(df: pd.DataFrame) -> float:
+def average_cr_length_valid_only(df: pd.DataFrame) -> float:
     validate_metric_input(df)
     return _mean_numeric(df["cr_length"])
+
+
+def average_cr_length_all(df: pd.DataFrame) -> float:
+    validate_metric_input(df)
+    values = _to_numeric(df["cr_length"])
+    if len(values) == 0:
+        return float(np.nan)
+    return float(values.fillna(0.0).mean())
+
+
+def average_cr_length(df: pd.DataFrame) -> float:
+    return average_cr_length_valid_only(df)
 
 
 def failure_rate(df: pd.DataFrame) -> float:
@@ -191,7 +203,8 @@ def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
         "mae": mae(df),
         "coverage": coverage(df),
         "coverage_valid_only": coverage_valid_only(df),
-        "avg_cr_length": average_cr_length(df),
+        "avg_cr_length": average_cr_length_all(df),
+        "avg_cr_length_valid_only": average_cr_length_valid_only(df),
         "failure_rate": failure_rate(df),
         "non_convergence_rate": non_convergence_rate(df),
         "cr_empty_rate": cr_empty_rate(df),

@@ -5,6 +5,8 @@ import pandas as pd
 import pytest
 
 from ivqr_sim.estimators.base import EstimationResult
+from ivqr_sim.scripts.full_simulation import main as full_simulation_main
+from ivqr_sim.scripts.full_simulation import select_design_chunk
 from ivqr_sim.simulation.design import Design
 from ivqr_sim.simulation import runner as runner_module
 from ivqr_sim.simulation.runner import (
@@ -559,3 +561,41 @@ def test_filter_completed_designs_malformed_csv_raises(tmp_path: Path) -> None:
             output_path,
             estimators=("post_selection", "dml"),
         )
+
+
+def test_select_design_chunk_partitions_designs() -> None:
+    designs = [
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=rep, seed=123 + rep)
+        for rep in range(10)
+    ]
+
+    chunk_0 = select_design_chunk(designs, chunk_index=0, num_chunks=2)
+    chunk_1 = select_design_chunk(designs, chunk_index=1, num_chunks=2)
+
+    assert set(chunk_0).isdisjoint(chunk_1)
+    assert sorted(chunk_0 + chunk_1, key=lambda design: design.rep) == designs
+
+
+def test_full_simulation_dry_run_does_not_write_output_csv(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    output_path = tmp_path / "dry_run.csv"
+    manifest_path = tmp_path / "manifest.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "03_run_full_simulation.py",
+            "--quick-test",
+            "--dry-run",
+            "--output",
+            str(output_path),
+            "--manifest",
+            str(manifest_path),
+        ],
+    )
+
+    full_simulation_main()
+
+    assert not output_path.exists()
+    assert manifest_path.exists()
