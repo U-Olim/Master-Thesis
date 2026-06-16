@@ -129,7 +129,11 @@ def critical_value_chi_square(
     level: float = 0.95,
     df: int = 1,
 ) -> float:
-    """Return a chi-square critical value."""
+    """Return a chi-square critical value.
+
+    The default df=1 is used for scalar alpha score inversion. For fully
+    overidentified GMM J-tests, df may differ and should be supplied explicitly.
+    """
     if not 0 < level < 1:
         raise ValueError("level must satisfy 0 < level < 1")
     if not isinstance(df, int) or isinstance(df, bool):

@@ -99,6 +99,7 @@ def test_evaluate_post_selection_alpha_returns_finite_statistic() -> None:
         x_selected,
         alpha=data.alpha_true,
         tau=0.5,
+        gmm_ridge=1e-6,
     )
 
     assert message == "ok"
@@ -111,7 +112,13 @@ def test_estimate_post_selection_ivqr_returns_estimation_result() -> None:
     data = generate_data(Design("dgp1", n=100, p=10, pi=1.0, tau=0.5, rep=0, seed=123))
     alphas = np.linspace(0.0, 2.0, 11)
 
-    result = estimate_post_selection_ivqr(data, tau=0.5, alphas=alphas, selection_cv=3)
+    result = estimate_post_selection_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        selection_cv=3,
+        gmm_ridge=1e-6,
+    )
 
     assert result.estimator == "post_selection_ivqr"
     assert result.alpha_true == pytest.approx(data.alpha_true)
@@ -119,6 +126,8 @@ def test_estimate_post_selection_ivqr_returns_estimation_result() -> None:
     assert result.failed is False
     assert result.alpha_hat is not None
     assert result.selected_controls is not None
+    assert result.objective_value is not None
+    assert np.isfinite(result.objective_value)
     assert result.runtime_seconds >= 0.0
 
 
@@ -157,6 +166,7 @@ def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
         alphas=alphas,
         selection_random_state=123,
         selection_cv=3,
+        gmm_ridge=1e-6,
     )
     result_2 = estimate_post_selection_ivqr(
         data,
@@ -164,6 +174,7 @@ def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
         alphas=alphas,
         selection_random_state=123,
         selection_cv=3,
+        gmm_ridge=1e-6,
     )
 
     assert result_1.alpha_hat == pytest.approx(result_2.alpha_hat)

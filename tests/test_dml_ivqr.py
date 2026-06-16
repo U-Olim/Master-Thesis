@@ -91,6 +91,7 @@ def test_evaluate_dml_ivqr_alpha_returns_finite_statistic() -> None:
         tau=0.5,
         k_folds=3,
         fold_random_state=123,
+        gmm_ridge=1e-6,
     )
 
     assert message == "ok"
@@ -110,6 +111,7 @@ def test_estimate_dml_ivqr_returns_estimation_result() -> None:
         k_folds=3,
         fold_random_state=123,
         quantile_penalty=0.01,
+        gmm_ridge=1e-6,
     )
 
     assert result.estimator == "dml_ivqr"
@@ -118,6 +120,7 @@ def test_estimate_dml_ivqr_returns_estimation_result() -> None:
     assert result.failed is False
     assert result.alpha_hat is not None
     assert result.objective_value is not None
+    assert np.isfinite(result.objective_value)
     assert result.runtime_seconds >= 0.0
 
 
@@ -149,6 +152,7 @@ def test_estimate_dml_ivqr_output_is_deterministic() -> None:
         k_folds=3,
         fold_random_state=123,
         quantile_penalty=0.01,
+        gmm_ridge=1e-6,
     )
     result_2 = estimate_dml_ivqr(
         data,
@@ -157,6 +161,7 @@ def test_estimate_dml_ivqr_output_is_deterministic() -> None:
         k_folds=3,
         fold_random_state=123,
         quantile_penalty=0.01,
+        gmm_ridge=1e-6,
     )
 
     assert result_1.alpha_hat == pytest.approx(result_2.alpha_hat)

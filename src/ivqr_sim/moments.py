@@ -1,4 +1,9 @@
-"""Reusable IVQR moment functions."""
+"""Reusable IVQR moment functions.
+
+Final estimator objectives use the covariance-weighted GMM statistic
+n * g_hat(a)' * Sigma_hat(a)^(-1) * g_hat(a), with a small ridge for
+numerical stability.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +17,24 @@ def quantile_score(residuals: np.ndarray, tau: float) -> np.ndarray:
 
     residuals = np.asarray(residuals)
     return tau - (residuals <= 0).astype(float)
+
+
+def _validate_1d_finite(values: np.ndarray, name: str) -> np.ndarray:
+    array = np.asarray(values, dtype=float)
+    if array.ndim != 1:
+        raise ValueError(f"{name} must be one-dimensional")
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"{name} must contain only finite values")
+    return array
+
+
+def _validate_2d_finite(values: np.ndarray, name: str) -> np.ndarray:
+    array = np.asarray(values, dtype=float)
+    if array.ndim != 2:
+        raise ValueError(f"{name} must be two-dimensional")
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"{name} must contain only finite values")
+    return array
 
 
 def residuals_alpha(
@@ -57,22 +80,78 @@ def sample_moment(
     instruments: np.ndarray,
 ) -> np.ndarray:
     """Return the sample moment vector n^{-1} sum_i psi_tau(r_i) Psi_i."""
-    residuals = np.asarray(residuals)
-    instruments = np.asarray(instruments)
+    return moment_contributions(residuals, tau, instruments).mean(axis=0)
 
-    if instruments.ndim == 1:
-        instruments = instruments.reshape(-1, 1)
 
-    if len(residuals) != instruments.shape[0]:
+def moment_contributions(
+    residuals: np.ndarray,
+    tau: float,
+    instruments: np.ndarray,
+) -> np.ndarray:
+    """Return m_i(a) = psi_tau(residual_i) * Psi_i as an (n, k) matrix."""
+    residuals = _validate_1d_finite(residuals, "residuals")
+    instruments = _validate_2d_finite(instruments, "instruments")
+    if residuals.shape[0] != instruments.shape[0]:
         raise ValueError("residuals and instruments must have the same number of rows")
 
     scores = quantile_score(residuals, tau)
-    moment = scores[:, None] * instruments
-    return moment.mean(axis=0)
+    contributions = scores[:, None] * instruments
+    if not np.all(np.isfinite(contributions)):
+        raise ValueError("moment contributions must be finite")
+    return contributions
+
+
+def moment_covariance(
+    contributions: np.ndarray,
+    ridge: float = 1e-8,
+) -> np.ndarray:
+    """Estimate centered covariance of moment contributions with ridge."""
+    contributions = _validate_2d_finite(contributions, "contributions")
+    if contributions.shape[0] < 2:
+        raise ValueError("at least two moment contributions are required")
+    if ridge < 0:
+        raise ValueError("ridge must be nonnegative")
+
+    n, k = contributions.shape
+    centered = contributions - contributions.mean(axis=0)
+    sigma = centered.T @ centered / n
+    sigma = sigma + ridge * np.eye(k)
+    if not np.all(np.isfinite(sigma)):
+        raise ValueError("moment covariance must be finite")
+    return sigma
+
+
+def weighted_gmm_statistic(
+    contributions: np.ndarray,
+    ridge: float = 1e-8,
+    use_pinv: bool = True,
+) -> float:
+    """Return n * g_hat' * Sigma_hat^{-1} * g_hat."""
+    contributions = _validate_2d_finite(contributions, "contributions")
+    n = contributions.shape[0]
+    g_hat = contributions.mean(axis=0)
+    sigma = moment_covariance(contributions, ridge=ridge)
+
+    if use_pinv:
+        statistic = n * g_hat @ np.linalg.pinv(sigma) @ g_hat
+    else:
+        statistic = n * g_hat @ np.linalg.solve(sigma, g_hat)
+
+    statistic = float(statistic)
+    if statistic < 0.0 and statistic > -1e-10:
+        statistic = 0.0
+    if not np.isfinite(statistic) or statistic < 0.0:
+        raise ValueError("weighted GMM statistic must be finite and nonnegative")
+    return statistic
 
 
 def score_statistic(moment_vector: np.ndarray) -> float:
-    """Return the unweighted quadratic score based on the Euclidean norm."""
+    """Unweighted prototype statistic: n * g'g.
+
+    This function returns g'g for backward compatibility because it only
+    receives the moment vector. For final estimator objectives, use
+    weighted_gmm_statistic().
+    """
     moment_vector = np.asarray(moment_vector)
     return float(np.dot(moment_vector, moment_vector))
 

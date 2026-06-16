@@ -50,6 +50,7 @@ def test_evaluate_full_ivqr_alpha_returns_finite_statistic() -> None:
         data.x,
         alpha=data.alpha_true,
         tau=0.5,
+        gmm_ridge=1e-6,
     )
 
     assert message == "ok"
@@ -63,7 +64,7 @@ def test_estimate_full_ivqr_returns_estimation_result() -> None:
     data = generate_data(design)
     alphas = np.linspace(0.0, 2.0, 11)
 
-    result = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
+    result = estimate_full_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
 
     assert result.estimator == "full_ivqr"
     assert result.alpha_true == pytest.approx(data.alpha_true)
@@ -71,6 +72,7 @@ def test_estimate_full_ivqr_returns_estimation_result() -> None:
     assert result.failed is False
     assert result.alpha_hat is not None
     assert result.objective_value is not None
+    assert np.isfinite(result.objective_value)
     assert result.runtime_seconds >= 0.0
 
 
@@ -112,8 +114,8 @@ def test_estimate_full_ivqr_output_is_deterministic() -> None:
     data = generate_data(design)
     alphas = np.linspace(0.0, 2.0, 11)
 
-    result_1 = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
-    result_2 = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
+    result_1 = estimate_full_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
+    result_2 = estimate_full_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
 
     assert result_1.alpha_hat == pytest.approx(result_2.alpha_hat)
     assert result_1.objective_value == pytest.approx(result_2.objective_value)

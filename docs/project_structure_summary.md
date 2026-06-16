@@ -26,6 +26,16 @@ Implemented:
 - Corrected nonseparable outcome equation.
 - Phase 1/Phase 2 tests.
 
+Phase 4 estimators use the covariance-weighted GMM objective
+
+```text
+n * g_hat(alpha)' Sigma_hat(alpha)^(-1) g_hat(alpha)
+```
+
+with a small ridge added to the estimated moment covariance for numerical
+stability. The older unweighted quadratic score remains only as a prototype
+helper.
+
 The corrected DGP outcome equation is
 
 ```text

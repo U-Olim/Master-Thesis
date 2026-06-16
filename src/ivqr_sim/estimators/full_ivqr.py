@@ -17,9 +17,9 @@ from ivqr_sim.inference import (
 from ivqr_sim.moments import (
     alpha_grid,
     make_instruments,
+    moment_contributions,
     residuals_alpha,
-    sample_moment,
-    score_statistic,
+    weighted_gmm_statistic,
 )
 
 
@@ -150,8 +150,9 @@ def evaluate_full_ivqr_alpha(
     alpha: float,
     tau: float,
     max_iter: int = 1000,
+    gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
-    """Evaluate the full-control IVQR objective at one alpha value."""
+    """Evaluate the covariance-weighted full-control IVQR objective."""
     y, d, z, x = _validate_data_arrays(y, d, z, x)
 
     beta_hat, converged, message = fit_profile_beta(
@@ -169,8 +170,8 @@ def evaluate_full_ivqr_alpha(
     x_beta = x_design @ beta_hat
     residuals = residuals_alpha(y, d, x_beta, alpha)
     instruments = make_instruments(z, x)
-    moment_vector = sample_moment(residuals, tau, instruments)
-    statistic = len(y) * score_statistic(moment_vector)
+    contributions = moment_contributions(residuals, tau, instruments)
+    statistic = weighted_gmm_statistic(contributions, ridge=gmm_ridge)
 
     return float(statistic), True, "ok"
 
@@ -184,8 +185,9 @@ def estimate_full_ivqr(
     alpha_step: float = 0.05,
     confidence_level: float = 0.95,
     max_iter: int = 1000,
+    gmm_ridge: float = 1e-8,
 ) -> EstimationResult:
-    """Estimate full-control IVQR by profiling controls over an alpha grid."""
+    """Estimate full-control IVQR by weighted GMM over an alpha grid."""
     start = perf_counter()
     _validate_tau(tau)
     y, d, z, x = _validate_data_arrays(data.y, data.d, data.z, data.x)
@@ -220,6 +222,7 @@ def estimate_full_ivqr(
             alpha=float(alpha),
             tau=tau,
             max_iter=max_iter,
+            gmm_ridge=gmm_ridge,
         )
         statistics[j] = statistic
         converged_flags.append(converged)

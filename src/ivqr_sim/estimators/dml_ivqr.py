@@ -17,7 +17,7 @@ from ivqr_sim.inference import (
     critical_value_chi_square,
     invert_score_test,
 )
-from ivqr_sim.moments import alpha_grid, quantile_score
+from ivqr_sim.moments import alpha_grid, quantile_score, weighted_gmm_statistic
 
 
 def _validate_tau(tau: float) -> None:
@@ -222,8 +222,9 @@ def evaluate_dml_ivqr_alpha(
     quantile_penalty: float = 0.01,
     ridge_alpha: float = 1.0,
     quantile_solver: str = "highs",
+    gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
-    """Evaluate the cross-fitted scalar DML-IVQR score statistic at alpha."""
+    """Evaluate the weighted cross-fitted scalar DML-IVQR statistic."""
     y, d, z, x = _validate_data_arrays(y, d, z, x)
     _validate_tau(tau)
 
@@ -263,8 +264,8 @@ def evaluate_dml_ivqr_alpha(
         score_test = quantile_score(residual_test, tau)
         moment_contributions[test_idx] = score_test * z_resid_test
 
-    g = float(np.mean(moment_contributions))
-    statistic = n * g * g
+    contributions = moment_contributions.reshape(-1, 1)
+    statistic = weighted_gmm_statistic(contributions, ridge=gmm_ridge)
     return float(statistic), True, "ok"
 
 
@@ -281,8 +282,9 @@ def estimate_dml_ivqr(
     quantile_penalty: float = 0.01,
     ridge_alpha: float = 1.0,
     quantile_solver: str = "highs",
+    gmm_ridge: float = 1e-8,
 ) -> EstimationResult:
-    """Estimate DML-IVQR by cross-fitted orthogonal score inversion."""
+    """Estimate DML-IVQR by cross-fitted weighted score inversion."""
     start = perf_counter()
     _validate_tau(tau)
     y, d, z, x = _validate_data_arrays(data.y, data.d, data.z, data.x)
@@ -309,6 +311,7 @@ def estimate_dml_ivqr(
             quantile_penalty=quantile_penalty,
             ridge_alpha=ridge_alpha,
             quantile_solver=quantile_solver,
+            gmm_ridge=gmm_ridge,
         )
         statistics[j] = statistic
         converged_flags.append(converged)

@@ -21,9 +21,9 @@ from ivqr_sim.inference import (
 from ivqr_sim.moments import (
     alpha_grid,
     make_instruments,
+    moment_contributions,
     residuals_alpha,
-    sample_moment,
-    score_statistic,
+    weighted_gmm_statistic,
 )
 
 
@@ -209,8 +209,9 @@ def evaluate_post_selection_alpha(
     alpha: float,
     tau: float,
     max_iter: int = 1000,
+    gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
-    """Evaluate the post-selection IVQR objective at one alpha value."""
+    """Evaluate the covariance-weighted post-selection IVQR objective."""
     y, d, z, x_selected = _validate_data_arrays(y, d, z, x_selected)
     beta_hat, converged, message = fit_post_selection_beta(
         y=y,
@@ -227,8 +228,8 @@ def evaluate_post_selection_alpha(
     x_beta = x_design @ beta_hat
     residuals = residuals_alpha(y, d, x_beta, alpha)
     instruments = make_instruments(z, x_selected)
-    moment_vector = sample_moment(residuals, tau, instruments)
-    statistic = len(y) * score_statistic(moment_vector)
+    contributions = moment_contributions(residuals, tau, instruments)
+    statistic = weighted_gmm_statistic(contributions, ridge=gmm_ridge)
 
     return float(statistic), True, "ok"
 
@@ -245,8 +246,9 @@ def estimate_post_selection_ivqr(
     selection_cv: int = 5,
     selection_max_iter: int = 10000,
     quantreg_max_iter: int = 1000,
+    gmm_ridge: float = 1e-8,
 ) -> EstimationResult:
-    """Estimate post-selection IVQR by Lasso selection then IVQR profiling."""
+    """Estimate post-selection IVQR by Lasso selection and weighted GMM."""
     start = perf_counter()
     _validate_tau(tau)
     y, d, z, x = _validate_data_arrays(data.y, data.d, data.z, data.x)
@@ -302,6 +304,7 @@ def estimate_post_selection_ivqr(
             alpha=float(alpha),
             tau=tau,
             max_iter=quantreg_max_iter,
+            gmm_ridge=gmm_ridge,
         )
         statistics[j] = statistic
         converged_flags.append(converged)

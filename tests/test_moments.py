@@ -5,10 +5,13 @@ from ivqr_sim.moments import (
     alpha_grid,
     evaluate_grid,
     make_instruments,
+    moment_contributions,
+    moment_covariance,
     quantile_score,
     residuals_alpha,
     sample_moment,
     score_statistic,
+    weighted_gmm_statistic,
 )
 
 
@@ -79,6 +82,85 @@ def test_sample_moment_returns_instrument_dimension() -> None:
     moment = sample_moment(residuals, tau=0.5, instruments=instruments)
 
     assert moment.shape == (2,)
+
+
+def test_moment_contributions_shape() -> None:
+    residuals = np.array([-1.0, 2.0, 3.0])
+    instruments = np.array([[1.0, 2.0], [0.0, 1.0], [1.0, 0.0]])
+
+    contributions = moment_contributions(residuals, tau=0.5, instruments=instruments)
+
+    assert contributions.shape == (3, 2)
+    assert np.all(np.isfinite(contributions))
+
+
+def test_sample_moment_equals_mean_of_contributions() -> None:
+    residuals = np.array([-1.0, 2.0, 3.0])
+    instruments = np.array([[1.0, 2.0], [0.0, 1.0], [1.0, 0.0]])
+
+    contributions = moment_contributions(residuals, tau=0.5, instruments=instruments)
+    moment = sample_moment(residuals, tau=0.5, instruments=instruments)
+
+    assert np.allclose(moment, contributions.mean(axis=0))
+
+
+def test_moment_covariance_shape_and_symmetry() -> None:
+    contributions = np.array([[1.0, 0.0], [2.0, 1.0], [3.0, 1.0], [4.0, 2.0]])
+
+    sigma = moment_covariance(contributions, ridge=1e-8)
+
+    assert sigma.shape == (2, 2)
+    assert np.allclose(sigma, sigma.T)
+    assert np.all(np.isfinite(sigma))
+
+
+def test_moment_covariance_ridge_adds_positive_diagonal() -> None:
+    contributions = np.ones((4, 2))
+
+    sigma = moment_covariance(contributions, ridge=1e-4)
+
+    assert np.all(np.diag(sigma) > 0.0)
+    assert np.allclose(np.diag(sigma), np.array([1e-4, 1e-4]))
+
+
+def test_weighted_gmm_statistic_is_finite_and_nonnegative() -> None:
+    contributions = np.array([[1.0, 0.0], [2.0, 1.0], [3.0, 1.0], [4.0, 2.0]])
+
+    statistic = weighted_gmm_statistic(contributions, ridge=1e-8)
+
+    assert np.isfinite(statistic)
+    assert statistic >= 0.0
+
+
+def test_weighted_gmm_statistic_matches_manual_scalar_case() -> None:
+    contributions = np.array([[1.0], [2.0], [3.0], [4.0]])
+    ridge = 1e-8
+    n = contributions.shape[0]
+    g_hat = contributions.mean(axis=0)
+    centered = contributions - g_hat
+    sigma = centered.T @ centered / n + ridge * np.eye(1)
+    expected = n * g_hat @ np.linalg.inv(sigma) @ g_hat
+
+    statistic = weighted_gmm_statistic(contributions, ridge=ridge, use_pinv=False)
+
+    assert statistic == pytest.approx(float(expected))
+
+
+@pytest.mark.parametrize(
+    ("contributions", "ridge"),
+    [
+        (np.array([1.0, 2.0, 3.0]), 1e-8),
+        (np.array([[1.0], [np.inf]]), 1e-8),
+        (np.array([[1.0]]), 1e-8),
+        (np.array([[1.0], [2.0]]), -1e-8),
+    ],
+)
+def test_moment_covariance_validates_inputs(
+    contributions: np.ndarray,
+    ridge: float,
+) -> None:
+    with pytest.raises(ValueError):
+        moment_covariance(contributions, ridge=ridge)
 
 
 def test_score_statistic_is_nonnegative() -> None:
