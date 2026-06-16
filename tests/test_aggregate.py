@@ -91,6 +91,7 @@ def test_aggregate_results_post_selection_metrics() -> None:
     assert row["non_convergence_rate"] == pytest.approx(0.5)
     assert row["cr_empty_rate"] == pytest.approx(0.5)
     assert row["coverage"] == pytest.approx(0.0)
+    assert row["coverage_valid_only"] == pytest.approx(0.0)
     assert row["mean_selected_controls"] == pytest.approx(3.5)
 
 
@@ -167,6 +168,34 @@ def test_aggregate_results_without_rep_column_uses_row_count() -> None:
     summary = aggregate_results(raw, expected_replications=2)
 
     assert summary["observed_replications"].tolist() == [2, 2]
+
+
+def test_aggregate_results_duplicate_raw_rows_raise_value_error() -> None:
+    raw = _raw_results().copy()
+    raw["seed"] = [123, 124, 123, 124]
+    duplicate = pd.concat([raw, raw.iloc[[0]]], ignore_index=True)
+
+    with pytest.raises(ValueError, match="duplicate"):
+        aggregate_results(duplicate)
+
+
+def test_aggregate_results_different_rep_rows_are_not_duplicates() -> None:
+    raw = _raw_results().copy()
+    raw["seed"] = [123, 124, 123, 124]
+    extra = raw.iloc[[0]].copy()
+    extra["rep"] = 2
+    extra["seed"] = 125
+
+    summary = aggregate_results(pd.concat([raw, extra], ignore_index=True))
+    dml = _row(summary, "dml_ivqr")
+
+    assert dml["observed_replications"] == 3
+
+
+def test_aggregate_results_without_seed_still_aggregates_artificial_data() -> None:
+    summary = aggregate_results(_raw_results(), expected_replications=2)
+
+    assert len(summary) == 2
 
 
 def test_incomplete_groups_returns_empty_if_column_missing() -> None:

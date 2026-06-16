@@ -7,6 +7,7 @@ from ivqr_sim.metrics import (
     bias,
     boundary_rate,
     coverage,
+    coverage_valid_only,
     cr_disconnected_rate,
     cr_empty_rate,
     estimation_errors,
@@ -77,7 +78,22 @@ def test_rmse_and_mae() -> None:
 def test_coverage_parses_bool_and_string_values() -> None:
     df = _base_df(cr_covers_true=[True, "False", "true", None])
 
-    assert coverage(df) == pytest.approx(2 / 3)
+    assert coverage(df) == pytest.approx(2 / 4)
+    assert coverage_valid_only(df) == pytest.approx(2 / 3)
+
+
+def test_coverage_counts_all_missing_as_noncoverage() -> None:
+    df = _base_df(cr_covers_true=[None, None, None])
+
+    assert coverage(df) == pytest.approx(0.0)
+    assert np.isnan(coverage_valid_only(df))
+
+
+def test_coverage_empty_dataframe_returns_nan() -> None:
+    df = _base_df().iloc[0:0]
+
+    assert np.isnan(coverage(df))
+    assert np.isnan(coverage_valid_only(df))
 
 
 def test_average_cr_length_ignores_missing_values() -> None:
@@ -150,6 +166,7 @@ def test_summarize_group_returns_expected_keys() -> None:
         "rmse",
         "mae",
         "coverage",
+        "coverage_valid_only",
         "avg_cr_length",
         "failure_rate",
         "non_convergence_rate",

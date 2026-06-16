@@ -110,6 +110,15 @@ def mae(df: pd.DataFrame) -> float:
 
 def coverage(df: pd.DataFrame) -> float:
     validate_metric_input(df)
+    values = _to_bool(df["cr_covers_true"])
+    if len(values) == 0:
+        return float(np.nan)
+    values = values.fillna(False)
+    return float(values.astype(float).mean())
+
+
+def coverage_valid_only(df: pd.DataFrame) -> float:
+    validate_metric_input(df)
     return _mean_bool(df["cr_covers_true"])
 
 
@@ -181,6 +190,7 @@ def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
         "rmse": rmse(df),
         "mae": mae(df),
         "coverage": coverage(df),
+        "coverage_valid_only": coverage_valid_only(df),
         "avg_cr_length": average_cr_length(df),
         "failure_rate": failure_rate(df),
         "non_convergence_rate": non_convergence_rate(df),

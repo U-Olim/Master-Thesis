@@ -101,6 +101,11 @@ it with `--estimators post_selection dml`.
 Phase 6B aggregation groups raw simulation rows by `dgp`, `n`, `p`, `pi`,
 `tau`, and `estimator`. The output contains Monte Carlo metrics and
 completeness diagnostics such as observed replications and completion rate.
+Coverage is computed over all replications: failed or missing
+confidence-region indicators count as non-coverage. The
+`coverage_valid_only` field is reported only as a diagnostic conditional on
+available confidence-region indicators. Aggregation rejects duplicate raw rows
+for the same `dgp`, `n`, `p`, `pi`, `tau`, `rep`, `seed`, `estimator` key.
 
 ```python
 from ivqr_sim.simulation.aggregate import aggregate_results_file

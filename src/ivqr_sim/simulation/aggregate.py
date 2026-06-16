@@ -10,6 +10,7 @@ from ivqr_sim.metrics import summarize_group, validate_metric_input
 
 
 GROUP_COLUMNS = ["dgp", "n", "p", "pi", "tau", "estimator"]
+RAW_UNIQUE_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep", "seed", "estimator"]
 SUMMARY_METRIC_COLUMNS = [
     "replications",
     "valid_estimates",
@@ -18,6 +19,7 @@ SUMMARY_METRIC_COLUMNS = [
     "rmse",
     "mae",
     "coverage",
+    "coverage_valid_only",
     "avg_cr_length",
     "failure_rate",
     "non_convergence_rate",
@@ -48,6 +50,20 @@ def load_raw_results(path: str | Path) -> pd.DataFrame:
     return raw
 
 
+def validate_no_duplicate_raw_rows(raw: pd.DataFrame) -> None:
+    """Reject duplicate estimator-replication rows when the full raw key exists."""
+    if not set(RAW_UNIQUE_COLUMNS).issubset(raw.columns):
+        return
+
+    duplicates = raw.duplicated(RAW_UNIQUE_COLUMNS, keep=False)
+    if duplicates.any():
+        duplicate_count = int(duplicates.sum())
+        raise ValueError(
+            "duplicate raw rows detected: "
+            f"{duplicate_count} rows share key columns {RAW_UNIQUE_COLUMNS}"
+        )
+
+
 def aggregate_results(
     raw: pd.DataFrame,
     expected_replications: int | None = None,
@@ -55,6 +71,7 @@ def aggregate_results(
     """Aggregate raw estimator-level rows by scenario and estimator."""
     validate_metric_input(raw)
     _validate_group_columns(raw)
+    validate_no_duplicate_raw_rows(raw)
 
     rows: list[dict[str, object]] = []
     for key, group in raw.groupby(GROUP_COLUMNS, dropna=False):
