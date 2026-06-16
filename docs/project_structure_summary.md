@@ -32,6 +32,7 @@ Implemented:
 - Weighted GMM objective.
 - Pilot simulation runner.
 - Full simulation runner with batching and resume support.
+- Core performance metrics and scenario-level aggregation.
 
 Phase 4 estimators use the covariance-weighted GMM objective
 
@@ -96,6 +97,42 @@ continues with the remaining estimators for the same dataset. Full-control IVQR
 is included by default because infeasibility in high-dimensional scenarios is
 informative and is recorded as estimator failure. Diagnostic runs can exclude
 it with `--estimators post_selection dml`.
+
+Phase 6B aggregation groups raw simulation rows by `dgp`, `n`, `p`, `pi`,
+`tau`, and `estimator`. The output contains Monte Carlo metrics and
+completeness diagnostics such as observed replications and completion rate.
+
+```python
+from ivqr_sim.simulation.aggregate import aggregate_results_file
+
+summary = aggregate_results_file(
+    "results/raw/full_simulation_results.csv",
+    "results/processed/summary_metrics.csv",
+    expected_replications=1000,
+)
+```
+
+Phase 6C creates thesis-ready CSV tables for Quarto or manual inclusion:
+
+```bash
+python scripts/04_make_tables.py \
+  --input results/processed/summary_metrics.csv \
+  --output-dir results/tables
+```
+
+Raw results can also be aggregated and tabled in one command:
+
+```bash
+python scripts/04_make_tables.py \
+  --raw-input results/raw/full_simulation_results.csv \
+  --summary-output results/processed/summary_metrics.csv \
+  --expected-replications 1000 \
+  --output-dir results/tables
+```
+
+Generated files include `comparison_table.csv`, `diagnostic_table.csv`,
+`bias_wide.csv`, `rmse_wide.csv`, `mae_wide.csv`, `coverage_wide.csv`,
+`cr_length_wide.csv`, `runtime_wide.csv`, and `failure_rate_wide.csv`.
 
 Setup for the `src/` package layout:
 
