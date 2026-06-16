@@ -1,12 +1,21 @@
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from ivqr_sim.estimators.base import EstimationResult
 from ivqr_sim.simulation.design import Design
 from ivqr_sim.simulation import runner as runner_module
-from ivqr_sim.simulation.runner import run_pilot_simulation, run_single_replication
+from ivqr_sim.simulation.runner import (
+    completed_design_keys,
+    filter_completed_designs,
+    make_simulation_grid,
+    observed_design_keys,
+    run_pilot_simulation,
+    run_simulation_batch,
+    run_single_replication,
+)
 
 
 REQUIRED_KEYS = {
@@ -178,3 +187,375 @@ def test_run_pilot_simulation_does_not_write_files(tmp_path: Path, monkeypatch) 
     run_pilot_simulation(reps=1, n=80, p=5, alphas=np.linspace(0.0, 2.0, 5))
 
     assert not Path("results/raw/pilot_results.csv").exists()
+
+
+def test_make_simulation_grid_size_and_unique_seeds() -> None:
+    designs = make_simulation_grid(
+        dgps=("dgp1",),
+        n_values=(80,),
+        p_values=(5,),
+        pi_values=(1.0, 0.5),
+        taus=(0.5,),
+        reps=3,
+    )
+
+    assert len(designs) == 6
+    assert len({design.seed for design in designs}) == 6
+
+
+def test_make_simulation_grid_accepts_all_valid_dgps() -> None:
+    designs = make_simulation_grid(
+        dgps=("dgp1", "dgp2", "dgp3"),
+        n_values=(80,),
+        p_values=(5,),
+        pi_values=(1.0,),
+        taus=(0.5,),
+        reps=1,
+    )
+
+    assert [design.dgp for design in designs] == ["dgp1", "dgp2", "dgp3"]
+
+
+def test_make_simulation_grid_invalid_dgp_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown DGP"):
+        make_simulation_grid(
+            dgps=("dgp1", "bad_dgp"),
+            n_values=(80,),
+            p_values=(5,),
+            pi_values=(1.0,),
+            taus=(0.5,),
+            reps=1,
+        )
+
+
+def test_make_simulation_grid_loop_order_is_deterministic() -> None:
+    designs = make_simulation_grid(
+        dgps=("dgp1", "dgp2"),
+        n_values=(80,),
+        p_values=(5,),
+        pi_values=(1.0, 0.5),
+        taus=(0.25, 0.5),
+        reps=2,
+        base_seed=100,
+    )
+
+    assert designs[0] == Design("dgp1", 80, 5, 1.0, 0.25, rep=0, seed=100)
+    assert designs[-1] == Design(
+        "dgp2",
+        80,
+        5,
+        0.5,
+        0.5,
+        rep=1,
+        seed=10_000_000 + 10_000 + 1_000 + 1 + 100,
+    )
+
+
+def test_run_single_replication_catches_unexpected_estimator_exception(
+    monkeypatch,
+) -> None:
+    def broken_full_estimator(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(runner_module, "estimate_full_ivqr", broken_full_estimator)
+    design = Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)
+
+    rows = run_single_replication(
+        design,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("full", "post_selection"),
+    )
+
+    assert len(rows) == 2
+    by_estimator = {row["estimator"]: row for row in rows}
+    assert by_estimator["full_ivqr"]["failed"] is True
+    assert by_estimator["full_ivqr"]["converged"] is False
+    assert "Unexpected estimator error: RuntimeError: boom" in by_estimator["full_ivqr"][
+        "message"
+    ]
+    assert "post_selection_ivqr" in by_estimator
+    assert by_estimator["post_selection_ivqr"]["message"] != by_estimator["full_ivqr"][
+        "message"
+    ]
+
+
+def test_run_simulation_batch_returns_expected_rows() -> None:
+    designs = [
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123),
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=1, seed=124),
+    ]
+
+    results = run_simulation_batch(
+        designs,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("post_selection", "dml"),
+    )
+
+    assert len(results) == 4
+    assert set(results["estimator"]) == {"post_selection_ivqr", "dml_ivqr"}
+    assert REQUIRED_KEYS.issubset(results.columns)
+
+
+def test_run_simulation_batch_writes_csv(tmp_path: Path) -> None:
+    output_path = tmp_path / "batch.csv"
+    designs = [Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)]
+
+    run_simulation_batch(
+        designs,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("post_selection",),
+        output_path=output_path,
+    )
+
+    written = pd.read_csv(output_path)
+    assert len(written) == 1
+    assert written.loc[0, "estimator"] == "post_selection_ivqr"
+
+
+def test_filter_completed_designs_removes_fully_completed_design(tmp_path: Path) -> None:
+    designs = [
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123),
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=1, seed=124),
+    ]
+    output_path = tmp_path / "existing.csv"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+                "estimator": "post_selection_ivqr",
+            },
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+                "estimator": "dml_ivqr",
+            },
+        ]
+    ).to_csv(output_path, index=False)
+
+    pending = filter_completed_designs(
+        designs,
+        output_path,
+        estimators=("post_selection", "dml"),
+    )
+
+    assert pending == [designs[1]]
+
+
+def test_filter_completed_designs_keeps_partially_completed_design(tmp_path: Path) -> None:
+    design = Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)
+    output_path = tmp_path / "existing.csv"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+                "estimator": "post_selection_ivqr",
+            }
+        ]
+    ).to_csv(output_path, index=False)
+
+    pending = filter_completed_designs(
+        [design],
+        output_path,
+        estimators=("post_selection", "dml"),
+    )
+
+    assert pending == [design]
+
+
+def test_observed_design_keys_reads_existing_results(tmp_path: Path) -> None:
+    output_path = tmp_path / "existing.csv"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+            }
+        ]
+    ).to_csv(output_path, index=False)
+
+    assert observed_design_keys(output_path) == {("dgp1", 80, 5, 1.0, 0.5, 0, 123)}
+
+
+def test_completed_design_keys_deprecated_alias_still_works(tmp_path: Path) -> None:
+    output_path = tmp_path / "existing.csv"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+            }
+        ]
+    ).to_csv(output_path, index=False)
+
+    assert completed_design_keys(output_path) == observed_design_keys(output_path)
+
+
+def test_filter_completed_designs_treats_failed_rows_as_completed_by_default(
+    tmp_path: Path,
+) -> None:
+    design = Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)
+    output_path = tmp_path / "existing.csv"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+                "estimator": "post_selection_ivqr",
+                "failed": True,
+            }
+        ]
+    ).to_csv(output_path, index=False)
+
+    pending = filter_completed_designs(
+        [design],
+        output_path,
+        estimators=("post_selection",),
+        rerun_failed=False,
+    )
+
+    assert pending == []
+
+
+def test_filter_completed_designs_rerun_failed_keeps_failed_design(
+    tmp_path: Path,
+) -> None:
+    design = Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)
+    output_path = tmp_path / "existing.csv"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+                "estimator": "post_selection_ivqr",
+                "failed": "True",
+            }
+        ]
+    ).to_csv(output_path, index=False)
+
+    pending = filter_completed_designs(
+        [design],
+        output_path,
+        estimators=("post_selection",),
+        rerun_failed=True,
+    )
+
+    assert pending == [design]
+
+
+def test_filter_completed_designs_rerun_failed_requires_all_successes(
+    tmp_path: Path,
+) -> None:
+    design = Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)
+    output_path = tmp_path / "existing.csv"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+                "estimator": "post_selection_ivqr",
+                "failed": False,
+            },
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+                "estimator": "dml_ivqr",
+                "failed": True,
+            },
+        ]
+    ).to_csv(output_path, index=False)
+
+    pending = filter_completed_designs(
+        [design],
+        output_path,
+        estimators=("post_selection", "dml"),
+        rerun_failed=True,
+    )
+
+    assert pending == [design]
+
+
+def test_filter_completed_designs_rerun_failed_missing_failed_column_raises(
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "missing_failed.csv"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+                "estimator": "post_selection_ivqr",
+            }
+        ]
+    ).to_csv(output_path, index=False)
+
+    with pytest.raises(ValueError, match="missing required resume columns"):
+        filter_completed_designs(
+            [Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)],
+            output_path,
+            estimators=("post_selection",),
+            rerun_failed=True,
+        )
+
+
+def test_filter_completed_designs_malformed_csv_raises(tmp_path: Path) -> None:
+    output_path = tmp_path / "bad.csv"
+    pd.DataFrame([{"dgp": "dgp1", "n": 80}]).to_csv(output_path, index=False)
+
+    with pytest.raises(ValueError, match="missing required resume columns"):
+        filter_completed_designs(
+            [Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)],
+            output_path,
+            estimators=("post_selection", "dml"),
+        )

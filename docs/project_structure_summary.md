@@ -15,7 +15,7 @@ This repository uses a `src/` package layout. The main package is `ivqr_sim`.
 
 ## Current Status
 
-Current status: Phase 5A pilot runner implemented.
+Current status: Phase 5B full simulation runner implemented.
 
 Implemented:
 
@@ -31,6 +31,7 @@ Implemented:
 - DML-IVQR.
 - Weighted GMM objective.
 - Pilot simulation runner.
+- Full simulation runner with batching and resume support.
 
 Phase 4 estimators use the covariance-weighted GMM objective
 
@@ -75,6 +76,27 @@ failed_alpha_count records failed grid evaluations.
 cr_empty=True means the inverted confidence region is empty, not that the estimator failed.
 ```
 
+The full simulation runner follows the binding grid from `Project_structure.pdf`
+and writes results batch-by-batch:
+
+```bash
+python scripts/03_run_full_simulation.py --resume
+python scripts/03_run_full_simulation.py --resume --rerun-failed
+python scripts/03_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
+python scripts/03_run_full_simulation.py --estimators post_selection dml --reps 10 --resume
+```
+
+The default run uses 3 DGPs, 3 sample sizes, 3 control dimensions, 4
+instrument strengths, 3 quantiles, and 1000 replications, so it can be
+computationally expensive. `--resume` skips designs for which all requested
+estimator rows already exist in the output CSV. `--rerun-failed` makes resume
+stricter: failed estimator rows are not treated as completed. If one estimator
+crashes unexpectedly, the runner records a failed row for that estimator and
+continues with the remaining estimators for the same dataset. Full-control IVQR
+is included by default because infeasibility in high-dimensional scenarios is
+informative and is recorded as estimator failure. Diagnostic runs can exclude
+it with `--estimators post_selection dml`.
+
 After editable installation, basic checks are:
 
 ```bash
@@ -83,6 +105,7 @@ python -c "import ivqr_sim"
 pytest -v
 python scripts/01_smoke_test.py
 python scripts/02_pilot_simulation.py --mode quick
+python scripts/03_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
 ```
 
 The corrected DGP outcome equation is

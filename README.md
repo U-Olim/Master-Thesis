@@ -22,7 +22,7 @@ The planned Monte Carlo design includes:
 
 ## Current Status
 
-Current status: Phase 5A pilot runner implemented.
+Current status: Phase 5B full simulation runner implemented.
 
 Implemented:
 
@@ -38,6 +38,7 @@ Implemented:
 - DML-IVQR
 - Covariance-weighted GMM objective
 - Pilot simulation runner
+- Full simulation runner with batching and resume support
 
 The corrected DGP outcome equation is
 
@@ -95,8 +96,27 @@ defaults rather than an artificially tiny cap. Full-control IVQR may produce
 empty confidence regions or be slow in high-dimensional settings; this is
 recorded rather than hidden.
 
-Full simulation grid execution and metrics aggregation will be implemented in
-later phases.
+The full simulation runner writes results batch-by-batch and supports resume:
+
+```bash
+python scripts/03_run_full_simulation.py --resume
+python scripts/03_run_full_simulation.py --resume --rerun-failed
+python scripts/03_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
+python scripts/03_run_full_simulation.py --estimators post_selection dml --reps 10 --resume
+```
+
+The default full grid follows `Project_structure.pdf` and can be
+computationally expensive: 3 DGPs, 3 sample sizes, 3 control dimensions, 4
+instrument strengths, 3 quantiles, and 1000 replications. `--resume` skips
+designs for which all requested estimator rows already exist in the output
+CSV. `--rerun-failed` makes resume stricter: failed estimator rows are not
+treated as completed. If one estimator crashes unexpectedly, the runner records
+a failed row for that estimator and continues with the remaining estimators for
+the same dataset. Full-control IVQR is included by default because failure in
+high-dimensional settings is informative. To exclude it for diagnostic runs,
+use `--estimators post_selection dml`.
+
+Final metrics aggregation will be implemented in a later phase.
 
 ## Installation
 
@@ -114,6 +134,7 @@ python -c "import ivqr_sim"
 pytest -v
 python scripts/01_smoke_test.py
 python scripts/02_pilot_simulation.py --mode quick
+python scripts/03_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
 ```
 
 ## Result Status
