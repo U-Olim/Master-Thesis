@@ -94,6 +94,8 @@ def _failed_result(
     tau: float,
     message: str,
     runtime_seconds: float,
+    alpha_grid_size: int | None = None,
+    failed_alpha_count: int | None = None,
 ) -> EstimationResult:
     return EstimationResult(
         estimator="dml_ivqr",
@@ -105,6 +107,8 @@ def _failed_result(
         message=message,
         objective_value=None,
         at_grid_boundary=False,
+        alpha_grid_size=alpha_grid_size,
+        failed_alpha_count=failed_alpha_count,
         cr_lower=None,
         cr_upper=None,
         cr_length=None,
@@ -326,8 +330,13 @@ def estimate_dml_ivqr(
         return _failed_result(
             data=data,
             tau=tau,
-            message="All alpha-grid evaluations failed.",
+            message=(
+                "All alpha-grid evaluations failed; "
+                f"failed_alpha_points={num_failed}/{len(alphas)}"
+            ),
             runtime_seconds=perf_counter() - start,
+            alpha_grid_size=len(alphas),
+            failed_alpha_count=num_failed,
         )
 
     alpha_hat, min_statistic, at_boundary = argmin_grid(alphas, statistics)
@@ -339,17 +348,18 @@ def estimate_dml_ivqr(
         alpha_true=data.alpha_true,
     )
 
-    all_converged = num_failed == 0
     return EstimationResult(
         estimator="dml_ivqr",
         alpha_hat=alpha_hat,
         alpha_true=data.alpha_true,
         tau=tau,
-        converged=all_converged,
+        converged=True,
         failed=False,
         message=f"ok; failed_alpha_points={num_failed}/{len(alphas)}",
         objective_value=min_statistic,
         at_grid_boundary=at_boundary,
+        alpha_grid_size=len(alphas),
+        failed_alpha_count=num_failed,
         cr_lower=region.lower,
         cr_upper=region.upper,
         cr_length=region.length,

@@ -101,6 +101,8 @@ def _failed_result(
     message: str,
     selected_controls: int | None,
     runtime_seconds: float,
+    alpha_grid_size: int | None = None,
+    failed_alpha_count: int | None = None,
 ) -> EstimationResult:
     return EstimationResult(
         estimator="post_selection_ivqr",
@@ -112,6 +114,8 @@ def _failed_result(
         message=message,
         objective_value=None,
         at_grid_boundary=False,
+        alpha_grid_size=alpha_grid_size,
+        failed_alpha_count=failed_alpha_count,
         cr_lower=None,
         cr_upper=None,
         cr_length=None,
@@ -272,6 +276,8 @@ def estimate_post_selection_ivqr(
             message=f"Control selection failed: {exc}",
             selected_controls=None,
             runtime_seconds=perf_counter() - start,
+            alpha_grid_size=None,
+            failed_alpha_count=None,
         )
 
     n = x.shape[0]
@@ -287,6 +293,8 @@ def estimate_post_selection_ivqr(
             message="Post-selection IVQR infeasible: selected nuisance dimension is at least sample size.",
             selected_controls=int(selected_indices.size),
             runtime_seconds=perf_counter() - start,
+            alpha_grid_size=None,
+            failed_alpha_count=None,
         )
 
     if alphas is None:
@@ -319,9 +327,14 @@ def estimate_post_selection_ivqr(
         return _failed_result(
             data=data,
             tau=tau,
-            message=f"All alpha-grid evaluations failed. {selection_message}",
+            message=(
+                "All alpha-grid evaluations failed; "
+                f"failed_alpha_points={num_failed}/{len(alphas)}; {selection_message}"
+            ),
             selected_controls=int(selected_indices.size),
             runtime_seconds=perf_counter() - start,
+            alpha_grid_size=len(alphas),
+            failed_alpha_count=num_failed,
         )
 
     alpha_hat, min_statistic, at_boundary = argmin_grid(alphas, statistics)
@@ -333,7 +346,6 @@ def estimate_post_selection_ivqr(
         alpha_true=data.alpha_true,
     )
 
-    all_converged = num_failed == 0
     message = f"ok; failed_alpha_points={num_failed}/{len(alphas)}; {selection_message}"
 
     return EstimationResult(
@@ -341,11 +353,13 @@ def estimate_post_selection_ivqr(
         alpha_hat=alpha_hat,
         alpha_true=data.alpha_true,
         tau=tau,
-        converged=all_converged,
+        converged=True,
         failed=False,
         message=message,
         objective_value=min_statistic,
         at_grid_boundary=at_boundary,
+        alpha_grid_size=len(alphas),
+        failed_alpha_count=num_failed,
         cr_lower=region.lower,
         cr_upper=region.upper,
         cr_length=region.length,

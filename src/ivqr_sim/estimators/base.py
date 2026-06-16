@@ -22,6 +22,8 @@ class EstimationResult:
 
     objective_value: float | None
     at_grid_boundary: bool
+    alpha_grid_size: int | None
+    failed_alpha_count: int | None
 
     cr_lower: float | None
     cr_upper: float | None

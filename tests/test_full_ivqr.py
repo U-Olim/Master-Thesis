@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from ivqr_sim.dgp import generate_data
+from ivqr_sim.estimators import full_ivqr as full_ivqr_module
 from ivqr_sim.estimators.full_ivqr import (
     add_intercept,
     estimate_full_ivqr,
@@ -74,6 +75,8 @@ def test_estimate_full_ivqr_returns_estimation_result() -> None:
     assert result.objective_value is not None
     assert np.isfinite(result.objective_value)
     assert result.cr_disconnected is not None
+    assert result.alpha_grid_size == len(alphas)
+    assert result.failed_alpha_count == 0
     assert result.runtime_seconds >= 0.0
 
 
@@ -86,7 +89,52 @@ def test_estimate_full_ivqr_infeasible_high_dimensional_case_fails_cleanly() -> 
     assert result.failed is True
     assert result.converged is False
     assert result.alpha_hat is None
+    assert result.alpha_grid_size is None
+    assert result.failed_alpha_count is None
     assert "infeasible" in result.message
+
+
+def test_estimate_full_ivqr_some_failed_alphas_still_converges(monkeypatch: pytest.MonkeyPatch) -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    data = generate_data(design)
+    alphas = np.array([0.0, 1.0, 2.0])
+    original = full_ivqr_module.evaluate_full_ivqr_alpha
+
+    def fake_evaluate(*args: object, **kwargs: object) -> tuple[float, bool, str]:
+        if kwargs["alpha"] == 1.0:
+            return np.inf, False, "forced failure"
+        return original(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(full_ivqr_module, "evaluate_full_ivqr_alpha", fake_evaluate)
+
+    result = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
+
+    assert result.failed is False
+    assert result.converged is True
+    assert result.alpha_hat is not None
+    assert result.alpha_grid_size == len(alphas)
+    assert result.failed_alpha_count == 1
+    assert "failed_alpha_points=1/3" in result.message
+
+
+def test_estimate_full_ivqr_all_failed_alphas_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    data = generate_data(design)
+    alphas = np.array([0.0, 1.0, 2.0])
+
+    def fake_evaluate(*args: object, **kwargs: object) -> tuple[float, bool, str]:
+        return np.inf, False, "forced failure"
+
+    monkeypatch.setattr(full_ivqr_module, "evaluate_full_ivqr_alpha", fake_evaluate)
+
+    result = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
+
+    assert result.failed is True
+    assert result.converged is False
+    assert result.alpha_hat is None
+    assert result.alpha_grid_size == len(alphas)
+    assert result.failed_alpha_count == len(alphas)
+    assert "All alpha-grid evaluations failed" in result.message
 
 
 def test_estimate_full_ivqr_invalid_tau_raises_value_error() -> None:

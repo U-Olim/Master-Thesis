@@ -49,6 +49,24 @@ practical implementation aligned with the score structure in
 The default confidence-region critical value uses `df=1` for scalar-alpha
 score inversion. It is not presented as a full overidentification J-test.
 
+Estimator result status fields use the following convention:
+
+```text
+failed=True means the estimator did not produce a usable estimate.
+converged=True means the estimator produced alpha_hat.
+failed_alpha_count records failed grid evaluations.
+cr_empty=True means the inverted confidence region is empty, not that the estimator failed.
+```
+
+After editable installation, basic checks are:
+
+```bash
+pip install -e .
+python -c "import ivqr_sim"
+pytest -v
+python scripts/01_smoke_test.py
+```
+
 The corrected DGP outcome equation is
 
 ```text

@@ -90,8 +90,18 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-## Running Tests
+## Checks
 
 ```bash
-pytest
+python -c "import ivqr_sim"
+pytest -v
+python scripts/01_smoke_test.py
 ```
+
+## Result Status
+
+`failed=True` means the estimator did not produce a usable estimate.
+`converged=True` means the estimator produced `alpha_hat`.
+`failed_alpha_count` records failed or sanitized alpha-grid evaluations.
+`cr_empty=True` means the inverted confidence region is empty, not that the
+estimator failed.
