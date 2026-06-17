@@ -1,16 +1,13 @@
 # Project Architecture Summary
 
-This repository uses a `src/` package layout. The main package is `ivqr_sim`.
+This repository uses a thematic `src/` layout. Core modules and packages live
+directly under `src/`.
 
-- `config.py`: fixed thesis design constants.
-- `dgp.py`: data-generating processes for DGP1, DGP2, and DGP3.
-- `true_effects.py`: true structural quantile treatment effects.
-- `moments.py`: IVQR and DML-IVQR moment functions.
-- `inference.py`: confidence-region and inference routines.
-- `metrics.py`: Monte Carlo performance metrics.
-- `estimators/`: Full-control IVQR, Post-selection IVQR, and DML-IVQR.
-- `simulation/`: design identifiers, runner orchestration, and aggregation.
-- `reporting/`: final thesis tables and figures.
+- `dgp/`: DGP designs, generators, and true structural parameters.
+- `estimators/`: Full-control, oracle, post-selection, and DML IVQR estimators.
+- `inference/`: alpha grids, moments, confidence regions, and metrics.
+- `simulation/`: fixed simulation config, runner orchestration, batching, and chunking.
+- `reporting/`: summaries, final thesis tables, and figures.
 - `tests/`: verification tests for implemented phases.
 
 ## Current Status
@@ -55,9 +52,9 @@ score inversion. It is not presented as a full overidentification J-test.
 The pilot simulation has two diagnostic modes:
 
 ```bash
-python scripts/02_pilot_simulation.py --mode quick
-python scripts/02_pilot_simulation.py --mode stress
-python scripts/02_pilot_simulation.py --mode quick --estimators post_selection dml
+python scripts/01_pilot_simulation.py --mode quick
+python scripts/01_pilot_simulation.py --mode stress
+python scripts/01_pilot_simulation.py --mode quick --estimators post_selection dml
 ```
 
 Quick mode uses `n=100`, `p=20`, `reps=3`, and a 9-point alpha grid. Stress
@@ -81,25 +78,25 @@ The full simulation runner follows the binding grid from `Project_structure.pdf`
 and writes results batch-by-batch:
 
 ```bash
-python scripts/03_run_full_simulation.py --resume
-python scripts/03_run_full_simulation.py --resume --rerun-failed
-python scripts/03_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
-python scripts/03_run_full_simulation.py --estimators post_selection dml --reps 10 --resume
+python scripts/02_run_full_simulation.py --resume
+python scripts/02_run_full_simulation.py --resume --rerun-failed
+python scripts/02_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
+python scripts/02_run_full_simulation.py --estimators post_selection dml --reps 10 --resume
 ```
 
 Safe final-run planning and chunking examples:
 
 ```bash
-python scripts/03_run_full_simulation.py --dry-run
+python scripts/02_run_full_simulation.py --dry-run
 
-python scripts/03_run_full_simulation.py \
+python scripts/02_run_full_simulation.py \
   --resume \
   --num-chunks 4 \
   --chunk-index 0 \
   --manifest results/raw/full_chunk_0_manifest.json \
   --output results/raw/full_simulation_results.csv
 
-python scripts/03_run_full_simulation.py \
+python scripts/02_run_full_simulation.py \
   --dgps dgp1 \
   --n-values 250 \
   --p-values 200 \
@@ -134,7 +131,7 @@ Aggregation rejects duplicate raw rows for the same `dgp`, `n`, `p`, `pi`,
 `tau`, `rep`, `seed`, `estimator` key.
 
 ```python
-from ivqr_sim.simulation.aggregate import aggregate_results_file
+from reporting.summaries import aggregate_results_file
 
 summary = aggregate_results_file(
     "results/raw/full_simulation_results.csv",
@@ -146,7 +143,7 @@ summary = aggregate_results_file(
 Phase 6C creates thesis-ready CSV tables for Quarto or manual inclusion:
 
 ```bash
-python scripts/04_make_tables.py \
+python scripts/03_make_tables.py \
   --input results/processed/summary_metrics.csv \
   --output-dir results/tables
 ```
@@ -154,7 +151,7 @@ python scripts/04_make_tables.py \
 Raw results can also be aggregated and tabled in one command:
 
 ```bash
-python scripts/04_make_tables.py \
+python scripts/03_make_tables.py \
   --raw-input results/raw/full_simulation_results.csv \
   --summary-output results/processed/summary_metrics.csv \
   --expected-replications 1000 \
@@ -172,27 +169,18 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 pip install -e .
-python -c "import ivqr_sim; print('import ok')"
+python -c "import dgp, simulation, estimators, reporting; print('import ok')"
 ```
 
-Direct script execution requires the editable install. Without it, the scripts
-display a clear installation message instead of a raw `ModuleNotFoundError`.
+Runnable command scripts live in the top-level `scripts/` folder and can be
+run from the repository root.
 
 Basic checks are:
 
 ```bash
 pytest -v
-python scripts/01_smoke_test.py
-python scripts/02_pilot_simulation.py --mode quick
-python scripts/03_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
-```
-
-After installation, equivalent console commands are available:
-
-```bash
-ivqr-smoke-test
-ivqr-pilot --mode quick
-ivqr-full-simulation --quick-test --output results/raw/full_quick_test.csv
+python scripts/01_pilot_simulation.py --mode quick
+python scripts/02_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
 ```
 
 The corrected DGP outcome equation is

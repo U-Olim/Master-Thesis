@@ -84,9 +84,9 @@ score inversion. It is not presented as a full overidentification J-test.
 The pilot simulation has two diagnostic modes:
 
 ```bash
-python scripts/02_pilot_simulation.py --mode quick
-python scripts/02_pilot_simulation.py --mode stress
-python scripts/02_pilot_simulation.py --mode quick --estimators post_selection dml
+python scripts/01_pilot_simulation.py --mode quick
+python scripts/01_pilot_simulation.py --mode stress
+python scripts/01_pilot_simulation.py --mode quick --estimators post_selection dml
 ```
 
 The default quick mode uses `n=100`, `p=20`, `reps=3`, and a 9-point alpha
@@ -100,25 +100,25 @@ recorded rather than hidden.
 The full simulation runner writes results batch-by-batch and supports resume:
 
 ```bash
-python scripts/03_run_full_simulation.py --resume
-python scripts/03_run_full_simulation.py --resume --rerun-failed
-python scripts/03_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
-python scripts/03_run_full_simulation.py --estimators post_selection dml --reps 10 --resume
+python scripts/02_run_full_simulation.py --resume
+python scripts/02_run_full_simulation.py --resume --rerun-failed
+python scripts/02_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
+python scripts/02_run_full_simulation.py --estimators post_selection dml --reps 10 --resume
 ```
 
 Safe final-run planning and chunking examples:
 
 ```bash
-python scripts/03_run_full_simulation.py --dry-run
+python scripts/02_run_full_simulation.py --dry-run
 
-python scripts/03_run_full_simulation.py \
+python scripts/02_run_full_simulation.py \
   --resume \
   --num-chunks 4 \
   --chunk-index 0 \
   --manifest results/raw/full_chunk_0_manifest.json \
   --output results/raw/full_simulation_results.csv
 
-python scripts/03_run_full_simulation.py \
+python scripts/02_run_full_simulation.py \
   --dgps dgp1 \
   --n-values 250 \
   --p-values 200 \
@@ -153,7 +153,7 @@ Aggregation rejects duplicate raw rows for the same `dgp`, `n`, `p`, `pi`,
 `tau`, `rep`, `seed`, `estimator` key.
 
 ```python
-from ivqr_sim.simulation.aggregate import aggregate_results_file
+from reporting.summaries import aggregate_results_file
 
 summary = aggregate_results_file(
     "results/raw/full_simulation_results.csv",
@@ -167,7 +167,7 @@ Plotting and final figure generation will be implemented in a later phase.
 Phase 6C creates thesis-ready CSV tables for Quarto or manual inclusion:
 
 ```bash
-python scripts/04_make_tables.py \
+python scripts/03_make_tables.py \
   --input results/processed/summary_metrics.csv \
   --output-dir results/tables
 ```
@@ -175,7 +175,7 @@ python scripts/04_make_tables.py \
 Raw results can also be aggregated and tabled in one command:
 
 ```bash
-python scripts/04_make_tables.py \
+python scripts/03_make_tables.py \
   --raw-input results/raw/full_simulation_results.csv \
   --summary-output results/processed/summary_metrics.csv \
   --expected-replications 1000 \
@@ -195,25 +195,16 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-Direct script execution requires the editable install. Without it, the scripts
-display a clear installation message instead of a raw `ModuleNotFoundError`.
+Runnable command scripts live in the top-level `scripts/` folder and can be
+run from the repository root.
 
 ## Checks
 
 ```bash
-python -c "import ivqr_sim; print('import ok')"
+python -c "import dgp, simulation, estimators, reporting; print('import ok')"
 pytest -v
-python scripts/01_smoke_test.py
-python scripts/02_pilot_simulation.py --mode quick
-python scripts/03_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
-```
-
-After installation, equivalent console commands are available:
-
-```bash
-ivqr-smoke-test
-ivqr-pilot --mode quick
-ivqr-full-simulation --quick-test --output results/raw/full_quick_test.csv
+python scripts/01_pilot_simulation.py --mode quick
+python scripts/02_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
 ```
 
 ## Result Status
