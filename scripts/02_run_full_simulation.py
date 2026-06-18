@@ -19,9 +19,9 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from simulation.batching import filter_completed_designs, run_simulation_batch
-from simulation.chunking import select_design_chunk, validate_chunk_args
-from simulation.runner import VALID_ESTIMATORS, make_simulation_grid
+from simulation.batching import filter_completed_designs, run_simulation_batch  # noqa: E402
+from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa: E402
+from simulation.runner import VALID_ESTIMATORS, make_simulation_grid  # noqa: E402
 
 
 DEFAULT_DGPS = ("dgp1", "dgp2", "dgp3")

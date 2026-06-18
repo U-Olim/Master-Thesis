@@ -1,6 +1,33 @@
 # Consolidated tests for the thematic project structure.
 
+import _path  # noqa: F401
+import numpy as np
+import pytest
+
+from dgp import generate_data
+from dgp.designs import Design
+from estimators import full_ivqr as full_ivqr_module
 from estimators.base import EstimationResult
+from estimators.dml_ivqr import (
+    estimate_dml_ivqr,
+    evaluate_dml_ivqr_alpha,
+    fit_instrument_residualizer,
+    fit_quantile_nuisance,
+    make_folds,
+    standardize_train_test,
+)
+from estimators.full_ivqr import (
+    add_intercept,
+    estimate_full_ivqr,
+    evaluate_full_ivqr_alpha,
+    fit_profile_beta,
+)
+from estimators.post_selection_ivqr import (
+    estimate_post_selection_ivqr,
+    evaluate_post_selection_alpha,
+    fit_post_selection_beta,
+    select_controls_lasso,
+)
 
 
 def test_estimation_result_can_be_instantiated() -> None:
@@ -58,21 +85,6 @@ def test_empty_confidence_region_is_separate_from_estimator_failure() -> None:
     assert result.failed is False
     assert result.converged is True
     assert result.cr_empty is True
-
-
-import numpy as np
-import pytest
-
-from dgp import generate_data
-from estimators import full_ivqr as full_ivqr_module
-from estimators.full_ivqr import (
-    add_intercept,
-    estimate_full_ivqr,
-    evaluate_full_ivqr_alpha,
-    fit_profile_beta,
-)
-from dgp.designs import Design
-
 
 def test_add_intercept_prepends_ones() -> None:
     x = np.array([[1.0, 2.0], [3.0, 4.0]])
@@ -232,20 +244,6 @@ def test_estimate_full_ivqr_output_is_deterministic() -> None:
     assert result_1.objective_value == pytest.approx(result_2.objective_value)
     assert result_1.cr_lower == pytest.approx(result_2.cr_lower)
     assert result_1.cr_upper == pytest.approx(result_2.cr_upper)
-
-
-import numpy as np
-import pytest
-
-from dgp import generate_data
-from estimators.post_selection_ivqr import (
-    estimate_post_selection_ivqr,
-    evaluate_post_selection_alpha,
-    fit_post_selection_beta,
-    select_controls_lasso,
-)
-from dgp.designs import Design
-
 
 def test_select_controls_lasso_returns_valid_indices() -> None:
     data = generate_data(Design("dgp1", n=100, p=10, pi=1.0, tau=0.5, rep=0, seed=123))
@@ -427,22 +425,6 @@ def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
         assert result_2.cr_upper is None
     else:
         assert result_1.cr_upper == pytest.approx(result_2.cr_upper)
-
-
-import numpy as np
-import pytest
-
-from dgp import generate_data
-from estimators.dml_ivqr import (
-    estimate_dml_ivqr,
-    evaluate_dml_ivqr_alpha,
-    fit_instrument_residualizer,
-    fit_quantile_nuisance,
-    make_folds,
-    standardize_train_test,
-)
-from dgp.designs import Design
-
 
 def test_make_folds_covers_each_observation_once() -> None:
     folds = make_folds(n=20, k_folds=5, random_state=123)

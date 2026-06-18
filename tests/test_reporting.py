@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-import numpy as np
+import _path  # noqa: F401
 import pandas as pd
 import pytest
 
@@ -13,6 +13,16 @@ from reporting.summaries import (
     aggregate_results_file,
     incomplete_groups,
     load_raw_results,
+)
+from reporting.tables import (
+    ESTIMATOR_LABELS,
+    add_estimator_labels,
+    filter_summary,
+    load_summary,
+    make_comparison_table,
+    make_diagnostic_table,
+    make_wide_metric_table,
+    write_tables,
 )
 
 
@@ -219,24 +229,6 @@ def test_aggregate_results_validates_metric_columns() -> None:
 
     with pytest.raises(ValueError, match="missing required columns"):
         aggregate_results(raw)
-
-
-from pathlib import Path
-
-import pandas as pd
-import pytest
-
-from reporting.tables import (
-    ESTIMATOR_LABELS,
-    add_estimator_labels,
-    filter_summary,
-    load_summary,
-    make_comparison_table,
-    make_diagnostic_table,
-    make_wide_metric_table,
-    write_tables,
-)
-
 
 def _summary() -> pd.DataFrame:
     rows = []

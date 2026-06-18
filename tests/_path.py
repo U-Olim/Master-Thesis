@@ -1,4 +1,4 @@
-"""Shared pytest configuration."""
+"""Test import-path bootstrap for direct test-file execution."""
 
 from pathlib import Path
 import sys

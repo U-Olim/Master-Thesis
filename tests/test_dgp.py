@@ -1,9 +1,12 @@
 # Consolidated tests for the thematic project structure.
 
+from math import sqrt
+
+import _path  # noqa: F401
 import numpy as np
 import pytest
+from scipy.stats import norm, t
 
-from simulation.config import DGPS, K_FOLDS, N_VALUES, P_VALUES, PI_VALUES, R_MAIN, TAUS
 from dgp import (
     generate_coefficients,
     generate_data,
@@ -12,6 +15,8 @@ from dgp import (
     make_covariance_matrix,
 )
 from dgp.designs import Design
+from dgp.true_parameters import true_alpha
+from simulation.config import DGPS, K_FOLDS, N_VALUES, P_VALUES, PI_VALUES, R_MAIN, TAUS
 
 
 def test_project_design_constants_exist() -> None:
@@ -314,10 +319,9 @@ def test_generate_data_invalid_design_values_raise_value_error() -> None:
     with pytest.raises(ValueError):
         generate_data(Design(dgp="dgp1", n=100, p=0, pi=0.5, tau=0.5, rep=0, seed=123))
     with pytest.raises(ValueError):
-        generate_data(Design(dgp="dgp1", n=100, p=20, pi=-0.1, tau=0.5, rep=0, seed=123))
-
-
-from dgp.designs import Design
+        generate_data(
+            Design(dgp="dgp1", n=100, p=20, pi=-0.1, tau=0.5, rep=0, seed=123)
+        )
 
 
 def test_design_can_be_instantiated() -> None:
@@ -330,14 +334,6 @@ def test_design_can_be_instantiated() -> None:
     assert design.tau == 0.5
     assert design.rep == 0
     assert design.seed == 123
-
-
-from math import sqrt
-
-import pytest
-from scipy.stats import norm, t
-
-from dgp.true_parameters import true_alpha
 
 
 def test_median_effects_equal_one() -> None:

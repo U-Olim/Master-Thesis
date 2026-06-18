@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+
+if __package__ in {None, ""}:
+    src_path = Path(__file__).resolve().parents[1]
+    if str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
 
 import numpy as np
 import pandas as pd
@@ -29,7 +35,15 @@ def _as_bool(value: object) -> bool:
 
 
 def _design_key(design: Design) -> tuple[object, ...]:
-    return (design.dgp, design.n, design.p, design.pi, design.tau, design.rep, design.seed)
+    return (
+        design.dgp,
+        design.n,
+        design.p,
+        design.pi,
+        design.tau,
+        design.rep,
+        design.seed,
+    )
 
 
 def _row_design_key(row: pd.Series) -> tuple[object, ...]:
@@ -91,7 +105,9 @@ def run_simulation_batch(
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         write_header = not (append and path.exists())
-        results.to_csv(path, mode="a" if append else "w", header=write_header, index=False)
+        results.to_csv(
+            path, mode="a" if append else "w", header=write_header, index=False
+        )
     return results
 
 
@@ -103,10 +119,10 @@ def observed_design_keys(results_path: str | Path) -> set[tuple[object, ...]]:
 
     try:
         existing = pd.read_csv(path, usecols=DESIGN_KEY_COLUMNS)
-    except ValueError as exc:
-        raise ValueError("results CSV is missing required design-key columns") from exc
     except pd.errors.EmptyDataError as exc:
         raise ValueError("results CSV is empty or malformed") from exc
+    except ValueError as exc:
+        raise ValueError("results CSV is missing required design-key columns") from exc
 
     return {_row_design_key(row) for _, row in existing.drop_duplicates().iterrows()}
 
@@ -133,12 +149,14 @@ def filter_completed_designs(
         required_columns += ["failed"]
     try:
         existing = pd.read_csv(path, usecols=required_columns)
-    except ValueError as exc:
-        raise ValueError("results CSV is missing required resume columns") from exc
     except pd.errors.EmptyDataError as exc:
         raise ValueError("results CSV is empty or malformed") from exc
+    except ValueError as exc:
+        raise ValueError("results CSV is missing required resume columns") from exc
 
-    expected_estimators = {ESTIMATOR_OUTPUT_NAMES[estimator] for estimator in estimators}
+    expected_estimators = {
+        ESTIMATOR_OUTPUT_NAMES[estimator] for estimator in estimators
+    }
     completed: dict[tuple[object, ...], set[str]] = {}
     for _, row in existing.iterrows():
         if rerun_failed and _as_bool(row["failed"]):

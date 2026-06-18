@@ -1,6 +1,8 @@
 # Consolidated tests for the thematic project structure.
 
+import _path  # noqa: F401
 import numpy as np
+import pandas as pd
 import pytest
 
 from inference import (
@@ -11,6 +13,40 @@ from inference import (
     is_disconnected_region,
     sanitize_grid_statistics,
     summarize_region,
+)
+from inference.metrics import (
+    average_cr_length,
+    average_cr_length_all,
+    average_cr_length_valid_only,
+    bias,
+    boundary_rate,
+    coverage,
+    coverage_valid_only,
+    cr_disconnected_rate,
+    cr_empty_rate,
+    estimation_errors,
+    failure_rate,
+    mae,
+    mean_failed_alpha_count,
+    mean_runtime_seconds,
+    mean_selected_controls,
+    median_bias,
+    non_convergence_rate,
+    rmse,
+    summarize_group,
+    validate_metric_input,
+)
+from inference.moments import (
+    alpha_grid,
+    evaluate_grid,
+    make_instruments,
+    moment_contributions,
+    moment_covariance,
+    quantile_score,
+    residuals_alpha,
+    sample_moment,
+    score_statistic,
+    weighted_gmm_statistic,
 )
 
 
@@ -388,35 +424,6 @@ def test_moment_outputs_are_deterministic() -> None:
     second = evaluate_grid(alphas, y, d, x_beta, tau=0.25, instruments=instruments)
 
     assert np.allclose(first, second)
-
-
-import numpy as np
-import pandas as pd
-import pytest
-
-from inference.metrics import (
-    average_cr_length,
-    average_cr_length_all,
-    average_cr_length_valid_only,
-    bias,
-    boundary_rate,
-    coverage,
-    coverage_valid_only,
-    cr_disconnected_rate,
-    cr_empty_rate,
-    estimation_errors,
-    failure_rate,
-    mae,
-    mean_failed_alpha_count,
-    mean_runtime_seconds,
-    mean_selected_controls,
-    median_bias,
-    non_convergence_rate,
-    rmse,
-    summarize_group,
-    validate_metric_input,
-)
-
 
 def _base_df(**overrides) -> pd.DataFrame:
     n_rows = max([3] + [len(value) for value in overrides.values()])

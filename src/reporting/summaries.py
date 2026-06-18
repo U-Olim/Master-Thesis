@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+from typing import cast
+
+if __package__ in {None, ""}:
+    src_path = Path(__file__).resolve().parents[1]
+    if str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
 
 import pandas as pd
 
@@ -76,11 +83,13 @@ def aggregate_results(
 
     rows: list[dict[str, object]] = []
     for key, group in raw.groupby(GROUP_COLUMNS, dropna=False):
-        row = dict(zip(GROUP_COLUMNS, key, strict=True))
+        row = cast(dict[str, object], dict(zip(GROUP_COLUMNS, key, strict=True)))
         row.update(summarize_group(group))
 
         observed_replications = (
-            int(group["rep"].nunique(dropna=True)) if "rep" in group.columns else int(len(group))
+            int(group["rep"].nunique(dropna=True))
+            if "rep" in group.columns
+            else int(len(group))
         )
         row["expected_replications"] = expected_replications
         row["observed_replications"] = observed_replications
@@ -90,11 +99,15 @@ def aggregate_results(
             row["completion_rate"] = None
         rows.append(row)
 
-    columns = GROUP_COLUMNS + SUMMARY_METRIC_COLUMNS + [
-        "expected_replications",
-        "observed_replications",
-        "completion_rate",
-    ]
+    columns = (
+        GROUP_COLUMNS
+        + SUMMARY_METRIC_COLUMNS
+        + [
+            "expected_replications",
+            "observed_replications",
+            "completion_rate",
+        ]
+    )
     summary = pd.DataFrame(rows, columns=columns)
     if summary.empty:
         return summary

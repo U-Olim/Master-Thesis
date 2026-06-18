@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+import sys
 from time import perf_counter
+
+if __package__ in {None, ""}:
+    src_path = Path(__file__).resolve().parents[1]
+    if str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
 
 import numpy as np
 from statsmodels.regression.quantile_regression import QuantReg
@@ -233,8 +240,8 @@ def estimate_full_ivqr(
                 max_iter=max_iter,
                 gmm_ridge=gmm_ridge,
             )
-        except Exception as exc:  # noqa: BLE001 - failed grid points are recorded.
-            statistic, converged, message = np.inf, False, str(exc)
+        except Exception:  # noqa: BLE001 - failed grid points are recorded.
+            statistic, converged = np.inf, False
         statistics[j] = statistic
         converged_flags.append(converged)
 

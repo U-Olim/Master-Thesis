@@ -7,9 +7,31 @@ numerical stability.
 
 from __future__ import annotations
 
+from pathlib import Path
+import sys
+
+if __package__ in {None, ""}:
+    src_path = Path(__file__).resolve().parents[1]
+    if str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
+
 import numpy as np
 
 from inference.alpha_grid import alpha_grid
+
+
+__all__ = [
+    "alpha_grid",
+    "evaluate_grid",
+    "make_instruments",
+    "moment_contributions",
+    "moment_covariance",
+    "quantile_score",
+    "residuals_alpha",
+    "sample_moment",
+    "score_statistic",
+    "weighted_gmm_statistic",
+]
 
 
 def quantile_score(residuals: np.ndarray, tau: float) -> np.ndarray:

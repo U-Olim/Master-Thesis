@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+import sys
 from time import perf_counter
-from typing import Any
+from typing import Any, Literal
+
+if __package__ in {None, ""}:
+    src_path = Path(__file__).resolve().parents[1]
+    if str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
 
 import numpy as np
 from sklearn.linear_model import QuantileRegressor, Ridge
@@ -20,6 +27,16 @@ from inference.confidence_regions import (
 )
 from inference.alpha_grid import alpha_grid
 from inference.moments import quantile_score, weighted_gmm_statistic
+
+
+QuantileSolver = Literal[
+    "highs-ds",
+    "highs-ipm",
+    "highs",
+    "interior-point",
+    "revised simplex",
+    "warn",
+]
 
 
 def _validate_tau(tau: float) -> None:
@@ -170,7 +187,7 @@ def fit_quantile_nuisance(
     alpha_value: float,
     tau: float,
     penalty: float = 0.01,
-    solver: str = "highs",
+    solver: QuantileSolver = "highs",
 ) -> tuple[Any | None, bool, str]:
     """Fit penalized quantile nuisance for Y - D alpha on X."""
     _validate_tau(tau)
@@ -228,7 +245,7 @@ def evaluate_dml_ivqr_alpha(
     fold_random_state: int | None = 123,
     quantile_penalty: float = 0.01,
     ridge_alpha: float = 1.0,
-    quantile_solver: str = "highs",
+    quantile_solver: QuantileSolver = "highs",
     gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
     """Evaluate the weighted cross-fitted scalar DML-IVQR statistic."""
@@ -288,7 +305,7 @@ def estimate_dml_ivqr(
     fold_random_state: int | None = 123,
     quantile_penalty: float = 0.01,
     ridge_alpha: float = 1.0,
-    quantile_solver: str = "highs",
+    quantile_solver: QuantileSolver = "highs",
     gmm_ridge: float = 1e-8,
 ) -> EstimationResult:
     """Estimate DML-IVQR by cross-fitted weighted score inversion."""
@@ -321,8 +338,8 @@ def estimate_dml_ivqr(
                 quantile_solver=quantile_solver,
                 gmm_ridge=gmm_ridge,
             )
-        except Exception as exc:  # noqa: BLE001 - failed grid points are recorded.
-            statistic, converged, message = np.inf, False, str(exc)
+        except Exception:  # noqa: BLE001 - failed grid points are recorded.
+            statistic, converged = np.inf, False
         statistics[j] = statistic
         converged_flags.append(converged)
 

@@ -15,7 +15,7 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from simulation.runner import run_pilot_simulation
+from simulation.runner import run_pilot_simulation  # noqa: E402
 
 
 VALID_ESTIMATORS = ("full", "post_selection", "dml")

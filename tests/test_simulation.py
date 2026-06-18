@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import sys
 
+import _path  # noqa: F401
 import numpy as np
 import pandas as pd
 import pytest
@@ -286,9 +287,9 @@ def test_run_single_replication_catches_unexpected_estimator_exception(
     by_estimator = {row["estimator"]: row for row in rows}
     assert by_estimator["full_ivqr"]["failed"] is True
     assert by_estimator["full_ivqr"]["converged"] is False
-    assert "Unexpected estimator error: RuntimeError: boom" in by_estimator["full_ivqr"][
-        "message"
-    ]
+    full_message = by_estimator["full_ivqr"]["message"]
+    assert isinstance(full_message, str)
+    assert "Unexpected estimator error: RuntimeError: boom" in full_message
     assert "post_selection_ivqr" in by_estimator
     assert by_estimator["post_selection_ivqr"]["message"] != by_estimator["full_ivqr"][
         "message"

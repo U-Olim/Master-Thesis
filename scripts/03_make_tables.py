@@ -11,8 +11,8 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from reporting.tables import load_summary, write_tables
-from reporting.summaries import aggregate_results_file
+from reporting.tables import load_summary, write_tables  # noqa: E402
+from reporting.summaries import aggregate_results_file  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
@@ -31,16 +31,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-replications", type=int, default=None)
     parser.add_argument("--output-dir", default="results/tables")
     parser.add_argument("--round-digits", type=int, default=4)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.input is None and args.raw_input is None:
+        parser.error("provide either --input or --raw-input")
+    if args.raw_input is not None and args.summary_output is None:
+        parser.error("--summary-output is required when using --raw-input")
+    return args
 
 
 def main() -> None:
     args = _parse_args()
-    if args.input is None and args.raw_input is None:
-        raise ValueError("provide either --input or --raw-input")
-    if args.raw_input is not None and args.summary_output is None:
-        raise ValueError("--summary-output is required when using --raw-input")
-
     if args.raw_input is not None:
         summary = aggregate_results_file(
             args.raw_input,
