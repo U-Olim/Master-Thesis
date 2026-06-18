@@ -2,7 +2,6 @@
 
 from math import sqrt
 
-import _path  # noqa: F401
 import numpy as np
 import pytest
 from scipy.stats import norm, t

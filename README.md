@@ -214,3 +214,6 @@ python scripts/02_run_full_simulation.py --quick-test --output results/raw/full_
 `failed_alpha_count` records failed or sanitized alpha-grid evaluations.
 `cr_empty=True` means the inverted confidence region is empty, not that the
 estimator failed.
+`cr_length` is the total length of accepted confidence-region blocks. For
+disconnected regions, it is not the width between the global lower and upper
+accepted alpha values.

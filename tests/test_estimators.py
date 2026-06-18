@@ -1,6 +1,5 @@
 # Consolidated tests for the thematic project structure.
 
-import _path  # noqa: F401
 import numpy as np
 import pytest
 
@@ -9,6 +8,8 @@ from dgp.designs import Design
 from estimators import full_ivqr as full_ivqr_module
 from estimators.base import EstimationResult
 from estimators.dml_ivqr import (
+    _build_dml_fold_cache,
+    _evaluate_dml_ivqr_alpha_uncached,
     estimate_dml_ivqr,
     evaluate_dml_ivqr_alpha,
     fit_instrument_residualizer,
@@ -513,6 +514,74 @@ def test_evaluate_dml_ivqr_alpha_returns_finite_statistic() -> None:
     assert statistic >= 0.0
 
 
+def test_dml_fold_cache_has_disjoint_train_test_splits() -> None:
+    data = generate_data(Design("dgp1", n=90, p=8, pi=1.0, tau=0.5, rep=0, seed=123))
+
+    cache = _build_dml_fold_cache(
+        data.y,
+        data.d,
+        data.z,
+        data.x,
+        k_folds=3,
+        random_state=123,
+        ridge_alpha=1.0,
+    )
+
+    test_counts = np.zeros(data.x.shape[0], dtype=int)
+    for fold in cache:
+        assert np.intersect1d(fold.train_idx, fold.test_idx).size == 0
+        assert fold.x_train_scaled.shape[0] == len(fold.train_idx)
+        assert fold.x_test_scaled.shape[0] == len(fold.test_idx)
+        assert fold.z_resid_test.shape == (len(fold.test_idx),)
+        assert np.all(np.isfinite(fold.z_resid_test))
+        test_counts[fold.test_idx] += 1
+
+    assert np.all(test_counts == 1)
+
+
+def test_dml_cached_and_uncached_alpha_statistics_match() -> None:
+    data = generate_data(Design("dgp1", n=90, p=8, pi=1.0, tau=0.5, rep=0, seed=123))
+    alphas = np.array([-0.5, 0.0, 0.5])
+
+    cached_stats = []
+    uncached_stats = []
+    for alpha_value in alphas:
+        cached_stat, cached_converged, cached_message = evaluate_dml_ivqr_alpha(
+            data.y,
+            data.d,
+            data.z,
+            data.x,
+            alpha_value=float(alpha_value),
+            tau=0.5,
+            k_folds=3,
+            fold_random_state=123,
+            quantile_penalty=0.01,
+            gmm_ridge=1e-6,
+            use_cache=True,
+        )
+        uncached_stat, uncached_converged, uncached_message = (
+            _evaluate_dml_ivqr_alpha_uncached(
+                data.y,
+                data.d,
+                data.z,
+                data.x,
+                alpha_value=float(alpha_value),
+                tau=0.5,
+                k_folds=3,
+                fold_random_state=123,
+                quantile_penalty=0.01,
+                gmm_ridge=1e-6,
+            )
+        )
+
+        assert cached_message == uncached_message == "ok"
+        assert cached_converged is uncached_converged is True
+        cached_stats.append(cached_stat)
+        uncached_stats.append(uncached_stat)
+
+    np.testing.assert_allclose(cached_stats, uncached_stats, rtol=1e-12, atol=1e-12)
+
+
 def test_estimate_dml_ivqr_returns_estimation_result() -> None:
     data = generate_data(Design("dgp1", n=100, p=10, pi=1.0, tau=0.5, rep=0, seed=123))
     alphas = np.linspace(0.0, 2.0, 9)
@@ -538,6 +607,43 @@ def test_estimate_dml_ivqr_returns_estimation_result() -> None:
     assert result.alpha_grid_size == len(alphas)
     assert result.failed_alpha_count == 0
     assert result.runtime_seconds >= 0.0
+
+
+def test_estimate_dml_ivqr_cached_and_uncached_results_match() -> None:
+    data = generate_data(Design("dgp1", n=90, p=8, pi=1.0, tau=0.5, rep=0, seed=123))
+    alphas = np.array([-0.5, 0.0, 0.5])
+
+    cached = estimate_dml_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        k_folds=3,
+        fold_random_state=123,
+        quantile_penalty=0.01,
+        gmm_ridge=1e-6,
+        use_cache=True,
+    )
+    uncached = estimate_dml_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        k_folds=3,
+        fold_random_state=123,
+        quantile_penalty=0.01,
+        gmm_ridge=1e-6,
+        use_cache=False,
+    )
+
+    assert cached.failed is False
+    assert uncached.failed is False
+    assert cached.alpha_hat == pytest.approx(uncached.alpha_hat)
+    assert cached.objective_value == pytest.approx(uncached.objective_value)
+    assert cached.cr_lower == pytest.approx(uncached.cr_lower)
+    assert cached.cr_upper == pytest.approx(uncached.cr_upper)
+    assert cached.cr_length == pytest.approx(uncached.cr_length)
+    assert cached.cr_covers_true is uncached.cr_covers_true
+    assert cached.cr_empty is uncached.cr_empty
+    assert cached.cr_disconnected is uncached.cr_disconnected
 
 
 def test_estimate_dml_ivqr_invalid_k_folds_raises_value_error() -> None:

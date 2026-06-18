@@ -4,7 +4,6 @@ import importlib.util
 from pathlib import Path
 import sys
 
-import _path  # noqa: F401
 import numpy as np
 import pandas as pd
 import pytest

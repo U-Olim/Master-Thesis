@@ -17,11 +17,31 @@ class ConfidenceRegion:
 
     lower: float | None
     upper: float | None
-    length: float | None
+    length: float
+    hull_length: float
+    blocks: tuple[tuple[float, float], ...]
+    accepted_alphas: tuple[float, ...]
+    n_blocks: int
     empty: bool
     disconnected: bool
     covers_true: bool | None
     selected_grid: np.ndarray
+    critical_value: float
+
+    @property
+    def region_length(self) -> float:
+        """Total accepted-region length across all connected blocks."""
+        return self.length
+
+    @property
+    def is_empty(self) -> bool:
+        """Backward-compatible explicit empty-region diagnostic."""
+        return self.empty
+
+    @property
+    def is_disconnected(self) -> bool:
+        """Backward-compatible explicit disconnected-region diagnostic."""
+        return self.disconnected
 
 
 def _as_1d_array(values: np.ndarray, name: str) -> np.ndarray:
@@ -43,12 +63,19 @@ def _validate_strictly_increasing(alphas: np.ndarray) -> None:
 def _validate_grid_and_statistics(
     alphas: np.ndarray,
     statistics: np.ndarray,
+    *,
+    sort_alphas: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     alphas = _as_1d_array(alphas, "alpha grid")
     statistics = _as_1d_array(statistics, "statistics")
 
     if alphas.size != statistics.size:
         raise ValueError("alpha grid and statistics must have equal length")
+
+    if sort_alphas:
+        order = np.argsort(alphas)
+        alphas = alphas[order]
+        statistics = statistics[order]
 
     _validate_strictly_increasing(alphas)
     return alphas, statistics
@@ -59,6 +86,51 @@ def _validate_critical_value(critical_value: float) -> float:
     if not np.isfinite(critical_value) or critical_value <= 0:
         raise ValueError("critical value must be positive and finite")
     return critical_value
+
+
+def _accepted_blocks(
+    alpha_candidates: np.ndarray,
+    accepted: np.ndarray,
+) -> tuple[tuple[float, float], ...]:
+    """Return connected blocks of accepted neighboring alpha-grid points."""
+    alpha_candidates = _as_1d_array(alpha_candidates, "alpha candidates")
+    _validate_strictly_increasing(alpha_candidates)
+
+    accepted = np.asarray(accepted, dtype=bool)
+    if accepted.ndim != 1:
+        raise ValueError("accepted mask must be one-dimensional")
+    if accepted.size != alpha_candidates.size:
+        raise ValueError("accepted mask and alpha candidates must have equal length")
+    if not np.any(accepted):
+        return ()
+
+    accepted_indices = np.flatnonzero(accepted)
+    split_points = np.flatnonzero(np.diff(accepted_indices) > 1) + 1
+    index_blocks = np.split(accepted_indices, split_points)
+
+    return tuple(
+        (float(alpha_candidates[block[0]]), float(alpha_candidates[block[-1]]))
+        for block in index_blocks
+    )
+
+
+def _covers_alpha(
+    blocks: tuple[tuple[float, float], ...],
+    alpha_true: float | None,
+) -> bool | None:
+    """Return whether alpha_true belongs to at least one accepted block."""
+    if alpha_true is None:
+        return None
+    alpha_true = float(alpha_true)
+    if not np.isfinite(alpha_true):
+        raise ValueError("alpha_true must be finite when provided")
+    if not blocks:
+        return False
+
+    # Coverage is computed using membership in accepted grid blocks, not the
+    # convex hull of accepted alphas. This matters for weak-IV settings where
+    # inverted confidence regions may be disconnected.
+    return any(lower <= alpha_true <= upper for lower, upper in blocks)
 
 
 def invert_score_test(
@@ -73,37 +145,52 @@ def invert_score_test(
     alpha objective over a grid. Failed alpha evaluations should be represented
     by large finite statistics before calling this function.
     """
-    alphas, statistics = _validate_grid_and_statistics(alphas, statistics)
+    alphas, statistics = _validate_grid_and_statistics(
+        alphas,
+        statistics,
+        sort_alphas=True,
+    )
     critical_value = _validate_critical_value(critical_value)
 
-    accepted = alphas[statistics <= critical_value]
+    accepted_mask = statistics <= critical_value
+    accepted = alphas[accepted_mask]
+    blocks = _accepted_blocks(alphas, accepted_mask)
+    covers_true = _covers_alpha(blocks, alpha_true)
 
     if accepted.size == 0:
-        covers_true = False if alpha_true is not None else None
         return ConfidenceRegion(
             lower=None,
             upper=None,
-            length=None,
+            length=0.0,
+            hull_length=0.0,
+            blocks=(),
+            accepted_alphas=(),
+            n_blocks=0,
             empty=True,
             disconnected=False,
             covers_true=covers_true,
             selected_grid=accepted,
+            critical_value=critical_value,
         )
 
     lower = float(accepted.min())
     upper = float(accepted.max())
-    covers_true = None
-    if alpha_true is not None:
-        covers_true = lower <= alpha_true <= upper
+    region_length = float(sum(block_upper - block_lower for block_lower, block_upper in blocks))
+    hull_length = upper - lower
 
     return ConfidenceRegion(
         lower=lower,
         upper=upper,
-        length=upper - lower,
+        length=region_length,
+        hull_length=hull_length,
+        blocks=blocks,
+        accepted_alphas=tuple(float(alpha) for alpha in accepted),
+        n_blocks=len(blocks),
         empty=False,
-        disconnected=is_disconnected_region(accepted, alphas),
+        disconnected=len(blocks) > 1,
         covers_true=covers_true,
         selected_grid=accepted,
+        critical_value=critical_value,
     )
 
 

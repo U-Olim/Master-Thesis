@@ -1,6 +1,5 @@
 # Consolidated tests for the thematic project structure.
 
-import _path  # noqa: F401
 import numpy as np
 import pandas as pd
 import pytest
@@ -100,6 +99,31 @@ def test_invert_score_test_connected_region_includes_critical_boundary() -> None
     assert region.lower == pytest.approx(-1.0)
     assert region.upper == pytest.approx(1.0)
     assert region.length == pytest.approx(2.0)
+    assert region.region_length == pytest.approx(2.0)
+    assert region.hull_length == pytest.approx(2.0)
+    assert region.blocks == ((-1.0, 1.0),)
+    assert region.accepted_alphas == (-1.0, 0.0, 1.0)
+    assert region.n_blocks == 1
+    assert region.empty is False
+    assert region.is_empty is False
+    assert region.disconnected is False
+    assert region.is_disconnected is False
+    assert region.covers_true is True
+    assert region.critical_value == pytest.approx(4.0)
+
+
+def test_invert_score_test_singleton_region() -> None:
+    alphas = np.array([-1.0, 0.0, 1.0])
+    stats = np.array([10.0, 1.0, 10.0])
+
+    region = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=0.0)
+
+    assert np.allclose(region.selected_grid, np.array([0.0]))
+    assert region.blocks == ((0.0, 0.0),)
+    assert region.lower == pytest.approx(0.0)
+    assert region.upper == pytest.approx(0.0)
+    assert region.length == pytest.approx(0.0)
+    assert region.hull_length == pytest.approx(0.0)
     assert region.empty is False
     assert region.disconnected is False
     assert region.covers_true is True
@@ -114,23 +138,72 @@ def test_invert_score_test_empty_region() -> None:
     assert region.empty is True
     assert region.lower is None
     assert region.upper is None
-    assert region.length is None
+    assert region.length == pytest.approx(0.0)
+    assert region.region_length == pytest.approx(0.0)
+    assert region.hull_length == pytest.approx(0.0)
+    assert region.blocks == ()
+    assert region.accepted_alphas == ()
+    assert region.n_blocks == 0
     assert len(region.selected_grid) == 0
     assert region.disconnected is False
     assert region.covers_true is False
 
 
-def test_invert_score_test_disconnected_region_uses_convex_hull_length() -> None:
+def test_invert_score_test_disconnected_region_uses_block_length() -> None:
     alphas = np.array([0, 1, 2, 3, 4], dtype=float)
     stats = np.array([1, 1, 10, 1, 1], dtype=float)
 
-    region = invert_score_test(alphas, stats, critical_value=2.0)
+    region = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=2.0)
 
     assert np.allclose(region.selected_grid, np.array([0.0, 1.0, 3.0, 4.0]))
     assert region.lower == pytest.approx(0.0)
     assert region.upper == pytest.approx(4.0)
-    assert region.length == pytest.approx(4.0)
+    assert region.blocks == ((0.0, 1.0), (3.0, 4.0))
+    assert region.n_blocks == 2
+    assert region.length == pytest.approx(2.0)
+    assert region.region_length == pytest.approx(2.0)
+    assert region.hull_length == pytest.approx(4.0)
     assert region.disconnected is True
+    assert region.covers_true is False
+
+
+def test_invert_score_test_disconnected_region_covers_true_inside_block() -> None:
+    alphas = np.array([0, 1, 2, 3, 4], dtype=float)
+    stats = np.array([1, 1, 10, 1, 1], dtype=float)
+
+    region = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=3.5)
+
+    assert region.blocks == ((0.0, 1.0), (3.0, 4.0))
+    assert region.covers_true is True
+
+
+def test_invert_score_test_all_accepted_region() -> None:
+    alphas = np.array([-1.0, 0.0, 1.0])
+    stats = np.array([1.0, 1.0, 1.0])
+
+    region = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=0.5)
+
+    assert region.blocks == ((-1.0, 1.0),)
+    assert region.lower == pytest.approx(-1.0)
+    assert region.upper == pytest.approx(1.0)
+    assert region.length == pytest.approx(2.0)
+    assert region.hull_length == pytest.approx(2.0)
+    assert region.disconnected is False
+    assert region.covers_true is True
+
+
+def test_invert_score_test_sorts_unsorted_alpha_grid_with_aligned_statistics() -> None:
+    alphas = np.array([2.0, 0.0, 1.0])
+    stats = np.array([10.0, 1.0, 1.0])
+
+    region = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=0.5)
+
+    assert np.allclose(region.selected_grid, np.array([0.0, 1.0]))
+    assert region.blocks == ((0.0, 1.0),)
+    assert region.lower == pytest.approx(0.0)
+    assert region.upper == pytest.approx(1.0)
+    assert region.length == pytest.approx(1.0)
+    assert region.covers_true is True
 
 
 def test_invert_score_test_coverage_false() -> None:
@@ -161,7 +234,6 @@ def test_is_disconnected_region_examples() -> None:
 @pytest.mark.parametrize(
     ("alphas", "stats", "critical_value"),
     [
-        (np.array([0.0, 2.0, 1.0]), np.array([1.0, 2.0, 3.0]), 1.0),
         (np.array([0.0, 1.0, 1.0]), np.array([1.0, 2.0, 3.0]), 1.0),
         (np.array([0.0, 1.0]), np.array([1.0, 2.0, 3.0]), 1.0),
         (np.array([0.0, 1.0, 2.0]), np.array([1.0, np.inf, 3.0]), 1.0),

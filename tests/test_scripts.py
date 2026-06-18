@@ -4,7 +4,6 @@ from pathlib import Path
 import subprocess
 import sys
 
-import _path  # noqa: F401
 import inference
 from estimators.base import EstimationResult
 from dgp.designs import Design

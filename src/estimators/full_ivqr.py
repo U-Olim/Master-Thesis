@@ -2,14 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-import sys
 from time import perf_counter
-
-if __package__ in {None, ""}:
-    src_path = Path(__file__).resolve().parents[1]
-    if str(src_path) not in sys.path:
-        sys.path.insert(0, str(src_path))
 
 import numpy as np
 from statsmodels.regression.quantile_regression import QuantReg
@@ -29,65 +22,20 @@ from inference.moments import (
     residuals_alpha,
     weighted_gmm_statistic,
 )
+from utils.validation import (
+    validate_1d_array,
+    validate_2d_array,
+    validate_alpha_grid,
+    validate_data_arrays,
+    validate_tau,
+)
 
 
 def add_intercept(x: np.ndarray) -> np.ndarray:
     """Return a design matrix with a leading intercept column."""
-    x = np.asarray(x, dtype=float)
-    if x.ndim != 2:
-        raise ValueError("x must be two-dimensional")
-    if not np.all(np.isfinite(x)):
-        raise ValueError("x must contain only finite values")
+    x = validate_2d_array("x", x)
 
     return np.column_stack([np.ones(x.shape[0]), x])
-
-
-def _validate_tau(tau: float) -> None:
-    if not 0 < tau < 1:
-        raise ValueError("tau must satisfy 0 < tau < 1")
-
-
-def _validate_vector(values: np.ndarray, name: str) -> np.ndarray:
-    array = np.asarray(values, dtype=float)
-    if array.ndim != 1:
-        raise ValueError(f"{name} must be one-dimensional")
-    if not np.all(np.isfinite(array)):
-        raise ValueError(f"{name} must contain only finite values")
-    return array
-
-
-def _validate_data_arrays(
-    y: np.ndarray,
-    d: np.ndarray,
-    z: np.ndarray,
-    x: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    y = _validate_vector(y, "y")
-    d = _validate_vector(d, "d")
-    z = _validate_vector(z, "z")
-    x = np.asarray(x, dtype=float)
-
-    if x.ndim != 2:
-        raise ValueError("x must be two-dimensional")
-    if not np.all(np.isfinite(x)):
-        raise ValueError("x must contain only finite values")
-    if not (len(y) == len(d) == len(z) == x.shape[0]):
-        raise ValueError("y, d, z, and x must have consistent row counts")
-
-    return y, d, z, x
-
-
-def _validate_alpha_candidates(alphas: np.ndarray) -> np.ndarray:
-    alphas = np.asarray(alphas, dtype=float)
-    if alphas.ndim != 1:
-        raise ValueError("alphas must be one-dimensional")
-    if alphas.size == 0:
-        raise ValueError("alphas must be nonempty")
-    if not np.all(np.isfinite(alphas)):
-        raise ValueError("alphas must contain only finite values")
-    if not np.all(np.diff(alphas) > 0):
-        raise ValueError("alphas must be sorted strictly increasing")
-    return alphas
 
 
 def _failed_result(
@@ -130,9 +78,9 @@ def fit_profile_beta(
     max_iter: int = 1000,
 ) -> tuple[np.ndarray, bool, str]:
     """Profile beta(alpha) by quantile regression of y - d alpha on [1, X]."""
-    _validate_tau(tau)
-    y = _validate_vector(y, "y")
-    d = _validate_vector(d, "d")
+    validate_tau(tau)
+    y = validate_1d_array("y", y)
+    d = validate_1d_array("d", d)
     x_design = add_intercept(x)
 
     if len(y) != len(d) or len(y) != x_design.shape[0]:
@@ -166,7 +114,7 @@ def evaluate_full_ivqr_alpha(
     gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
     """Evaluate the covariance-weighted full-control IVQR objective."""
-    y, d, z, x = _validate_data_arrays(y, d, z, x)
+    y, d, z, x = validate_data_arrays(y, d, x, z)
 
     beta_hat, converged, message = fit_profile_beta(
         y=y,
@@ -202,8 +150,8 @@ def estimate_full_ivqr(
 ) -> EstimationResult:
     """Estimate full-control IVQR by weighted GMM over an alpha grid."""
     start = perf_counter()
-    _validate_tau(tau)
-    y, d, z, x = _validate_data_arrays(data.y, data.d, data.z, data.x)
+    validate_tau(tau)
+    y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
 
     n, p = x.shape
     num_profile_params = p + 1
@@ -223,7 +171,7 @@ def estimate_full_ivqr(
     if alphas is None:
         alphas = alpha_grid(alpha_min, alpha_max, alpha_step)
     else:
-        alphas = _validate_alpha_candidates(alphas)
+        alphas = validate_alpha_grid(alphas)
 
     statistics = np.empty(len(alphas), dtype=float)
     converged_flags: list[bool] = []

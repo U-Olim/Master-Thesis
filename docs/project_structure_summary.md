@@ -72,6 +72,7 @@ failed=True means the estimator did not produce a usable estimate.
 converged=True means the estimator produced alpha_hat.
 failed_alpha_count records failed grid evaluations.
 cr_empty=True means the inverted confidence region is empty, not that the estimator failed.
+cr_length is the total length of accepted confidence-region blocks, not the convex-hull width for disconnected regions.
 ```
 
 The full simulation runner follows the binding grid from `Project_structure.pdf`
@@ -127,6 +128,8 @@ confidence-region indicators count as non-coverage. The
 available confidence-region indicators. `avg_cr_length` also uses all
 replications, treating missing confidence-region lengths as zero; the
 `avg_cr_length_valid_only` field is a diagnostic over available lengths only.
+The underlying `cr_length` is the total accepted block length, so disconnected
+confidence regions do not count rejected gaps as accepted length.
 Aggregation rejects duplicate raw rows for the same `dgp`, `n`, `p`, `pi`,
 `tau`, `rep`, `seed`, `estimator` key.
 

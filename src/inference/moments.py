@@ -7,17 +7,10 @@ numerical stability.
 
 from __future__ import annotations
 
-from pathlib import Path
-import sys
-
-if __package__ in {None, ""}:
-    src_path = Path(__file__).resolve().parents[1]
-    if str(src_path) not in sys.path:
-        sys.path.insert(0, str(src_path))
-
 import numpy as np
 
 from inference.alpha_grid import alpha_grid
+from utils.validation import validate_1d_array, validate_2d_array, validate_tau
 
 
 __all__ = [
@@ -36,29 +29,10 @@ __all__ = [
 
 def quantile_score(residuals: np.ndarray, tau: float) -> np.ndarray:
     """Return the quantile score psi_tau(u) = tau - 1{u <= 0}."""
-    if not 0 < tau < 1:
-        raise ValueError("tau must satisfy 0 < tau < 1")
+    validate_tau(tau)
 
     residuals = np.asarray(residuals)
     return tau - (residuals <= 0).astype(float)
-
-
-def _validate_1d_finite(values: np.ndarray, name: str) -> np.ndarray:
-    array = np.asarray(values, dtype=float)
-    if array.ndim != 1:
-        raise ValueError(f"{name} must be one-dimensional")
-    if not np.all(np.isfinite(array)):
-        raise ValueError(f"{name} must contain only finite values")
-    return array
-
-
-def _validate_2d_finite(values: np.ndarray, name: str) -> np.ndarray:
-    array = np.asarray(values, dtype=float)
-    if array.ndim != 2:
-        raise ValueError(f"{name} must be two-dimensional")
-    if not np.all(np.isfinite(array)):
-        raise ValueError(f"{name} must contain only finite values")
-    return array
 
 
 def residuals_alpha(
@@ -113,8 +87,8 @@ def moment_contributions(
     instruments: np.ndarray,
 ) -> np.ndarray:
     """Return m_i(a) = psi_tau(residual_i) * Psi_i as an (n, k) matrix."""
-    residuals = _validate_1d_finite(residuals, "residuals")
-    instruments = _validate_2d_finite(instruments, "instruments")
+    residuals = validate_1d_array("residuals", residuals)
+    instruments = validate_2d_array("instruments", instruments)
     if residuals.shape[0] != instruments.shape[0]:
         raise ValueError("residuals and instruments must have the same number of rows")
 
@@ -130,7 +104,7 @@ def moment_covariance(
     ridge: float = 1e-8,
 ) -> np.ndarray:
     """Estimate centered covariance of moment contributions with ridge."""
-    contributions = _validate_2d_finite(contributions, "contributions")
+    contributions = validate_2d_array("contributions", contributions)
     if contributions.shape[0] < 2:
         raise ValueError("at least two moment contributions are required")
     if ridge < 0:
@@ -151,7 +125,7 @@ def weighted_gmm_statistic(
     use_pinv: bool = True,
 ) -> float:
     """Return n * g_hat' * Sigma_hat^{-1} * g_hat."""
-    contributions = _validate_2d_finite(contributions, "contributions")
+    contributions = validate_2d_array("contributions", contributions)
     n = contributions.shape[0]
     g_hat = contributions.mean(axis=0)
     sigma = moment_covariance(contributions, ridge=ridge)

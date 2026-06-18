@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import _path  # noqa: F401
 import pandas as pd
 import pytest
 

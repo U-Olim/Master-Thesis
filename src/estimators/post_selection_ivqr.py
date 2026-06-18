@@ -2,14 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-import sys
 from time import perf_counter
-
-if __package__ in {None, ""}:
-    src_path = Path(__file__).resolve().parents[1]
-    if str(src_path) not in sys.path:
-        sys.path.insert(0, str(src_path))
 
 import numpy as np
 from sklearn.linear_model import LassoCV
@@ -33,73 +26,11 @@ from inference.moments import (
     residuals_alpha,
     weighted_gmm_statistic,
 )
-
-
-def _validate_tau(tau: float) -> None:
-    if not 0 < tau < 1:
-        raise ValueError("tau must satisfy 0 < tau < 1")
-
-
-def _validate_vector(values: np.ndarray, name: str) -> np.ndarray:
-    array = np.asarray(values, dtype=float)
-    if array.ndim != 1:
-        raise ValueError(f"{name} must be one-dimensional")
-    if not np.all(np.isfinite(array)):
-        raise ValueError(f"{name} must contain only finite values")
-    return array
-
-
-def _validate_data_arrays(
-    y: np.ndarray,
-    d: np.ndarray,
-    z: np.ndarray,
-    x: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    y = _validate_vector(y, "y")
-    d = _validate_vector(d, "d")
-    z = _validate_vector(z, "z")
-    x = np.asarray(x, dtype=float)
-
-    if x.ndim != 2:
-        raise ValueError("x must be two-dimensional")
-    if not np.all(np.isfinite(x)):
-        raise ValueError("x must contain only finite values")
-    if not (len(y) == len(d) == len(z) == x.shape[0]):
-        raise ValueError("y, d, z, and x must have consistent row counts")
-
-    return y, d, z, x
-
-
-def _validate_outcome_control_arrays(
-    y: np.ndarray,
-    d: np.ndarray,
-    x: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    y = _validate_vector(y, "y")
-    d = _validate_vector(d, "d")
-    x = np.asarray(x, dtype=float)
-
-    if x.ndim != 2:
-        raise ValueError("x must be two-dimensional")
-    if not np.all(np.isfinite(x)):
-        raise ValueError("x must contain only finite values")
-    if not (len(y) == len(d) == x.shape[0]):
-        raise ValueError("y, d, and x must have consistent row counts")
-
-    return y, d, x
-
-
-def _validate_alpha_candidates(alphas: np.ndarray) -> np.ndarray:
-    alphas = np.asarray(alphas, dtype=float)
-    if alphas.ndim != 1:
-        raise ValueError("alphas must be one-dimensional")
-    if alphas.size == 0:
-        raise ValueError("alphas must be nonempty")
-    if not np.all(np.isfinite(alphas)):
-        raise ValueError("alphas must contain only finite values")
-    if not np.all(np.diff(alphas) > 0):
-        raise ValueError("alphas must be sorted strictly increasing")
-    return alphas
+from utils.validation import (
+    validate_alpha_grid,
+    validate_data_arrays,
+    validate_tau,
+)
 
 
 def _failed_result(
@@ -144,8 +75,8 @@ def select_controls_lasso(
     max_iter: int = 10000,
 ) -> tuple[np.ndarray, str]:
     """Select controls by union of LassoCV selections for Y~X and D~X."""
-    _validate_tau(tau)
-    y, d, x = _validate_outcome_control_arrays(y, d, x)
+    validate_tau(tau)
+    y, d, x = validate_data_arrays(y, d, x)
 
     if cv < 2:
         raise ValueError("cv must be at least 2")
@@ -186,8 +117,8 @@ def fit_post_selection_beta(
     max_iter: int = 1000,
 ) -> tuple[np.ndarray, bool, str]:
     """Profile selected-control beta(alpha) with intercept by QuantReg."""
-    _validate_tau(tau)
-    y, d, x_selected = _validate_outcome_control_arrays(y, d, x_selected)
+    validate_tau(tau)
+    y, d, x_selected = validate_data_arrays(y, d, x_selected)
     x_design = add_intercept(x_selected)
     beta_length = x_design.shape[1]
 
@@ -225,7 +156,7 @@ def evaluate_post_selection_alpha(
     gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
     """Evaluate the covariance-weighted post-selection IVQR objective."""
-    y, d, z, x_selected = _validate_data_arrays(y, d, z, x_selected)
+    y, d, z, x_selected = validate_data_arrays(y, d, x_selected, z)
     beta_hat, converged, message = fit_post_selection_beta(
         y=y,
         d=d,
@@ -263,8 +194,8 @@ def estimate_post_selection_ivqr(
 ) -> EstimationResult:
     """Estimate post-selection IVQR by Lasso selection and weighted GMM."""
     start = perf_counter()
-    _validate_tau(tau)
-    y, d, z, x = _validate_data_arrays(data.y, data.d, data.z, data.x)
+    validate_tau(tau)
+    y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
 
     try:
         selected_indices, selection_message = select_controls_lasso(
@@ -307,7 +238,7 @@ def estimate_post_selection_ivqr(
     if alphas is None:
         alphas = alpha_grid(alpha_min, alpha_max, alpha_step)
     else:
-        alphas = _validate_alpha_candidates(alphas)
+        alphas = validate_alpha_grid(alphas)
 
     statistics = np.empty(len(alphas), dtype=float)
     converged_flags: list[bool] = []
