@@ -196,24 +196,6 @@ def test_summarize_region_returns_estimation_result_fields() -> None:
         "cr_covers_true": True,
     }
 
-
-import numpy as np
-import pytest
-
-from inference.moments import (
-    alpha_grid,
-    evaluate_grid,
-    make_instruments,
-    moment_contributions,
-    moment_covariance,
-    quantile_score,
-    residuals_alpha,
-    sample_moment,
-    score_statistic,
-    weighted_gmm_statistic,
-)
-
-
 def test_quantile_score_uses_weak_inequality_at_zero() -> None:
     residuals = np.array([-1.0, 0.0, 2.0])
 
