@@ -22,6 +22,7 @@ from estimators.full_ivqr import (
     add_intercept,
     estimate_full_ivqr,
 )
+from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import (
     estimate_post_selection_ivqr,
     evaluate_post_selection_alpha,
@@ -435,6 +436,76 @@ def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
         assert result_2.cr_upper is None
     else:
         assert result_1.cr_upper == pytest.approx(result_2.cr_upper)
+
+
+def test_estimate_oracle_ivqr_is_not_full_control_alias() -> None:
+    assert estimate_oracle_ivqr is not estimate_full_ivqr
+
+
+def test_estimate_oracle_ivqr_uses_reduced_controls(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = generate_data(Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123))
+    captured: dict[str, tuple[int, int]] = {}
+
+    def fake_full_estimator(reduced_data, **kwargs):
+        captured["x_shape"] = reduced_data.x.shape
+        return EstimationResult(
+            estimator="full_ivqr",
+            alpha_hat=1.0,
+            alpha_true=reduced_data.alpha_true,
+            tau=kwargs["tau"],
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(kwargs["alphas"]),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=None,
+            runtime_seconds=0.0,
+        )
+
+    monkeypatch.setattr(full_ivqr_module, "estimate_full_ivqr", fake_full_estimator)
+    import estimators.oracle_ivqr as oracle_module
+
+    monkeypatch.setattr(oracle_module, "estimate_full_ivqr", fake_full_estimator)
+
+    result = estimate_oracle_ivqr(
+        data,
+        tau=0.5,
+        alphas=np.linspace(0.0, 2.0, 3),
+        oracle_indices=np.arange(10),
+    )
+
+    assert captured["x_shape"] == (80, 10)
+    assert result.estimator == "oracle_ivqr"
+    assert result.selected_controls == 10
+
+
+def test_estimate_oracle_ivqr_rejects_invalid_indices() -> None:
+    data = generate_data(Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123))
+
+    with pytest.raises(ValueError, match="nonempty"):
+        estimate_oracle_ivqr(data, tau=0.5, alphas=np.linspace(0.0, 2.0, 3), oracle_indices=[])
+    with pytest.raises(ValueError, match="duplicates"):
+        estimate_oracle_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.linspace(0.0, 2.0, 3),
+            oracle_indices=np.array([0, 0]),
+        )
+    with pytest.raises(ValueError, match="between"):
+        estimate_oracle_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.linspace(0.0, 2.0, 3),
+            oracle_indices=np.array([20]),
+        )
 
 def test_make_folds_covers_each_observation_once() -> None:
     folds = make_folds(n=20, k_folds=5, random_state=123)

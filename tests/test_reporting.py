@@ -355,6 +355,21 @@ def test_add_estimator_labels_maps_known_and_preserves_unknown() -> None:
     assert "estimator_label" not in summary.columns
 
 
+def test_add_estimator_labels_maps_oracle() -> None:
+    summary = pd.DataFrame(
+        [
+            {
+                **_summary().iloc[0].to_dict(),
+                "estimator": "oracle_ivqr",
+            }
+        ]
+    )
+
+    labeled = add_estimator_labels(summary)
+
+    assert labeled.iloc[0]["estimator_label"] == "Oracle IVQR"
+
+
 def test_filter_summary_filters_values_and_empty_matches() -> None:
     summary = _summary()
 

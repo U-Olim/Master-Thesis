@@ -10,11 +10,14 @@ import pandas as pd
 TABLE_GROUP_COLUMNS = ["dgp", "n", "p", "pi", "tau"]
 ESTIMATOR_COLUMN = "estimator"
 ESTIMATOR_ORDER = [
+    "oracle_ivqr",
     "full_ivqr",
     "post_selection_ivqr",
     "dml_ivqr",
 ]
 ESTIMATOR_LABELS = {
+    "oracle_ivqr": "Oracle IVQR",
+    "oracle": "Oracle IVQR",
     "full_ivqr": "Full-control IVQR",
     "post_selection_ivqr": "Post-selection IVQR",
     "dml_ivqr": "DML-IVQR",

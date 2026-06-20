@@ -19,6 +19,8 @@ from simulation.batching import (
 )
 from simulation.chunking import select_design_chunk
 from simulation.runner import (
+    DEFAULT_PILOT_ESTIMATORS,
+    VALID_ESTIMATORS,
     make_simulation_grid,
     run_pilot_simulation,
     run_single_replication,
@@ -151,6 +153,15 @@ def test_run_pilot_simulation_invalid_estimator_raises() -> None:
             alphas=np.linspace(0.0, 2.0, 5),
             estimators=("bad_estimator",),
         )
+
+
+def test_valid_estimators_includes_oracle() -> None:
+    assert "oracle" in VALID_ESTIMATORS
+
+
+def test_default_pilot_estimators_do_not_include_oracle() -> None:
+    assert DEFAULT_PILOT_ESTIMATORS == ("full", "post_selection", "dml")
+    assert "oracle" not in DEFAULT_PILOT_ESTIMATORS
 
 
 def test_quantreg_max_iter_is_passed_to_full_estimator(monkeypatch) -> None:
@@ -334,6 +345,21 @@ def test_run_single_replication_successful_row_has_ok_status() -> None:
     assert len(rows) == 1
     assert rows[0]["status"] == "ok"
     assert rows[0]["error_type"] is None
+
+
+def test_run_single_replication_accepts_oracle_estimator() -> None:
+    design = Design("dgp1", 200, 50, 1.0, 0.5, rep=0, seed=123)
+
+    rows = run_single_replication(
+        design,
+        np.linspace(0.0, 2.0, 3),
+        estimators=("oracle",),
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["estimator"] == "oracle_ivqr"
+    assert rows[0]["selected_controls"] == 10
+    assert rows[0]["status"] in {"ok", "failed"}
 
 
 def test_run_simulation_batch_returns_expected_rows() -> None:
@@ -759,3 +785,25 @@ def test_manual_full_control_uses_benchmark_scenario_defaults() -> None:
     assert args.taus == [0.5]
     assert args.alpha_grid_size == 3
     assert args.output == "manual.csv"
+
+
+def test_manual_oracle_uses_single_scenario_defaults() -> None:
+    args = full_simulation_cli.argparse.Namespace(
+        preset="main",
+        estimators=["oracle"],
+        dgps=None,
+        n_values=[100],
+        p_values=[20],
+        pi_values=None,
+        taus=None,
+        reps=1,
+        alpha_grid_size=3,
+        output="oracle.csv",
+    )
+
+    full_simulation_cli._apply_preset_defaults(args)
+
+    assert args.estimators == ["oracle"]
+    assert args.dgps == ["dgp1"]
+    assert args.pi_values == [1.0]
+    assert args.taus == [0.5]

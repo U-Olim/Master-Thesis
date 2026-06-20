@@ -7,6 +7,7 @@ This repository contains the code architecture for a master thesis simulation st
 The final project compares IVQR-type estimators:
 
 - Full-control IVQR
+- Oracle IVQR
 - Post-selection IVQR
 - DML-IVQR
 
@@ -34,6 +35,7 @@ Implemented:
 - Core IVQR moment functions
 - Confidence-region inversion
 - Full-control IVQR
+- Oracle IVQR
 - Post-selection IVQR
 - DML-IVQR
 - Covariance-weighted GMM objective
@@ -120,6 +122,11 @@ The benchmark excludes `p=500` and `pi=0.10` to keep the full-control run
 feasible and focused. Users can still manually run full-control on other
 feasible designs with `--estimators full`.
 
+Oracle IVQR is also simulation-only and infeasible in real applications. It
+knows the true active controls from the DGP, restricts `X` to those controls,
+and then runs the same IVQR procedure on the reduced control set. It is a
+benchmark for post-selection IVQR and DML-IVQR, not an implementable estimator.
+
 The full simulation runner writes results batch-by-batch and supports resume:
 
 ```bash
@@ -156,6 +163,14 @@ python scripts/02_run_full_simulation.py \
 python scripts/02_run_full_simulation.py \
   --preset full-control-benchmark \
   --output results/raw/full_control_benchmark_R100.csv
+
+python scripts/02_run_full_simulation.py \
+  --estimators oracle post_selection dml \
+  --reps 10 \
+  --n-values 500 \
+  --p-values 200 \
+  --alpha-grid-size 9 \
+  --output results/raw/oracle_post_dml_test.csv
 ```
 
 The main default grid is computationally expensive: 3 DGPs, 2 sample sizes, 2

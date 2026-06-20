@@ -6,7 +6,7 @@ import numpy as np
 from scipy.stats import norm, t
 
 from dgp.designs import Design, SimData
-from dgp.true_parameters import _normalize_dgp, true_alpha
+from dgp.true_parameters import _normalize_dgp, true_alpha, true_sparse_coefficients
 from simulation.config import DF_T, RHO_UV, RHO_X
 
 
@@ -41,25 +41,7 @@ def generate_x(
 
 def generate_coefficients(dgp: str, p: int) -> dict[str, np.ndarray]:
     """Generate sparse outcome and first-stage coefficient vectors."""
-
-    normalized_dgp = _normalize_dgp(dgp)
-    if p <= 0:
-        raise ValueError("p must be positive.")
-
-    beta = np.zeros(p)
-    gamma = np.zeros(p)
-
-    if normalized_dgp == "dgp2":
-        s = min(20, p)
-        indices = np.arange(1, s + 1, dtype=float)
-        beta[:s] = 0.5 / np.sqrt(indices)
-        gamma[:s] = 0.4 / np.sqrt(indices)
-    else:
-        s = min(10, p)
-        indices = np.arange(1, s + 1)
-        values = 0.5 / indices
-        beta[:s] = values
-        gamma[:s] = values
+    beta, gamma = true_sparse_coefficients(dgp, p)
     return {"beta": beta, "gamma": gamma}
 
 

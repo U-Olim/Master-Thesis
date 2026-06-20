@@ -8,19 +8,22 @@ import numpy as np
 import pandas as pd
 
 from dgp.generators import generate_data
-from dgp.true_parameters import true_alpha
+from dgp.true_parameters import get_oracle_control_indices, true_alpha
 from estimators.base import EstimationResult
 from estimators.dml_ivqr import estimate_dml_ivqr
 from estimators.full_ivqr import estimate_full_ivqr
+from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import estimate_post_selection_ivqr
 from dgp.designs import Design
 
 
 EstimatorFn = Callable[..., EstimationResult]
-VALID_ESTIMATORS = ("full", "post_selection", "dml")
+VALID_ESTIMATORS = ("full", "oracle", "post_selection", "dml")
+DEFAULT_PILOT_ESTIMATORS = ("full", "post_selection", "dml")
 VALID_DGPS = ("dgp1", "dgp2", "dgp3")
 ESTIMATOR_OUTPUT_NAMES = {
     "full": "full_ivqr",
+    "oracle": "oracle_ivqr",
     "post_selection": "post_selection_ivqr",
     "dml": "dml_ivqr",
 }
@@ -269,7 +272,7 @@ def make_simulation_grid(
 def run_single_replication(
     design: Design,
     alphas: np.ndarray,
-    estimators: tuple[str, ...] = ("full", "post_selection", "dml"),
+    estimators: tuple[str, ...] = DEFAULT_PILOT_ESTIMATORS,
     quantreg_max_iter: int = 500,
     selection_cv: int = 3,
     selection_max_iter: int = 10000,
@@ -288,6 +291,7 @@ def run_single_replication(
     data = generate_data(design)
     estimator_map: dict[str, EstimatorFn] = {
         "full": estimate_full_ivqr,
+        "oracle": estimate_oracle_ivqr,
         "post_selection": estimate_post_selection_ivqr,
         "dml": estimate_dml_ivqr,
     }
@@ -320,6 +324,16 @@ def run_single_replication(
                     ridge_alpha=dml_ridge_alpha,
                     gmm_ridge=gmm_ridge,
                 )
+            elif estimator_name == "oracle":
+                oracle_indices = get_oracle_control_indices(design.dgp, design.p)
+                result = estimator(
+                    data,
+                    tau=design.tau,
+                    alphas=alphas,
+                    oracle_indices=oracle_indices,
+                    max_iter=quantreg_max_iter,
+                    gmm_ridge=gmm_ridge,
+                )
             else:
                 result = estimator(
                     data,
@@ -344,7 +358,7 @@ def run_pilot_simulation(
     reps: int = 10,
     base_seed: int = 12345,
     alphas: np.ndarray | None = None,
-    estimators: tuple[str, ...] = ("full", "post_selection", "dml"),
+    estimators: tuple[str, ...] = DEFAULT_PILOT_ESTIMATORS,
     alpha_grid_size: int = 9,
     alpha_min: float = -1.0,
     alpha_max: float = 3.0,

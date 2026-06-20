@@ -15,6 +15,7 @@ from dgp import (
 )
 from dgp.designs import Design
 from dgp.true_parameters import true_alpha
+from dgp.true_parameters import get_oracle_control_count, get_oracle_control_indices
 from simulation.config import (
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_OUTPUT,
@@ -54,6 +55,31 @@ def test_project_design_constants_exist() -> None:
     assert DEFAULT_OUTPUT == "results/raw/full_simulation_results.csv"
     assert DEFAULT_ALPHA_GRID_SIZE == 17
     assert K_FOLDS == 5
+
+
+def test_get_oracle_control_indices_returns_true_active_support() -> None:
+    np.testing.assert_array_equal(
+        get_oracle_control_indices("dgp1", p=100),
+        np.arange(10),
+    )
+    np.testing.assert_array_equal(
+        get_oracle_control_indices("dgp2", p=100),
+        np.arange(20),
+    )
+    np.testing.assert_array_equal(
+        get_oracle_control_indices("dgp3", p=100),
+        np.arange(10),
+    )
+    assert get_oracle_control_count("dgp2", p=100) == 20
+
+
+def test_get_oracle_control_indices_rejects_invalid_inputs() -> None:
+    with pytest.raises(ValueError, match="Unknown DGP"):
+        get_oracle_control_indices("bad_dgp", p=100)
+    with pytest.raises(ValueError, match="requires at least 10 controls"):
+        get_oracle_control_indices("dgp1", p=9)
+    with pytest.raises(ValueError, match="requires at least 20 controls"):
+        get_oracle_control_indices("dgp2", p=19)
 
 
 def test_covariance_matrix_shape_and_values() -> None:

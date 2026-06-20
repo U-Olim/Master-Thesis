@@ -114,8 +114,11 @@ def _apply_preset_defaults(args: argparse.Namespace) -> None:
         preset_output = FULL_CONTROL_BENCHMARK_OUTPUT
     else:
         preset_estimators = MAIN_ESTIMATORS
-        full_control_only = tuple(args.estimators or ()) == FULL_CONTROL_BENCHMARK_ESTIMATORS
-        if full_control_only:
+        manual_single_benchmark = tuple(args.estimators or ()) in {
+            FULL_CONTROL_BENCHMARK_ESTIMATORS,
+            ("oracle",),
+        }
+        if manual_single_benchmark:
             preset_dgps = ("dgp1",)
             preset_n_values = tuple(FULL_CONTROL_BENCHMARK_N_VALUES)
             preset_p_values = tuple(FULL_CONTROL_BENCHMARK_P_VALUES)

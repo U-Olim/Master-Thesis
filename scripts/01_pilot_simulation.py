@@ -15,10 +15,13 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from simulation.runner import run_pilot_simulation  # noqa: E402
+from simulation.runner import (  # noqa: E402
+    DEFAULT_PILOT_ESTIMATORS,
+    VALID_ESTIMATORS,
+    run_pilot_simulation,
+)
 
 
-VALID_ESTIMATORS = ("full", "post_selection", "dml")
 MODE_CONFIGS = {
     "quick": {
         "dgp": "dgp1",
@@ -31,7 +34,7 @@ MODE_CONFIGS = {
         "quantreg_max_iter": 500,
         "selection_cv": 3,
         "dml_k_folds": 3,
-        "estimators": VALID_ESTIMATORS,
+        "estimators": DEFAULT_PILOT_ESTIMATORS,
         "output_path": Path("results/raw/pilot_quick_results.csv"),
     },
     "stress": {
@@ -45,7 +48,7 @@ MODE_CONFIGS = {
         "quantreg_max_iter": 500,
         "selection_cv": 3,
         "dml_k_folds": 3,
-        "estimators": VALID_ESTIMATORS,
+        "estimators": DEFAULT_PILOT_ESTIMATORS,
         "output_path": Path("results/raw/pilot_stress_results.csv"),
     },
 }

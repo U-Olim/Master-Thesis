@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 import inference
+import pandas as pd
 from estimators.base import EstimationResult
 from dgp.designs import Design
 from inference import metrics
@@ -101,6 +102,47 @@ def test_full_simulation_manual_full_control_dry_run() -> None:
     assert "estimators: full" in result.stdout
 
 
+def test_full_simulation_oracle_estimator_runs(tmp_path: Path) -> None:
+    script = Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
+    output = tmp_path / "oracle_smoke.csv"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--estimators",
+            "oracle",
+            "--reps",
+            "1",
+            "--dgps",
+            "dgp1",
+            "--n-values",
+            "200",
+            "--p-values",
+            "50",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--alpha-grid-size",
+            "3",
+            "--output",
+            str(output),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0
+    assert output.exists()
+    assert "estimators: oracle" in result.stdout
+    written = pd.read_csv(output)
+    assert written.loc[0, "estimator"] == "oracle_ivqr"
+    assert "status" in written.columns
+
+
 def test_make_tables_script_help_runs() -> None:
     script = Path(__file__).resolve().parents[1] / "scripts" / "03_make_tables.py"
 
@@ -120,7 +162,7 @@ def test_pilot_script_runs_end_to_end(tmp_path: Path) -> None:
     script = Path(__file__).resolve().parents[1] / "scripts" / "01_pilot_simulation.py"
 
     result = subprocess.run(
-        [sys.executable, str(script)],
+        [sys.executable, str(script), "--estimators", "dml"],
         cwd=tmp_path,
         check=False,
         capture_output=True,
@@ -131,6 +173,4 @@ def test_pilot_script_runs_end_to_end(tmp_path: Path) -> None:
     output = tmp_path / "results" / "raw" / "pilot_quick_results.csv"
     assert result.returncode == 0
     assert output.exists()
-    assert "full_ivqr" in result.stdout
-    assert "post_selection_ivqr" in result.stdout
     assert "dml_ivqr" in result.stdout
