@@ -93,6 +93,14 @@ the true active controls from the DGP, restricts `X` to those controls, and then
 runs the same IVQR procedure on the reduced control set. It is a benchmark for
 post-selection IVQR and DML-IVQR, not an implementable estimator.
 
+The main simulation preset runs Oracle IVQR, post-selection IVQR, and DML-IVQR
+on the full high-dimensional grid with `R = 100` and a 9-point alpha grid. It
+intentionally excludes full-control IVQR, which stays in
+`--preset full-control-benchmark` or explicit manual `--estimators full` runs.
+The 9-point alpha grid is a computationally efficient default, not a
+theoretically special value. Larger grids such as 13 points can still be used
+as robustness checks with `--alpha-grid-size 13`.
+
 Estimator result status fields use the following convention:
 
 ```text
@@ -110,9 +118,10 @@ and writes results batch-by-batch:
 python scripts/02_run_full_simulation.py --resume
 python scripts/02_run_full_simulation.py --resume --rerun-failed
 python scripts/02_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
-python scripts/02_run_full_simulation.py --estimators post_selection dml --reps 10 --resume
+python scripts/02_run_full_simulation.py --estimators oracle post_selection dml --reps 10 --resume
 python scripts/02_run_full_simulation.py --preset main
 python scripts/02_run_full_simulation.py --preset full-control-benchmark
+python scripts/02_run_full_simulation.py --preset main --alpha-grid-size 13
 ```
 
 Safe final-run planning and chunking examples:
@@ -134,7 +143,7 @@ python scripts/02_run_full_simulation.py \
   --pi-values 1.0 0.5 0.25 0.10 \
   --taus 0.5 \
   --reps 50 \
-  --estimators post_selection dml \
+  --estimators oracle post_selection dml \
   --output results/raw/mini_weak_iv.csv
 
 python scripts/02_run_full_simulation.py \
@@ -151,10 +160,12 @@ python scripts/02_run_full_simulation.py \
 ```
 
 The main default run uses 3 DGPs, 2 sample sizes, 2 control dimensions, 4
-instrument strengths, 3 quantiles, and 1000 replications, so it can be
-computationally expensive. It runs post-selection IVQR and DML-IVQR. `--resume`
-skips designs for which all requested estimator rows already exist in the
-output CSV. `--rerun-failed` makes resume stricter: failed estimator rows are
+instrument strengths, 3 quantiles, and 100 replications with a 9-point alpha
+grid, so it can be computationally expensive. It runs Oracle IVQR,
+post-selection IVQR, and DML-IVQR. Full-control IVQR stays out of the main
+preset. `--resume` skips designs for which all requested estimator rows already
+exist in the output CSV. `--rerun-failed` makes resume stricter: failed
+estimator rows are
 not treated as completed. If one estimator raises an exception, the runner
 records a failed row for that estimator and continues with the remaining
 estimators for the same dataset. Failed rows stay in raw output with `status`,
@@ -177,7 +188,7 @@ from reporting.summaries import aggregate_results_file
 summary = aggregate_results_file(
     "results/raw/full_simulation_results.csv",
     "results/processed/summary_metrics.csv",
-    expected_replications=1000,
+    expected_replications=100,
 )
 ```
 
@@ -195,7 +206,7 @@ Raw results can also be aggregated and tabled in one command:
 python scripts/03_make_tables.py \
   --raw-input results/raw/full_simulation_results.csv \
   --summary-output results/processed/summary_metrics.csv \
-  --expected-replications 1000 \
+  --expected-replications 100 \
   --output-dir results/tables
 ```
 

@@ -10,6 +10,7 @@ import pandas as pd
 TABLE_GROUP_COLUMNS = ["dgp", "n", "p", "pi", "tau"]
 ESTIMATOR_COLUMN = "estimator"
 ESTIMATOR_ORDER = [
+    "oracle",
     "oracle_ivqr",
     "full_ivqr",
     "post_selection_ivqr",

@@ -483,8 +483,86 @@ def test_estimate_oracle_ivqr_uses_reduced_controls(monkeypatch: pytest.MonkeyPa
     )
 
     assert captured["x_shape"] == (80, 10)
-    assert result.estimator == "oracle_ivqr"
+    assert result.estimator == "oracle"
     assert result.selected_controls == 10
+
+
+def test_estimate_oracle_ivqr_accepts_array_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = generate_data(Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123))
+    captured: dict[str, tuple[int, int]] = {}
+
+    def fake_full_estimator(reduced_data, **kwargs):
+        captured["x_shape"] = reduced_data.x.shape
+        return EstimationResult(
+            estimator="full_ivqr",
+            alpha_hat=1.0,
+            alpha_true=reduced_data.alpha_true,
+            tau=kwargs["tau"],
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(kwargs["alphas"]),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=None,
+            runtime_seconds=0.0,
+        )
+
+    import estimators.oracle_ivqr as oracle_module
+
+    monkeypatch.setattr(oracle_module, "estimate_full_ivqr", fake_full_estimator)
+
+    result = estimate_oracle_ivqr(
+        data.y,
+        data.d,
+        data.x,
+        data.z,
+        tau=0.5,
+        alpha_candidates=np.linspace(0.0, 2.0, 3),
+        oracle_indices=np.arange(10),
+        alpha_true=data.alpha_true,
+    )
+
+    assert captured["x_shape"] == (80, 10)
+    assert result.estimator == "oracle"
+    assert result.selected_controls == 10
+
+
+def test_estimate_oracle_ivqr_alpha_hat_does_not_use_alpha_true() -> None:
+    data = generate_data(Design("dgp1", n=200, p=50, pi=1.0, tau=0.5, rep=0, seed=123))
+    alphas = np.linspace(0.0, 2.0, 3)
+
+    without_truth = estimate_oracle_ivqr(
+        data.y,
+        data.d,
+        data.x,
+        data.z,
+        tau=0.5,
+        alpha_candidates=alphas,
+        oracle_indices=np.arange(10),
+    )
+    with_wrong_truth = estimate_oracle_ivqr(
+        data.y,
+        data.d,
+        data.x,
+        data.z,
+        tau=0.5,
+        alpha_candidates=alphas,
+        oracle_indices=np.arange(10),
+        alpha_true=999.0,
+    )
+
+    assert without_truth.alpha_hat == pytest.approx(with_wrong_truth.alpha_hat)
+    assert without_truth.objective_value == pytest.approx(with_wrong_truth.objective_value)
+    assert without_truth.selected_controls == 10
+    assert with_wrong_truth.selected_controls == 10
 
 
 def test_estimate_oracle_ivqr_rejects_invalid_indices() -> None:

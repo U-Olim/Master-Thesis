@@ -13,10 +13,10 @@ PI_VALUES = [1.0, 0.5, 0.25, 0.10]
 TAUS = [0.25, 0.50, 0.75]
 DGPS = ["dgp1", "dgp2", "dgp3"]
 
-R_MAIN = 1000
+R_MAIN = 100
 R_FULL_CONTROL_BENCHMARK = 100
 DEFAULT_OUTPUT = "results/raw/full_simulation_results.csv"
-DEFAULT_ALPHA_GRID_SIZE = 17
+DEFAULT_ALPHA_GRID_SIZE = 9
 K_FOLDS = 5
 
 RHO_X = 0.5

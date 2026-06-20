@@ -49,7 +49,7 @@ DEFAULT_N_VALUES = tuple(N_VALUES)
 DEFAULT_P_VALUES = tuple(P_VALUES)
 DEFAULT_PI_VALUES = tuple(PI_VALUES)
 DEFAULT_TAUS = tuple(TAUS)
-MAIN_ESTIMATORS = ("post_selection", "dml")
+MAIN_ESTIMATORS = ("oracle", "post_selection", "dml")
 FULL_CONTROL_BENCHMARK_ESTIMATORS = ("full",)
 
 
@@ -165,7 +165,7 @@ def _apply_quick_test(args: argparse.Namespace) -> None:
     args.taus = [0.5]
     args.reps = 2
     args.alpha_grid_size = 5
-    args.estimators = list(MAIN_ESTIMATORS)
+    args.estimators = ["post_selection", "dml"]
     args.batch_size = 2
 
 

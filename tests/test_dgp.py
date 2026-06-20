@@ -50,10 +50,10 @@ def test_project_design_constants_exist() -> None:
     assert PI_VALUES == [1.0, 0.5, 0.25, 0.10]
     assert TAUS == [0.25, 0.50, 0.75]
     assert DGPS == ["dgp1", "dgp2", "dgp3"]
-    assert R_MAIN == 1000
+    assert R_MAIN == 100
     assert R_FULL_CONTROL_BENCHMARK == 100
     assert DEFAULT_OUTPUT == "results/raw/full_simulation_results.csv"
-    assert DEFAULT_ALPHA_GRID_SIZE == 17
+    assert DEFAULT_ALPHA_GRID_SIZE == 9
     assert K_FOLDS == 5
 
 

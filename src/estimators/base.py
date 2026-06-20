@@ -13,7 +13,7 @@ class EstimationResult:
 
     estimator: str
     alpha_hat: float | None
-    alpha_true: float
+    alpha_true: float | None
     tau: float
 
     converged: bool

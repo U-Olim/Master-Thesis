@@ -357,7 +357,7 @@ def test_run_single_replication_accepts_oracle_estimator() -> None:
     )
 
     assert len(rows) == 1
-    assert rows[0]["estimator"] == "oracle_ivqr"
+    assert rows[0]["estimator"] == "oracle"
     assert rows[0]["selected_controls"] == 10
     assert rows[0]["status"] in {"ok", "failed"}
 
@@ -698,14 +698,15 @@ def test_full_simulation_main_preset_excludes_full_control_by_default() -> None:
 
     full_simulation_cli._apply_preset_defaults(args)
 
-    assert args.estimators == ["post_selection", "dml"]
+    assert args.estimators == ["oracle", "post_selection", "dml"]
+    assert "full" not in args.estimators
     assert args.dgps == ["dgp1", "dgp2", "dgp3"]
     assert args.n_values == [500, 1000]
     assert args.p_values == [200, 500]
     assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
-    assert args.reps == 1000
-    assert args.alpha_grid_size == 17
+    assert args.reps == 100
+    assert args.alpha_grid_size == 9
     assert args.output == "results/raw/full_simulation_results.csv"
 
 
@@ -761,6 +762,26 @@ def test_full_simulation_preset_respects_explicit_overrides() -> None:
     assert args.reps == 10
     assert args.alpha_grid_size == 3
     assert args.output == "custom.csv"
+
+
+def test_full_simulation_main_preset_respects_alpha_grid_override() -> None:
+    args = full_simulation_cli.argparse.Namespace(
+        preset="main",
+        estimators=None,
+        dgps=None,
+        n_values=None,
+        p_values=None,
+        pi_values=None,
+        taus=None,
+        reps=None,
+        alpha_grid_size=13,
+        output=None,
+    )
+
+    full_simulation_cli._apply_preset_defaults(args)
+
+    assert args.estimators == ["oracle", "post_selection", "dml"]
+    assert args.alpha_grid_size == 13
 
 
 def test_manual_full_control_uses_benchmark_scenario_defaults() -> None:

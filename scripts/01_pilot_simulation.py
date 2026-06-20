@@ -15,6 +15,7 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
+from simulation.config import DEFAULT_ALPHA_GRID_SIZE  # noqa: E402
 from simulation.runner import (  # noqa: E402
     DEFAULT_PILOT_ESTIMATORS,
     VALID_ESTIMATORS,
@@ -30,7 +31,7 @@ MODE_CONFIGS = {
         "pi": 1.0,
         "tau": 0.5,
         "reps": 3,
-        "alpha_grid_size": 9,
+        "alpha_grid_size": DEFAULT_ALPHA_GRID_SIZE,
         "quantreg_max_iter": 500,
         "selection_cv": 3,
         "dml_k_folds": 3,
@@ -44,7 +45,7 @@ MODE_CONFIGS = {
         "pi": 1.0,
         "tau": 0.5,
         "reps": 2,
-        "alpha_grid_size": 9,
+        "alpha_grid_size": DEFAULT_ALPHA_GRID_SIZE,
         "quantreg_max_iter": 500,
         "selection_cv": 3,
         "dml_k_folds": 3,

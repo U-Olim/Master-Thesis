@@ -360,7 +360,7 @@ def test_add_estimator_labels_maps_oracle() -> None:
         [
             {
                 **_summary().iloc[0].to_dict(),
-                "estimator": "oracle_ivqr",
+                "estimator": "oracle",
             }
         ]
     )

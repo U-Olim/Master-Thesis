@@ -469,6 +469,18 @@ def test_alpha_grid_has_expected_length_and_endpoint() -> None:
     assert grid[-1] == pytest.approx(4.0)
 
 
+@pytest.mark.parametrize(("size", "step"), [(9, 0.5), (13, 1.0 / 3.0)])
+def test_alpha_grid_supports_default_and_robustness_grid_sizes(
+    size: int,
+    step: float,
+) -> None:
+    grid = alpha_grid(-1.0, 3.0, step)
+
+    assert len(grid) == size
+    assert grid[0] == pytest.approx(-1.0)
+    assert grid[-1] == pytest.approx(3.0)
+
+
 def test_evaluate_grid_returns_finite_values() -> None:
     alphas = np.array([0.0, 0.5, 1.0])
     y = np.array([1.0, 2.0, 3.0, 4.0])

@@ -15,6 +15,7 @@ from estimators.full_ivqr import estimate_full_ivqr
 from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import estimate_post_selection_ivqr
 from dgp.designs import Design
+from simulation.config import DEFAULT_ALPHA_GRID_SIZE
 
 
 EstimatorFn = Callable[..., EstimationResult]
@@ -23,7 +24,7 @@ DEFAULT_PILOT_ESTIMATORS = ("full", "post_selection", "dml")
 VALID_DGPS = ("dgp1", "dgp2", "dgp3")
 ESTIMATOR_OUTPUT_NAMES = {
     "full": "full_ivqr",
-    "oracle": "oracle_ivqr",
+    "oracle": "oracle",
     "post_selection": "post_selection_ivqr",
     "dml": "dml_ivqr",
 }
@@ -82,7 +83,7 @@ def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object
     bias = None
     absolute_error = None
     squared_error = None
-    if result.alpha_hat is not None:
+    if result.alpha_hat is not None and result.alpha_true is not None:
         bias = result.alpha_hat - result.alpha_true
         absolute_error = abs(bias)
         squared_error = bias**2
@@ -359,7 +360,7 @@ def run_pilot_simulation(
     base_seed: int = 12345,
     alphas: np.ndarray | None = None,
     estimators: tuple[str, ...] = DEFAULT_PILOT_ESTIMATORS,
-    alpha_grid_size: int = 9,
+    alpha_grid_size: int = DEFAULT_ALPHA_GRID_SIZE,
     alpha_min: float = -1.0,
     alpha_max: float = 3.0,
     quantreg_max_iter: int = 500,

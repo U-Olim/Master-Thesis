@@ -11,6 +11,21 @@ from dgp.designs import Design
 from inference import metrics
 
 
+FULL_SIMULATION_SCRIPT = (
+    Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
+)
+
+
+def _run_full_simulation_dry_run(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(FULL_SIMULATION_SCRIPT), *args],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
 def test_core_phase1_imports_work() -> None:
     assert inference is not None
     assert metrics is not None
@@ -19,10 +34,8 @@ def test_core_phase1_imports_work() -> None:
 
 
 def test_full_simulation_script_help_runs() -> None:
-    script = Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
-
     result = subprocess.run(
-        [sys.executable, str(script), "--help"],
+        [sys.executable, str(FULL_SIMULATION_SCRIPT), "--help"],
         check=False,
         capture_output=True,
         text=True,
@@ -35,66 +48,125 @@ def test_full_simulation_script_help_runs() -> None:
 
 
 def test_full_simulation_full_control_benchmark_preset_dry_run() -> None:
-    script = Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(script),
-            "--preset",
-            "full-control-benchmark",
-            "--dry-run",
-            "--reps",
-            "1",
-            "--dgps",
-            "dgp1",
-            "--pi-values",
-            "1.0",
-            "--taus",
-            "0.5",
-            "--n-values",
-            "500",
-            "--p-values",
-            "100",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=60,
+    result = _run_full_simulation_dry_run(
+        "--preset",
+        "full-control-benchmark",
+        "--dry-run",
+        "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--n-values",
+        "500",
+        "--p-values",
+        "100",
     )
 
     assert result.returncode == 0
     assert "preset: full-control-benchmark" in result.stdout
     assert "estimators: full" in result.stdout
+    assert "alpha grid: size=9" in result.stdout
+
+
+def test_full_simulation_main_preset_dry_run_includes_oracle_not_full() -> None:
+    result = _run_full_simulation_dry_run(
+        "--preset",
+        "main",
+        "--dry-run",
+        "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--n-values",
+        "500",
+        "--p-values",
+        "200",
+    )
+
+    assert result.returncode == 0
+    assert "preset: main" in result.stdout
+    assert "estimators: oracle,post_selection,dml" in result.stdout
+    assert "estimators: full" not in result.stdout
+    assert "alpha grid: size=9" in result.stdout
+
+
+def test_full_simulation_main_preset_alpha_grid_cli_override_dry_run() -> None:
+    result = _run_full_simulation_dry_run(
+        "--preset",
+        "main",
+        "--alpha-grid-size",
+        "13",
+        "--dry-run",
+        "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--n-values",
+        "500",
+        "--p-values",
+        "200",
+    )
+
+    assert result.returncode == 0
+    assert "preset: main" in result.stdout
+    assert "alpha grid: size=13" in result.stdout
+
+
+def test_full_simulation_full_control_alpha_grid_cli_override_dry_run() -> None:
+    result = _run_full_simulation_dry_run(
+        "--preset",
+        "full-control-benchmark",
+        "--alpha-grid-size",
+        "3",
+        "--dry-run",
+        "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--n-values",
+        "500",
+        "--p-values",
+        "100",
+    )
+
+    assert result.returncode == 0
+    assert "preset: full-control-benchmark" in result.stdout
+    assert "alpha grid: size=3" in result.stdout
 
 
 def test_full_simulation_manual_full_control_dry_run() -> None:
-    script = Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(script),
-            "--estimators",
-            "full",
-            "--dry-run",
-            "--reps",
-            "1",
-            "--dgps",
-            "dgp1",
-            "--pi-values",
-            "1.0",
-            "--taus",
-            "0.5",
-            "--n-values",
-            "500",
-            "--p-values",
-            "100",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=60,
+    result = _run_full_simulation_dry_run(
+        "--estimators",
+        "full",
+        "--dry-run",
+        "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--n-values",
+        "500",
+        "--p-values",
+        "100",
     )
 
     assert result.returncode == 0
@@ -139,7 +211,7 @@ def test_full_simulation_oracle_estimator_runs(tmp_path: Path) -> None:
     assert output.exists()
     assert "estimators: oracle" in result.stdout
     written = pd.read_csv(output)
-    assert written.loc[0, "estimator"] == "oracle_ivqr"
+    assert written.loc[0, "estimator"] == "oracle"
     assert "status" in written.columns
 
 

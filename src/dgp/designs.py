@@ -26,6 +26,6 @@ class SimData:
     d: np.ndarray
     z: np.ndarray
     x: np.ndarray
-    alpha_true: float
+    alpha_true: float | None
     u: np.ndarray | None = None
     v: np.ndarray | None = None
