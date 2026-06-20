@@ -25,10 +25,80 @@ def test_full_simulation_script_help_runs() -> None:
         check=False,
         capture_output=True,
         text=True,
+        timeout=60,
     )
 
     assert result.returncode == 0
     assert "Run the full IVQR Monte Carlo simulation" in result.stdout
+    assert "--preset" in result.stdout
+
+
+def test_full_simulation_full_control_benchmark_preset_dry_run() -> None:
+    script = Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--preset",
+            "full-control-benchmark",
+            "--dry-run",
+            "--reps",
+            "1",
+            "--dgps",
+            "dgp1",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--n-values",
+            "500",
+            "--p-values",
+            "100",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0
+    assert "preset: full-control-benchmark" in result.stdout
+    assert "estimators: full" in result.stdout
+
+
+def test_full_simulation_manual_full_control_dry_run() -> None:
+    script = Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--estimators",
+            "full",
+            "--dry-run",
+            "--reps",
+            "1",
+            "--dgps",
+            "dgp1",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--n-values",
+            "500",
+            "--p-values",
+            "100",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0
+    assert "preset: main" in result.stdout
+    assert "estimators: full" in result.stdout
 
 
 def test_make_tables_script_help_runs() -> None:
@@ -39,6 +109,7 @@ def test_make_tables_script_help_runs() -> None:
         check=False,
         capture_output=True,
         text=True,
+        timeout=60,
     )
 
     assert result.returncode == 0
@@ -54,6 +125,7 @@ def test_pilot_script_runs_end_to_end(tmp_path: Path) -> None:
         check=False,
         capture_output=True,
         text=True,
+        timeout=60,
     )
 
     output = tmp_path / "results" / "raw" / "pilot_quick_results.csv"

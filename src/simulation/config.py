@@ -1,12 +1,22 @@
 """Fixed design constants from the thesis project structure."""
 
-N_VALUES = [250, 500, 1000]
-P_VALUES = [200, 300, 500]
+N_VALUES = [500, 1000]
+P_VALUES = [200, 500]
+FULL_CONTROL_BENCHMARK_DGPS = ["dgp1", "dgp2", "dgp3"]
+FULL_CONTROL_BENCHMARK_N_VALUES = [500, 1000]
+FULL_CONTROL_BENCHMARK_P_VALUES = [100, 200]
+FULL_CONTROL_BENCHMARK_PI_VALUES = [1.0, 0.5, 0.25]
+FULL_CONTROL_BENCHMARK_TAUS = [0.25, 0.5, 0.75]
+FULL_CONTROL_BENCHMARK_OUTPUT = "results/raw/full_control_benchmark_R100.csv"
+FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE = 9
 PI_VALUES = [1.0, 0.5, 0.25, 0.10]
 TAUS = [0.25, 0.50, 0.75]
 DGPS = ["dgp1", "dgp2", "dgp3"]
 
 R_MAIN = 1000
+R_FULL_CONTROL_BENCHMARK = 100
+DEFAULT_OUTPUT = "results/raw/full_simulation_results.csv"
+DEFAULT_ALPHA_GRID_SIZE = 17
 K_FOLDS = 5
 
 RHO_X = 0.5

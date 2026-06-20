@@ -23,7 +23,6 @@ from inference.moments import (
     weighted_gmm_statistic,
 )
 from utils.validation import (
-    validate_1d_array,
     validate_2d_array,
     validate_alpha_grid,
     validate_data_arrays,
@@ -38,13 +37,23 @@ def add_intercept(x: np.ndarray) -> np.ndarray:
     return np.column_stack([np.ones(x.shape[0]), x])
 
 
-def _failed_result(
+def _validate_full_control_feasible(n: int, p: int) -> None:
+    """Reject only mathematically infeasible full-control QR designs."""
+    if p + 1 >= n:
+        raise ValueError(
+            "Full-control IVQR is infeasible when the number of controls plus intercept "
+            "is greater than or equal to the sample size. "
+            f"Received n={n}, p={p}, p+1={p + 1}."
+        )
+
+
+def _failed_estimation_result(
     data: SimData,
     tau: float,
     message: str,
     runtime_seconds: float,
-    alpha_grid_size: int | None = None,
-    failed_alpha_count: int | None = None,
+    alpha_grid_size: int,
+    failed_alpha_count: int,
 ) -> EstimationResult:
     return EstimationResult(
         estimator="full_ivqr",
@@ -69,28 +78,17 @@ def _failed_result(
     )
 
 
-def fit_profile_beta(
-    y: np.ndarray,
-    d: np.ndarray,
-    x: np.ndarray,
-    alpha: float,
+def _fit_control_quantile_regression(
+    y_alpha: np.ndarray,
+    x_design: np.ndarray,
     tau: float,
     max_iter: int = 1000,
 ) -> tuple[np.ndarray, bool, str]:
-    """Profile beta(alpha) by quantile regression of y - d alpha on [1, X]."""
-    validate_tau(tau)
-    y = validate_1d_array("y", y)
-    d = validate_1d_array("d", d)
-    x_design = add_intercept(x)
-
-    if len(y) != len(d) or len(y) != x_design.shape[0]:
-        raise ValueError("y, d, and x must have consistent row counts")
-
-    y_tilde = y - d * alpha
+    """Fit Q_tau(Y - D alpha | X) using the intercept-augmented full controls."""
     beta_length = x_design.shape[1]
 
     try:
-        result = QuantReg(y_tilde, x_design).fit(q=tau, max_iter=max_iter)
+        result = QuantReg(y_alpha, x_design).fit(q=tau, max_iter=max_iter)
         beta_hat = np.asarray(result.params, dtype=float)
     except Exception as exc:  # noqa: BLE001 - QuantReg can fail in several ways.
         return np.full(beta_length, np.nan), False, str(exc)
@@ -103,34 +101,28 @@ def fit_profile_beta(
     return beta_hat, True, "ok"
 
 
-def evaluate_full_ivqr_alpha(
+def _evaluate_alpha_full_ivqr(
     y: np.ndarray,
     d: np.ndarray,
-    z: np.ndarray,
-    x: np.ndarray,
+    x_design: np.ndarray,
+    instruments: np.ndarray,
     alpha: float,
     tau: float,
     max_iter: int = 1000,
     gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
     """Evaluate the covariance-weighted full-control IVQR objective."""
-    y, d, z, x = validate_data_arrays(y, d, x, z)
-
-    beta_hat, converged, message = fit_profile_beta(
-        y=y,
-        d=d,
-        x=x,
-        alpha=alpha,
+    beta_hat, converged, message = _fit_control_quantile_regression(
+        y_alpha=y - d * alpha,
+        x_design=x_design,
         tau=tau,
         max_iter=max_iter,
     )
     if not converged:
         return np.inf, False, message
 
-    x_design = add_intercept(x)
     x_beta = x_design @ beta_hat
     residuals = residuals_alpha(y, d, x_beta, alpha)
-    instruments = make_instruments(z, x)
     contributions = moment_contributions(residuals, tau, instruments)
     statistic = weighted_gmm_statistic(contributions, ridge=gmm_ridge)
 
@@ -154,19 +146,9 @@ def estimate_full_ivqr(
     y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
 
     n, p = x.shape
-    num_profile_params = p + 1
-    if num_profile_params >= n:
-        return _failed_result(
-            data=data,
-            tau=tau,
-            message=(
-                "Full-control IVQR infeasible: number of profiled nuisance "
-                "parameters is at least sample size."
-            ),
-            runtime_seconds=perf_counter() - start,
-            alpha_grid_size=None,
-            failed_alpha_count=None,
-        )
+    _validate_full_control_feasible(n=n, p=p)
+    x_design = add_intercept(x)
+    instruments = make_instruments(z, x)
 
     if alphas is None:
         alphas = alpha_grid(alpha_min, alpha_max, alpha_step)
@@ -178,11 +160,11 @@ def estimate_full_ivqr(
 
     for j, alpha in enumerate(alphas):
         try:
-            statistic, converged, message = evaluate_full_ivqr_alpha(
+            statistic, converged, _message = _evaluate_alpha_full_ivqr(
                 y=y,
                 d=d,
-                z=z,
-                x=x,
+                x_design=x_design,
+                instruments=instruments,
                 alpha=float(alpha),
                 tau=tau,
                 max_iter=max_iter,
@@ -195,7 +177,7 @@ def estimate_full_ivqr(
 
     statistics, num_failed = sanitize_grid_statistics(statistics, converged_flags)
     if num_failed == len(alphas):
-        return _failed_result(
+        return _failed_estimation_result(
             data=data,
             tau=tau,
             message=(

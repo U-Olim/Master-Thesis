@@ -36,6 +36,11 @@ RESULT_COLUMNS = [
     "alpha_hat",
     "alpha_true",
     "bias",
+    "absolute_error",
+    "squared_error",
+    "status",
+    "error_type",
+    "error_message",
     "failed",
     "converged",
     "cr_lower",
@@ -51,6 +56,7 @@ RESULT_COLUMNS = [
     "message",
 ]
 DESIGN_KEY_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep", "seed"]
+MAX_ERROR_MESSAGE_LENGTH = 500
 
 
 def _validate_estimators(estimators: tuple[str, ...]) -> None:
@@ -71,8 +77,13 @@ def _validate_dgps(dgps: tuple[str, ...]) -> None:
 
 def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object]:
     bias = None
+    absolute_error = None
+    squared_error = None
     if result.alpha_hat is not None:
         bias = result.alpha_hat - result.alpha_true
+        absolute_error = abs(bias)
+        squared_error = bias**2
+    status = "failed" if result.failed else "ok"
 
     return {
         "dgp": design.dgp,
@@ -86,6 +97,13 @@ def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object
         "alpha_hat": result.alpha_hat,
         "alpha_true": result.alpha_true,
         "bias": bias,
+        "absolute_error": absolute_error,
+        "squared_error": squared_error,
+        "status": status,
+        "error_type": "EstimatorFailure" if result.failed else None,
+        "error_message": result.message[:MAX_ERROR_MESSAGE_LENGTH]
+        if result.failed
+        else None,
         "failed": result.failed,
         "converged": result.converged,
         "cr_lower": result.cr_lower,
@@ -102,6 +120,10 @@ def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object
     }
 
 
+def _short_error_message(exc: Exception) -> str:
+    return str(exc)[:MAX_ERROR_MESSAGE_LENGTH]
+
+
 def _failure_rows_for_design(
     design: Design,
     estimators: tuple[str, ...],
@@ -113,9 +135,9 @@ def _failure_rows_for_design(
     except Exception:
         alpha_true = None
 
-    message = f"{type(exc).__name__}: {exc}"
+    message = f"{type(exc).__name__}: {_short_error_message(exc)}"
     return [
-        _base_failure_row(design, estimator, alphas, alpha_true, message)
+        _base_failure_row(design, estimator, alphas, alpha_true, exc, message)
         for estimator in estimators
     ]
 
@@ -125,6 +147,7 @@ def _base_failure_row(
     estimator: str,
     alphas: np.ndarray,
     alpha_true: float | None,
+    exc: Exception,
     message: str,
 ) -> dict[str, object]:
     return {
@@ -139,6 +162,11 @@ def _base_failure_row(
         "alpha_hat": None,
         "alpha_true": alpha_true,
         "bias": None,
+        "absolute_error": None,
+        "squared_error": None,
+        "status": "failed",
+        "error_type": type(exc).__name__,
+        "error_message": _short_error_message(exc),
         "failed": True,
         "converged": False,
         "cr_lower": None,
@@ -167,8 +195,8 @@ def _failure_row_for_estimator(
     except Exception:
         alpha_true = None
 
-    message = f"Unexpected estimator error: {type(exc).__name__}: {exc}"
-    return _base_failure_row(design, estimator, alphas, alpha_true, message)
+    message = f"Unexpected estimator error: {type(exc).__name__}: {_short_error_message(exc)}"
+    return _base_failure_row(design, estimator, alphas, alpha_true, exc, message)
 
 
 def make_simulation_grid(

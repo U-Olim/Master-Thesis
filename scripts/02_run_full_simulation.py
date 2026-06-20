@@ -21,32 +21,63 @@ if str(SRC_PATH) not in sys.path:
 
 from simulation.batching import filter_completed_designs, run_simulation_batch  # noqa: E402
 from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa: E402
+from simulation.config import (  # noqa: E402
+    DEFAULT_ALPHA_GRID_SIZE,
+    DEFAULT_OUTPUT,
+    DGPS,
+    FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
+    FULL_CONTROL_BENCHMARK_DGPS,
+    FULL_CONTROL_BENCHMARK_N_VALUES,
+    FULL_CONTROL_BENCHMARK_OUTPUT,
+    FULL_CONTROL_BENCHMARK_PI_VALUES,
+    FULL_CONTROL_BENCHMARK_P_VALUES,
+    FULL_CONTROL_BENCHMARK_TAUS,
+    N_VALUES,
+    P_VALUES,
+    PI_VALUES,
+    R_FULL_CONTROL_BENCHMARK,
+    R_MAIN,
+    TAUS,
+)
 from simulation.runner import VALID_ESTIMATORS, make_simulation_grid  # noqa: E402
 
 
-DEFAULT_DGPS = ("dgp1", "dgp2", "dgp3")
-DEFAULT_N_VALUES = (250, 500, 1000)
-DEFAULT_P_VALUES = (200, 300, 500)
-DEFAULT_PI_VALUES = (1.0, 0.5, 0.25, 0.10)
-DEFAULT_TAUS = (0.25, 0.50, 0.75)
+PRESET_MAIN = "main"
+PRESET_FULL_CONTROL = "full-control-benchmark"
+DEFAULT_DGPS = tuple(DGPS)
+DEFAULT_N_VALUES = tuple(N_VALUES)
+DEFAULT_P_VALUES = tuple(P_VALUES)
+DEFAULT_PI_VALUES = tuple(PI_VALUES)
+DEFAULT_TAUS = tuple(TAUS)
+MAIN_ESTIMATORS = ("post_selection", "dml")
+FULL_CONTROL_BENCHMARK_ESTIMATORS = ("full",)
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the full IVQR Monte Carlo simulation in batches."
     )
-    parser.add_argument("--output", default="results/raw/full_simulation_results.csv")
-    parser.add_argument("--reps", type=int, default=1000)
+    parser.add_argument(
+        "--preset",
+        choices=(PRESET_MAIN, PRESET_FULL_CONTROL),
+        default=PRESET_MAIN,
+        help=(
+            "Simulation preset. 'main' excludes full-control IVQR; "
+            "'full-control-benchmark' runs the full-control benchmark grid."
+        ),
+    )
+    parser.add_argument("--output", default=None)
+    parser.add_argument("--reps", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=10)
     parser.add_argument("--base-seed", type=int, default=12345)
     parser.add_argument("--alpha-min", type=float, default=-1.0)
     parser.add_argument("--alpha-max", type=float, default=3.0)
-    parser.add_argument("--alpha-grid-size", type=int, default=17)
+    parser.add_argument("--alpha-grid-size", type=int, default=None)
     parser.add_argument(
         "--estimators",
         nargs="+",
         choices=VALID_ESTIMATORS,
-        default=list(VALID_ESTIMATORS),
+        default=None,
     )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--rerun-failed", action="store_true")
@@ -56,18 +87,68 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-designs", type=int, default=None)
     parser.add_argument("--manifest", default=None)
     parser.add_argument("--quick-test", action="store_true")
-    parser.add_argument("--dgps", nargs="+", default=list(DEFAULT_DGPS))
+    parser.add_argument("--dgps", nargs="+", default=None)
     parser.add_argument(
-        "--n-values", nargs="+", type=int, default=list(DEFAULT_N_VALUES)
+        "--n-values", nargs="+", type=int, default=None
     )
     parser.add_argument(
-        "--p-values", nargs="+", type=int, default=list(DEFAULT_P_VALUES)
+        "--p-values", nargs="+", type=int, default=None
     )
     parser.add_argument(
-        "--pi-values", nargs="+", type=float, default=list(DEFAULT_PI_VALUES)
+        "--pi-values", nargs="+", type=float, default=None
     )
-    parser.add_argument("--taus", nargs="+", type=float, default=list(DEFAULT_TAUS))
+    parser.add_argument("--taus", nargs="+", type=float, default=None)
     return parser.parse_args()
+
+
+def _apply_preset_defaults(args: argparse.Namespace) -> None:
+    if args.preset == PRESET_FULL_CONTROL:
+        preset_estimators = FULL_CONTROL_BENCHMARK_ESTIMATORS
+        preset_dgps = tuple(FULL_CONTROL_BENCHMARK_DGPS)
+        preset_n_values = tuple(FULL_CONTROL_BENCHMARK_N_VALUES)
+        preset_p_values = tuple(FULL_CONTROL_BENCHMARK_P_VALUES)
+        preset_pi_values = tuple(FULL_CONTROL_BENCHMARK_PI_VALUES)
+        preset_taus = tuple(FULL_CONTROL_BENCHMARK_TAUS)
+        preset_reps = R_FULL_CONTROL_BENCHMARK
+        preset_alpha_grid_size = FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE
+        preset_output = FULL_CONTROL_BENCHMARK_OUTPUT
+    else:
+        preset_estimators = MAIN_ESTIMATORS
+        full_control_only = tuple(args.estimators or ()) == FULL_CONTROL_BENCHMARK_ESTIMATORS
+        if full_control_only:
+            preset_dgps = ("dgp1",)
+            preset_n_values = tuple(FULL_CONTROL_BENCHMARK_N_VALUES)
+            preset_p_values = tuple(FULL_CONTROL_BENCHMARK_P_VALUES)
+            preset_pi_values = (1.0,)
+            preset_taus = (0.5,)
+        else:
+            preset_dgps = DEFAULT_DGPS
+            preset_n_values = DEFAULT_N_VALUES
+            preset_p_values = DEFAULT_P_VALUES
+            preset_pi_values = DEFAULT_PI_VALUES
+            preset_taus = DEFAULT_TAUS
+        preset_reps = R_MAIN
+        preset_alpha_grid_size = DEFAULT_ALPHA_GRID_SIZE
+        preset_output = DEFAULT_OUTPUT
+
+    if args.estimators is None:
+        args.estimators = list(preset_estimators)
+    if args.dgps is None:
+        args.dgps = list(preset_dgps)
+    if args.n_values is None:
+        args.n_values = list(preset_n_values)
+    if args.p_values is None:
+        args.p_values = list(preset_p_values)
+    if args.pi_values is None:
+        args.pi_values = list(preset_pi_values)
+    if args.taus is None:
+        args.taus = list(preset_taus)
+    if args.reps is None:
+        args.reps = preset_reps
+    if args.alpha_grid_size is None:
+        args.alpha_grid_size = preset_alpha_grid_size
+    if args.output is None:
+        args.output = preset_output
 
 
 def _apply_quick_test(args: argparse.Namespace) -> None:
@@ -81,7 +162,7 @@ def _apply_quick_test(args: argparse.Namespace) -> None:
     args.taus = [0.5]
     args.reps = 2
     args.alpha_grid_size = 5
-    args.estimators = list(VALID_ESTIMATORS)
+    args.estimators = list(MAIN_ESTIMATORS)
     args.batch_size = 2
 
 
@@ -98,6 +179,7 @@ def _print_plan(
     dry_run: bool,
     chunk_index: int | None,
     num_chunks: int | None,
+    preset: str,
 ) -> None:
     expected_rows = designs_in_run * len(estimators)
     print("Full simulation plan")
@@ -119,10 +201,17 @@ def _print_plan(
     print(f"batch size: {batch_size}")
     print(f"resume: {resume}")
     print(f"rerun_failed: {rerun_failed}")
-    print(
-        "Full-control IVQR is included by default; infeasible high-dimensional "
-        "cases are recorded as failures."
-    )
+    print(f"preset: {preset}")
+    if "full" in estimators:
+        print(
+            "Full-control IVQR is running as requested; infeasible cases are "
+            "recorded as failed rows."
+        )
+    else:
+        print(
+            "Full-control IVQR is not part of the main default run. Use "
+            "--preset full-control-benchmark or --estimators full to run it."
+        )
 
 
 def _write_manifest(
@@ -173,6 +262,7 @@ def _count_rows(path: Path) -> int | None:
 
 def main() -> None:
     args = _parse_args()
+    _apply_preset_defaults(args)
     _apply_quick_test(args)
 
     if args.batch_size < 1:
@@ -231,6 +321,7 @@ def main() -> None:
         dry_run=args.dry_run,
         chunk_index=args.chunk_index,
         num_chunks=args.num_chunks,
+        preset=args.preset,
     )
     _write_manifest(
         args.manifest,

@@ -61,9 +61,31 @@ Quick mode uses `n=100`, `p=20`, `reps=3`, and a 9-point alpha grid. Stress
 mode uses `n=250`, `p=200`, `reps=2`, and the same 9-point grid. These pilots
 are for checking estimator behavior and runtime, not for final Monte Carlo
 conclusions. Estimator iteration limits use realistic pilot defaults rather
-than an artificially tiny cap. Full-control IVQR may produce empty confidence
-regions or be slow in high-dimensional settings; this is recorded rather than
-hidden.
+than an artificially tiny cap.
+
+Full-control IVQR is benchmark-only. It directly controls for all `X`
+variables, so it can be computationally heavy and is not part of the main
+high-dimensional default run. It runs when requested manually with
+`--estimators full` or via `--preset full-control-benchmark`. It raises a hard
+error only for invalid inputs or infeasible designs where `p + 1 >= n`; no
+warning is emitted merely because `p / n` is high.
+
+The final full-control benchmark preset is intentionally smaller than the main
+high-dimensional simulation:
+
+- Estimator: `full`
+- DGPs: `dgp1`, `dgp2`, `dgp3`
+- Sample sizes: `n = 500, 1000`
+- Control dimensions: `p = 100, 200`
+- Instrument strengths: `pi = 1.0, 0.5, 0.25`
+- Quantiles: `tau = 0.25, 0.50, 0.75`
+- Replications: `R = 100`
+- Alpha grid size: `9`
+- Output: `results/raw/full_control_benchmark_R100.csv`
+
+The benchmark excludes `p=500` and `pi=0.10` to keep the full-control run
+feasible and focused. Users can still manually run full-control on other
+feasible designs with `--estimators full`.
 
 Estimator result status fields use the following convention:
 
@@ -83,6 +105,8 @@ python scripts/02_run_full_simulation.py --resume
 python scripts/02_run_full_simulation.py --resume --rerun-failed
 python scripts/02_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
 python scripts/02_run_full_simulation.py --estimators post_selection dml --reps 10 --resume
+python scripts/02_run_full_simulation.py --preset main
+python scripts/02_run_full_simulation.py --preset full-control-benchmark
 ```
 
 Safe final-run planning and chunking examples:
@@ -99,37 +123,37 @@ python scripts/02_run_full_simulation.py \
 
 python scripts/02_run_full_simulation.py \
   --dgps dgp1 \
-  --n-values 250 \
+  --n-values 500 \
   --p-values 200 \
   --pi-values 1.0 0.5 0.25 0.10 \
   --taus 0.5 \
   --reps 50 \
   --estimators post_selection dml \
   --output results/raw/mini_weak_iv.csv
+
+python scripts/02_run_full_simulation.py \
+  --preset full-control-benchmark \
+  --output results/raw/full_control_benchmark_R100.csv
 ```
 
-The default run uses 3 DGPs, 3 sample sizes, 3 control dimensions, 4
+The main default run uses 3 DGPs, 2 sample sizes, 2 control dimensions, 4
 instrument strengths, 3 quantiles, and 1000 replications, so it can be
-computationally expensive. `--resume` skips designs for which all requested
-estimator rows already exist in the output CSV. `--rerun-failed` makes resume
-stricter: failed estimator rows are not treated as completed. If one estimator
-crashes unexpectedly, the runner records a failed row for that estimator and
-continues with the remaining estimators for the same dataset. Full-control IVQR
-is included by default because infeasibility in high-dimensional scenarios is
-informative and is recorded as estimator failure. Diagnostic runs can exclude
-it with `--estimators post_selection dml`.
+computationally expensive. It runs post-selection IVQR and DML-IVQR. `--resume`
+skips designs for which all requested estimator rows already exist in the
+output CSV. `--rerun-failed` makes resume stricter: failed estimator rows are
+not treated as completed. If one estimator raises an exception, the runner
+records a failed row for that estimator and continues with the remaining
+estimators for the same dataset. Failed rows stay in raw output with `status`,
+`error_type`, and `error_message` columns.
 
 Phase 6B aggregation groups raw simulation rows by `dgp`, `n`, `p`, `pi`,
 `tau`, and `estimator`. The output contains Monte Carlo metrics and
 completeness diagnostics such as observed replications and completion rate.
-Coverage is computed over all replications: failed or missing
-confidence-region indicators count as non-coverage. The
-`coverage_valid_only` field is reported only as a diagnostic conditional on
-available confidence-region indicators. `avg_cr_length` also uses all
-replications, treating missing confidence-region lengths as zero; the
-`avg_cr_length_valid_only` field is a diagnostic over available lengths only.
-The underlying `cr_length` is the total accepted block length, so disconnected
-confidence regions do not count rejected gaps as accepted length.
+Performance metrics such as bias, RMSE, coverage, and confidence-region length
+are computed on successful rows. Failed rows remain in the raw data and enter
+failure-rate diagnostics. The underlying `cr_length` is the total accepted
+block length, so disconnected confidence regions do not count rejected gaps as
+accepted length.
 Aggregation rejects duplicate raw rows for the same `dgp`, `n`, `p`, `pi`,
 `tau`, `rep`, `seed`, `estimator` key.
 

@@ -46,6 +46,11 @@ REQUIRED_KEYS = {
     "alpha_hat",
     "alpha_true",
     "bias",
+    "absolute_error",
+    "squared_error",
+    "status",
+    "error_type",
+    "error_message",
     "failed",
     "converged",
     "cr_lower",
@@ -285,6 +290,9 @@ def test_run_single_replication_catches_unexpected_estimator_exception(
     assert len(rows) == 2
     by_estimator = {row["estimator"]: row for row in rows}
     assert by_estimator["full_ivqr"]["failed"] is True
+    assert by_estimator["full_ivqr"]["status"] == "failed"
+    assert by_estimator["full_ivqr"]["error_type"] == "RuntimeError"
+    assert by_estimator["full_ivqr"]["error_message"] == "boom"
     assert by_estimator["full_ivqr"]["converged"] is False
     full_message = by_estimator["full_ivqr"]["message"]
     assert isinstance(full_message, str)
@@ -293,6 +301,39 @@ def test_run_single_replication_catches_unexpected_estimator_exception(
     assert by_estimator["post_selection_ivqr"]["message"] != by_estimator["full_ivqr"][
         "message"
     ]
+
+
+def test_run_single_replication_records_infeasible_full_control_failure() -> None:
+    design = Design("dgp1", 20, 25, 1.0, 0.5, rep=0, seed=123)
+
+    rows = run_single_replication(
+        design,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("full",),
+    )
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["estimator"] == "full_ivqr"
+    assert row["status"] == "failed"
+    assert row["failed"] is True
+    assert row["error_type"] == "ValueError"
+    assert "Received n=20, p=25" in str(row["error_message"])
+    assert row["alpha_hat"] is None
+
+
+def test_run_single_replication_successful_row_has_ok_status() -> None:
+    design = Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)
+
+    rows = run_single_replication(
+        design,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("full",),
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["status"] == "ok"
+    assert rows[0]["error_type"] is None
 
 
 def test_run_simulation_batch_returns_expected_rows() -> None:
@@ -613,3 +654,108 @@ def test_full_simulation_dry_run_does_not_write_output_csv(
 
     assert not output_path.exists()
     assert manifest_path.exists()
+
+
+def test_full_simulation_main_preset_excludes_full_control_by_default() -> None:
+    args = full_simulation_cli.argparse.Namespace(
+        preset="main",
+        estimators=None,
+        dgps=None,
+        n_values=None,
+        p_values=None,
+        pi_values=None,
+        taus=None,
+        reps=None,
+        alpha_grid_size=None,
+        output=None,
+    )
+
+    full_simulation_cli._apply_preset_defaults(args)
+
+    assert args.estimators == ["post_selection", "dml"]
+    assert args.dgps == ["dgp1", "dgp2", "dgp3"]
+    assert args.n_values == [500, 1000]
+    assert args.p_values == [200, 500]
+    assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
+    assert args.taus == [0.25, 0.5, 0.75]
+    assert args.reps == 1000
+    assert args.alpha_grid_size == 17
+    assert args.output == "results/raw/full_simulation_results.csv"
+
+
+def test_full_simulation_full_control_benchmark_preset() -> None:
+    args = full_simulation_cli.argparse.Namespace(
+        preset="full-control-benchmark",
+        estimators=None,
+        dgps=None,
+        n_values=None,
+        p_values=None,
+        pi_values=None,
+        taus=None,
+        reps=None,
+        alpha_grid_size=None,
+        output=None,
+    )
+
+    full_simulation_cli._apply_preset_defaults(args)
+
+    assert args.estimators == ["full"]
+    assert args.dgps == ["dgp1", "dgp2", "dgp3"]
+    assert args.n_values == [500, 1000]
+    assert args.p_values == [100, 200]
+    assert args.pi_values == [1.0, 0.5, 0.25]
+    assert args.taus == [0.25, 0.5, 0.75]
+    assert args.reps == 100
+    assert args.alpha_grid_size == 9
+    assert args.output.endswith("full_control_benchmark_R100.csv")
+
+
+def test_full_simulation_preset_respects_explicit_overrides() -> None:
+    args = full_simulation_cli.argparse.Namespace(
+        preset="full-control-benchmark",
+        estimators=["full"],
+        dgps=["dgp1"],
+        n_values=[500],
+        p_values=[100],
+        pi_values=None,
+        taus=None,
+        reps=10,
+        alpha_grid_size=3,
+        output="custom.csv",
+    )
+
+    full_simulation_cli._apply_preset_defaults(args)
+
+    assert args.estimators == ["full"]
+    assert args.dgps == ["dgp1"]
+    assert args.n_values == [500]
+    assert args.p_values == [100]
+    assert args.pi_values == [1.0, 0.5, 0.25]
+    assert args.taus == [0.25, 0.5, 0.75]
+    assert args.reps == 10
+    assert args.alpha_grid_size == 3
+    assert args.output == "custom.csv"
+
+
+def test_manual_full_control_uses_benchmark_scenario_defaults() -> None:
+    args = full_simulation_cli.argparse.Namespace(
+        preset="main",
+        estimators=["full"],
+        dgps=None,
+        n_values=[500],
+        p_values=[100],
+        pi_values=None,
+        taus=None,
+        reps=1,
+        alpha_grid_size=3,
+        output="manual.csv",
+    )
+
+    full_simulation_cli._apply_preset_defaults(args)
+
+    assert args.estimators == ["full"]
+    assert args.dgps == ["dgp1"]
+    assert args.pi_values == [1.0]
+    assert args.taus == [0.5]
+    assert args.alpha_grid_size == 3
+    assert args.output == "manual.csv"

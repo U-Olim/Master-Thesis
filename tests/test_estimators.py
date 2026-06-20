@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import warnings
 
 from dgp import generate_data
 from dgp.designs import Design
@@ -20,8 +21,6 @@ from estimators.dml_ivqr import (
 from estimators.full_ivqr import (
     add_intercept,
     estimate_full_ivqr,
-    evaluate_full_ivqr_alpha,
-    fit_profile_beta,
 )
 from estimators.post_selection_ivqr import (
     estimate_post_selection_ivqr,
@@ -101,11 +100,9 @@ def test_fit_profile_beta_works_on_small_data() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
 
-    beta_hat, converged, message = fit_profile_beta(
-        data.y,
-        data.d,
-        data.x,
-        alpha=data.alpha_true,
+    beta_hat, converged, message = full_ivqr_module._fit_control_quantile_regression(
+        y_alpha=data.y - data.d * data.alpha_true,
+        x_design=add_intercept(data.x),
         tau=0.5,
     )
 
@@ -119,11 +116,11 @@ def test_evaluate_full_ivqr_alpha_returns_finite_statistic() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
 
-    statistic, converged, message = evaluate_full_ivqr_alpha(
-        data.y,
-        data.d,
-        data.z,
-        data.x,
+    statistic, converged, message = full_ivqr_module._evaluate_alpha_full_ivqr(
+        y=data.y,
+        d=data.d,
+        x_design=add_intercept(data.x),
+        instruments=full_ivqr_module.make_instruments(data.z, data.x),
         alpha=data.alpha_true,
         tau=0.5,
         gmm_ridge=1e-6,
@@ -159,28 +156,22 @@ def test_estimate_full_ivqr_infeasible_high_dimensional_case_fails_cleanly() -> 
     design = Design("dgp1", n=20, p=25, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
 
-    result = estimate_full_ivqr(data, tau=0.5, alphas=np.linspace(0.0, 2.0, 5))
-
-    assert result.failed is True
-    assert result.converged is False
-    assert result.alpha_hat is None
-    assert result.alpha_grid_size is None
-    assert result.failed_alpha_count is None
-    assert "infeasible" in result.message
+    with pytest.raises(ValueError, match=r"Received n=20, p=25, p\+1=26"):
+        estimate_full_ivqr(data, tau=0.5, alphas=np.linspace(0.0, 2.0, 5))
 
 
 def test_estimate_full_ivqr_some_failed_alphas_still_converges(monkeypatch: pytest.MonkeyPatch) -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
     alphas = np.array([0.0, 1.0, 2.0])
-    original = full_ivqr_module.evaluate_full_ivqr_alpha
+    original = full_ivqr_module._evaluate_alpha_full_ivqr
 
     def fake_evaluate(*args: object, **kwargs: object) -> tuple[float, bool, str]:
         if kwargs["alpha"] == 1.0:
             return np.inf, False, "forced failure"
         return original(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(full_ivqr_module, "evaluate_full_ivqr_alpha", fake_evaluate)
+    monkeypatch.setattr(full_ivqr_module, "_evaluate_alpha_full_ivqr", fake_evaluate)
 
     result = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
 
@@ -200,7 +191,7 @@ def test_estimate_full_ivqr_all_failed_alphas_fails(monkeypatch: pytest.MonkeyPa
     def fake_evaluate(*args: object, **kwargs: object) -> tuple[float, bool, str]:
         return np.inf, False, "forced failure"
 
-    monkeypatch.setattr(full_ivqr_module, "evaluate_full_ivqr_alpha", fake_evaluate)
+    monkeypatch.setattr(full_ivqr_module, "_evaluate_alpha_full_ivqr", fake_evaluate)
 
     result = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
 
@@ -218,6 +209,24 @@ def test_estimate_full_ivqr_invalid_tau_raises_value_error() -> None:
 
     with pytest.raises(ValueError):
         estimate_full_ivqr(data, tau=0.0, alphas=np.linspace(0.0, 2.0, 5))
+
+
+def test_estimate_full_ivqr_feasible_high_pn_emits_no_pn_warning() -> None:
+    design = Design("dgp1", n=30, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
+    data = generate_data(design)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        estimate_full_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.array([data.alpha_true]),
+            max_iter=50,
+            gmm_ridge=1e-6,
+        )
+
+    messages = [str(warning.message).lower() for warning in caught]
+    assert not any("p/n" in message or "high-dimensional" in message for message in messages)
 
 
 def test_estimate_full_ivqr_confidence_region_fields_are_coherent() -> None:

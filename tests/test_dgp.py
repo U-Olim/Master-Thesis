@@ -15,16 +15,44 @@ from dgp import (
 )
 from dgp.designs import Design
 from dgp.true_parameters import true_alpha
-from simulation.config import DGPS, K_FOLDS, N_VALUES, P_VALUES, PI_VALUES, R_MAIN, TAUS
+from simulation.config import (
+    DEFAULT_ALPHA_GRID_SIZE,
+    DEFAULT_OUTPUT,
+    DGPS,
+    FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
+    FULL_CONTROL_BENCHMARK_DGPS,
+    FULL_CONTROL_BENCHMARK_N_VALUES,
+    FULL_CONTROL_BENCHMARK_OUTPUT,
+    FULL_CONTROL_BENCHMARK_PI_VALUES,
+    FULL_CONTROL_BENCHMARK_P_VALUES,
+    FULL_CONTROL_BENCHMARK_TAUS,
+    K_FOLDS,
+    N_VALUES,
+    P_VALUES,
+    PI_VALUES,
+    R_FULL_CONTROL_BENCHMARK,
+    R_MAIN,
+    TAUS,
+)
 
 
 def test_project_design_constants_exist() -> None:
-    assert N_VALUES == [250, 500, 1000]
-    assert P_VALUES == [200, 300, 500]
+    assert N_VALUES == [500, 1000]
+    assert P_VALUES == [200, 500]
+    assert FULL_CONTROL_BENCHMARK_DGPS == ["dgp1", "dgp2", "dgp3"]
+    assert FULL_CONTROL_BENCHMARK_N_VALUES == [500, 1000]
+    assert FULL_CONTROL_BENCHMARK_P_VALUES == [100, 200]
+    assert FULL_CONTROL_BENCHMARK_PI_VALUES == [1.0, 0.5, 0.25]
+    assert FULL_CONTROL_BENCHMARK_TAUS == [0.25, 0.5, 0.75]
+    assert FULL_CONTROL_BENCHMARK_OUTPUT == "results/raw/full_control_benchmark_R100.csv"
+    assert FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE == 9
     assert PI_VALUES == [1.0, 0.5, 0.25, 0.10]
     assert TAUS == [0.25, 0.50, 0.75]
     assert DGPS == ["dgp1", "dgp2", "dgp3"]
     assert R_MAIN == 1000
+    assert R_FULL_CONTROL_BENCHMARK == 100
+    assert DEFAULT_OUTPUT == "results/raw/full_simulation_results.csv"
+    assert DEFAULT_ALPHA_GRID_SIZE == 17
     assert K_FOLDS == 5
 
 

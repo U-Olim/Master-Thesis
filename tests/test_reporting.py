@@ -78,7 +78,7 @@ def test_aggregate_results_includes_strict_and_valid_only_length_metrics() -> No
     summary = aggregate_results(_raw_results(), expected_replications=2)
     row = _row(summary, "post_selection_ivqr")
 
-    assert row["avg_cr_length"] == pytest.approx(1.5 / 2)
+    assert row["avg_cr_length"] == pytest.approx(1.5)
     assert row["avg_cr_length_valid_only"] == pytest.approx(1.5)
 
 
@@ -112,6 +112,39 @@ def test_aggregate_results_post_selection_metrics() -> None:
     assert row["coverage"] == pytest.approx(0.0)
     assert row["coverage_valid_only"] == pytest.approx(0.0)
     assert row["mean_selected_controls"] == pytest.approx(3.5)
+
+
+def test_aggregate_results_ignores_status_failed_rows_for_performance_metrics() -> None:
+    raw = pd.DataFrame(
+        {
+            "dgp": ["dgp1", "dgp1"],
+            "n": [20, 20],
+            "p": [25, 25],
+            "pi": [1.0, 1.0],
+            "tau": [0.5, 0.5],
+            "rep": [0, 1],
+            "estimator": ["full_ivqr", "full_ivqr"],
+            "alpha_hat": [1.2, None],
+            "alpha_true": [1.0, 1.0],
+            "failed": [False, True],
+            "status": ["ok", "failed"],
+            "converged": [True, False],
+            "cr_length": [2.0, None],
+            "cr_covers_true": [True, None],
+            "cr_empty": [False, True],
+            "runtime_seconds": [0.1, None],
+        }
+    )
+
+    summary = aggregate_results(raw, expected_replications=2)
+    row = _row(summary, "full_ivqr")
+
+    assert row["valid_estimates"] == 1
+    assert row["bias"] == pytest.approx(0.2)
+    assert row["rmse"] == pytest.approx(0.2)
+    assert row["coverage"] == pytest.approx(1.0)
+    assert row["avg_cr_length"] == pytest.approx(2.0)
+    assert row["failure_rate"] == pytest.approx(0.5)
 
 
 def test_load_raw_results_missing_file_raises(tmp_path: Path) -> None:

@@ -74,11 +74,18 @@ def _mean_bool(series: pd.Series) -> float:
     return float(values.astype(float).mean())
 
 
+def _successful_rows(df: pd.DataFrame) -> pd.DataFrame:
+    validate_metric_input(df)
+    if "status" in df.columns:
+        return df.loc[df["status"].astype(str).str.lower() == "ok"]
+    return df.loc[~_to_bool(df["failed"]).fillna(False)]
+
+
 def estimation_errors(df: pd.DataFrame) -> pd.Series:
     """Return alpha_hat - alpha_true, recomputed from raw columns."""
-    validate_metric_input(df)
-    alpha_hat = _to_numeric(df["alpha_hat"])
-    alpha_true = _to_numeric(df["alpha_true"])
+    successful = _successful_rows(df)
+    alpha_hat = _to_numeric(successful["alpha_hat"])
+    alpha_true = _to_numeric(successful["alpha_true"])
     return alpha_hat - alpha_true
 
 
@@ -111,29 +118,28 @@ def mae(df: pd.DataFrame) -> float:
 
 
 def coverage(df: pd.DataFrame) -> float:
-    validate_metric_input(df)
-    values = _to_bool(df["cr_covers_true"])
-    if len(values) == 0:
+    successful = _successful_rows(df)
+    if successful.empty:
         return float(np.nan)
-    values = values.fillna(False)
+    values = _to_bool(successful["cr_covers_true"]).fillna(False)
     return float(values.astype(float).mean())
 
 
 def coverage_valid_only(df: pd.DataFrame) -> float:
-    validate_metric_input(df)
-    return _mean_bool(df["cr_covers_true"])
+    successful = _successful_rows(df)
+    return _mean_bool(successful["cr_covers_true"])
 
 
 def average_cr_length_valid_only(df: pd.DataFrame) -> float:
-    validate_metric_input(df)
-    return _mean_numeric(df["cr_length"])
+    successful = _successful_rows(df)
+    return _mean_numeric(successful["cr_length"])
 
 
 def average_cr_length_all(df: pd.DataFrame) -> float:
-    validate_metric_input(df)
-    values = _to_numeric(df["cr_length"])
-    if len(values) == 0:
+    successful = _successful_rows(df)
+    if successful.empty:
         return float(np.nan)
+    values = _to_numeric(successful["cr_length"])
     return float(values.fillna(0.0).mean())
 
 
@@ -195,7 +201,8 @@ def mean_runtime_seconds(df: pd.DataFrame) -> float:
 def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
     """Summarize one already-filtered Monte Carlo result group."""
     validate_metric_input(df)
-    valid_estimates = int(_to_numeric(df["alpha_hat"]).notna().sum())
+    successful = _successful_rows(df)
+    valid_estimates = int(_to_numeric(successful["alpha_hat"]).notna().sum())
     return {
         "replications": int(len(df)),
         "valid_estimates": valid_estimates,
