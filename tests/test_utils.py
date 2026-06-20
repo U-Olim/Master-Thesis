@@ -120,8 +120,11 @@ def test_validate_positive_int() -> None:
 
 def test_validate_k_folds() -> None:
     assert validate_k_folds(3, 10) == 3
+    assert validate_k_folds(5, 10) == 5
     with pytest.raises(ValueError, match="greater than 1"):
         validate_k_folds(2, 1)
+    with pytest.raises(ValueError, match="2 <= k_folds <= n"):
+        validate_k_folds(0, 10)
     with pytest.raises(ValueError, match="2 <= k_folds <= n"):
         validate_k_folds(1, 10)
     with pytest.raises(ValueError, match="2 <= k_folds <= n"):

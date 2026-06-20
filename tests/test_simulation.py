@@ -19,6 +19,7 @@ from simulation.batching import (
 )
 from simulation.chunking import select_design_chunk
 from simulation.runner import (
+    DEFAULT_DML_K_FOLDS,
     DEFAULT_PILOT_ESTIMATORS,
     VALID_ESTIMATORS,
     make_simulation_grid,
@@ -164,6 +165,10 @@ def test_default_pilot_estimators_do_not_include_oracle() -> None:
     assert "oracle" not in DEFAULT_PILOT_ESTIMATORS
 
 
+def test_default_dml_k_folds_is_three() -> None:
+    assert DEFAULT_DML_K_FOLDS == 3
+
+
 def test_quantreg_max_iter_is_passed_to_full_estimator(monkeypatch) -> None:
     captured: dict[str, int] = {}
 
@@ -203,6 +208,45 @@ def test_quantreg_max_iter_is_passed_to_full_estimator(monkeypatch) -> None:
 
     assert len(rows) == 1
     assert captured["max_iter"] == 123
+
+
+def test_dml_k_folds_is_passed_to_dml_estimator(monkeypatch) -> None:
+    captured: dict[str, int] = {}
+
+    def fake_dml_estimator(data, tau, alphas, k_folds, **kwargs):
+        captured["k_folds"] = k_folds
+        return EstimationResult(
+            estimator="dml_ivqr",
+            alpha_hat=1.0,
+            alpha_true=data.alpha_true,
+            tau=tau,
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(alphas),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=None,
+            runtime_seconds=0.0,
+        )
+
+    monkeypatch.setattr(runner_module, "estimate_dml_ivqr", fake_dml_estimator)
+    rows = run_single_replication(
+        Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123),
+        np.linspace(0.0, 2.0, 5),
+        estimators=("dml",),
+        dml_k_folds=5,
+    )
+
+    assert len(rows) == 1
+    assert captured["k_folds"] == 5
 
 
 def test_run_pilot_simulation_bias_logic() -> None:
@@ -782,6 +826,19 @@ def test_full_simulation_main_preset_respects_alpha_grid_override() -> None:
 
     assert args.estimators == ["oracle", "post_selection", "dml"]
     assert args.alpha_grid_size == 13
+
+
+def test_full_simulation_parser_dml_k_folds_default_and_override(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["02_run_full_simulation.py"])
+    args = full_simulation_cli._parse_args()
+    assert args.dml_k_folds == 3
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["02_run_full_simulation.py", "--preset", "main", "--dml-k-folds", "5"],
+    )
+    args = full_simulation_cli._parse_args()
+    assert args.dml_k_folds == 5
 
 
 def test_manual_full_control_uses_benchmark_scenario_defaults() -> None:

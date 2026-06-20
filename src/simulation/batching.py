@@ -11,6 +11,7 @@ from dgp.designs import Design
 from simulation.runner import (
     DESIGN_KEY_COLUMNS,
     ESTIMATOR_OUTPUT_NAMES,
+    DEFAULT_DML_K_FOLDS,
     RESULT_COLUMNS,
     _failure_rows_for_design,
     _validate_estimators,
@@ -61,7 +62,7 @@ def run_simulation_batch(
     quantreg_max_iter: int = 500,
     selection_cv: int = 3,
     selection_max_iter: int = 10000,
-    dml_k_folds: int = 5,
+    dml_k_folds: int = DEFAULT_DML_K_FOLDS,
     dml_quantile_penalty: float = 0.01,
     dml_ridge_alpha: float = 1.0,
     dml_fold_random_state: int | None = 123,

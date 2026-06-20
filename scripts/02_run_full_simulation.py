@@ -23,6 +23,7 @@ from simulation.batching import filter_completed_designs, run_simulation_batch  
 from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa: E402
 from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_GRID_SIZE,
+    DEFAULT_DML_K_FOLDS,
     DEFAULT_OUTPUT,
     DGPS,
     FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
@@ -73,6 +74,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--alpha-min", type=float, default=-1.0)
     parser.add_argument("--alpha-max", type=float, default=3.0)
     parser.add_argument("--alpha-grid-size", type=int, default=None)
+    parser.add_argument(
+        "--dml-k-folds",
+        type=int,
+        default=DEFAULT_DML_K_FOLDS,
+        help=(
+            "Number of cross-fitting folds for DML-IVQR. Default is 3 for "
+            "faster diagnostics/main simulations; use 5 for robustness checks."
+        ),
+    )
     parser.add_argument(
         "--estimators",
         nargs="+",
@@ -183,6 +193,7 @@ def _print_plan(
     chunk_index: int | None,
     num_chunks: int | None,
     preset: str,
+    dml_k_folds: int,
 ) -> None:
     expected_rows = designs_in_run * len(estimators)
     print("Full simulation plan")
@@ -202,6 +213,7 @@ def _print_plan(
         f"size={alphas.size}, min={float(alphas.min())}, max={float(alphas.max())}"
     )
     print(f"batch size: {batch_size}")
+    print(f"DML folds: {dml_k_folds}")
     print(f"resume: {resume}")
     print(f"rerun_failed: {rerun_failed}")
     print(f"preset: {preset}")
@@ -272,6 +284,8 @@ def main() -> None:
         raise ValueError("--batch-size must be at least 1")
     if args.alpha_grid_size < 3:
         raise ValueError("--alpha-grid-size must be at least 3")
+    if args.dml_k_folds < 2:
+        raise ValueError("--dml-k-folds must be at least 2")
     if args.alpha_max <= args.alpha_min:
         raise ValueError("--alpha-max must exceed --alpha-min")
     validate_chunk_args(args.chunk_index, args.num_chunks)
@@ -325,6 +339,7 @@ def main() -> None:
         chunk_index=args.chunk_index,
         num_chunks=args.num_chunks,
         preset=args.preset,
+        dml_k_folds=args.dml_k_folds,
     )
     _write_manifest(
         args.manifest,
@@ -351,7 +366,7 @@ def main() -> None:
             estimators=estimators,
             output_path=output_path,
             append=append,
-            dml_k_folds=5,
+            dml_k_folds=args.dml_k_folds,
         )
         completed += len(batch)
         elapsed = time.perf_counter() - start

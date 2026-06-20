@@ -70,6 +70,7 @@ def test_full_simulation_full_control_benchmark_preset_dry_run() -> None:
     assert "preset: full-control-benchmark" in result.stdout
     assert "estimators: full" in result.stdout
     assert "alpha grid: size=9" in result.stdout
+    assert "DML folds: 3" in result.stdout
 
 
 def test_full_simulation_main_preset_dry_run_includes_oracle_not_full() -> None:
@@ -96,6 +97,7 @@ def test_full_simulation_main_preset_dry_run_includes_oracle_not_full() -> None:
     assert "estimators: oracle,post_selection,dml" in result.stdout
     assert "estimators: full" not in result.stdout
     assert "alpha grid: size=9" in result.stdout
+    assert "DML folds: 3" in result.stdout
 
 
 def test_full_simulation_main_preset_alpha_grid_cli_override_dry_run() -> None:
@@ -122,6 +124,32 @@ def test_full_simulation_main_preset_alpha_grid_cli_override_dry_run() -> None:
     assert result.returncode == 0
     assert "preset: main" in result.stdout
     assert "alpha grid: size=13" in result.stdout
+
+
+def test_full_simulation_main_preset_dml_k_folds_cli_override_dry_run() -> None:
+    result = _run_full_simulation_dry_run(
+        "--preset",
+        "main",
+        "--dml-k-folds",
+        "5",
+        "--dry-run",
+        "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--n-values",
+        "500",
+        "--p-values",
+        "200",
+    )
+
+    assert result.returncode == 0
+    assert "preset: main" in result.stdout
+    assert "DML folds: 5" in result.stdout
 
 
 def test_full_simulation_full_control_alpha_grid_cli_override_dry_run() -> None:
@@ -246,3 +274,22 @@ def test_pilot_script_runs_end_to_end(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert output.exists()
     assert "dml_ivqr" in result.stdout
+    assert "dml_k_folds=3" in result.stdout
+
+
+def test_pilot_script_dml_k_folds_override(tmp_path: Path) -> None:
+    script = Path(__file__).resolve().parents[1] / "scripts" / "01_pilot_simulation.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script), "--estimators", "dml", "--dml-k-folds", "5"],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    output = tmp_path / "results" / "raw" / "pilot_quick_results.csv"
+    assert result.returncode == 0
+    assert output.exists()
+    assert "dml_k_folds=5" in result.stdout

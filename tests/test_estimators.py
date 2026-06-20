@@ -809,9 +809,26 @@ def test_estimate_dml_ivqr_invalid_k_folds_raises_value_error() -> None:
     alphas = np.linspace(0.0, 2.0, 5)
 
     with pytest.raises(ValueError):
+        estimate_dml_ivqr(data, tau=0.5, alphas=alphas, k_folds=0)
+    with pytest.raises(ValueError):
         estimate_dml_ivqr(data, tau=0.5, alphas=alphas, k_folds=1)
     with pytest.raises(ValueError):
         estimate_dml_ivqr(data, tau=0.5, alphas=alphas, k_folds=data.x.shape[0] + 1)
+
+
+def test_estimate_dml_ivqr_accepts_five_folds_for_robustness() -> None:
+    data = generate_data(Design("dgp1", n=100, p=10, pi=1.0, tau=0.5, rep=0, seed=123))
+    result = estimate_dml_ivqr(
+        data,
+        tau=0.5,
+        alphas=np.linspace(0.0, 2.0, 3),
+        k_folds=5,
+        fold_random_state=123,
+        quantile_penalty=0.01,
+    )
+
+    assert result.alpha_grid_size == 3
+    assert result.estimator == "dml_ivqr"
 
 
 def test_estimate_dml_ivqr_invalid_tau_raises_value_error() -> None:

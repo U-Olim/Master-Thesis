@@ -18,6 +18,7 @@ from dgp.true_parameters import true_alpha
 from dgp.true_parameters import get_oracle_control_count, get_oracle_control_indices
 from simulation.config import (
     DEFAULT_ALPHA_GRID_SIZE,
+    DEFAULT_DML_K_FOLDS,
     DEFAULT_OUTPUT,
     DGPS,
     FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
@@ -54,7 +55,8 @@ def test_project_design_constants_exist() -> None:
     assert R_FULL_CONTROL_BENCHMARK == 100
     assert DEFAULT_OUTPUT == "results/raw/full_simulation_results.csv"
     assert DEFAULT_ALPHA_GRID_SIZE == 9
-    assert K_FOLDS == 5
+    assert DEFAULT_DML_K_FOLDS == 3
+    assert K_FOLDS == 3
 
 
 def test_get_oracle_control_indices_returns_true_active_support() -> None:

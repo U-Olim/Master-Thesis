@@ -15,7 +15,7 @@ from estimators.full_ivqr import estimate_full_ivqr
 from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import estimate_post_selection_ivqr
 from dgp.designs import Design
-from simulation.config import DEFAULT_ALPHA_GRID_SIZE
+from simulation.config import DEFAULT_ALPHA_GRID_SIZE, DEFAULT_DML_K_FOLDS
 
 
 EstimatorFn = Callable[..., EstimationResult]
@@ -277,7 +277,7 @@ def run_single_replication(
     quantreg_max_iter: int = 500,
     selection_cv: int = 3,
     selection_max_iter: int = 10000,
-    dml_k_folds: int = 3,
+    dml_k_folds: int = DEFAULT_DML_K_FOLDS,
     dml_quantile_penalty: float = 0.01,
     dml_ridge_alpha: float = 1.0,
     dml_fold_random_state: int | None = 123,
@@ -366,7 +366,7 @@ def run_pilot_simulation(
     quantreg_max_iter: int = 500,
     selection_cv: int = 3,
     selection_max_iter: int = 10000,
-    dml_k_folds: int = 3,
+    dml_k_folds: int = DEFAULT_DML_K_FOLDS,
     dml_quantile_penalty: float = 0.01,
     dml_ridge_alpha: float = 1.0,
     gmm_ridge: float = 1e-8,

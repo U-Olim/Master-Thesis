@@ -43,9 +43,11 @@ stability. The older unweighted quadratic score remains only as a prototype
 helper.
 
 DML-IVQR uses cross-fitting, penalized quantile regression via sklearn
-`QuantileRegressor`, and Ridge residualization of `Z` on `X`. This is a
-practical implementation aligned with the score structure in
-`Project_structure.pdf`.
+`QuantileRegressor`, and Ridge residualization of `Z` on `X`. The project
+default is `dml_k_folds = 3` for computational efficiency in diagnostics and
+main simulations. This is not theoretically special; `K=5` remains available
+for robustness checks with `--dml-k-folds 5`. This is a practical
+implementation aligned with the score structure in `Project_structure.pdf`.
 
 The default confidence-region critical value uses `df=1` for scalar-alpha
 score inversion. It is not presented as a full overidentification J-test.
@@ -122,6 +124,7 @@ python scripts/02_run_full_simulation.py --estimators oracle post_selection dml 
 python scripts/02_run_full_simulation.py --preset main
 python scripts/02_run_full_simulation.py --preset full-control-benchmark
 python scripts/02_run_full_simulation.py --preset main --alpha-grid-size 13
+python scripts/02_run_full_simulation.py --preset main --dml-k-folds 5
 ```
 
 Safe final-run planning and chunking examples:
@@ -151,6 +154,12 @@ python scripts/02_run_full_simulation.py \
   --output results/raw/full_control_benchmark_R100.csv
 
 python scripts/02_run_full_simulation.py \
+  --preset main \
+  --reps 10 \
+  --dml-k-folds 3 \
+  --dry-run
+
+python scripts/02_run_full_simulation.py \
   --estimators oracle post_selection dml \
   --reps 10 \
   --n-values 500 \
@@ -170,6 +179,8 @@ not treated as completed. If one estimator raises an exception, the runner
 records a failed row for that estimator and continues with the remaining
 estimators for the same dataset. Failed rows stay in raw output with `status`,
 `error_type`, and `error_message` columns.
+DML-IVQR uses 3 cross-fitting folds by default in the runner; use
+`--dml-k-folds 5` for a 5-fold robustness run.
 
 Phase 6B aggregation groups raw simulation rows by `dgp`, `n`, `p`, `pi`,
 `tau`, and `estimator`. The output contains Monte Carlo metrics and
