@@ -12,7 +12,7 @@ from statsmodels.regression.quantile_regression import QuantReg
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
-from estimators.full_ivqr import add_intercept
+from estimators.full_ivqr import _as_2d_instruments, _evaluate_alpha_ch_ivqr, add_intercept
 from inference.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
@@ -21,10 +21,6 @@ from inference.confidence_regions import (
 )
 from inference.moments import (
     alpha_grid,
-    make_instruments,
-    moment_contributions,
-    residuals_alpha,
-    weighted_gmm_statistic,
 )
 from simulation.config import DEFAULT_QUANTREG_MAX_ITER
 from utils.validation import (
@@ -158,27 +154,18 @@ def evaluate_post_selection_alpha(
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
-    """Evaluate the covariance-weighted post-selection IVQR objective."""
+    """Evaluate post-selection CH-IVQR by testing gamma_Z(alpha)=0."""
     y, d, z, x_selected = validate_data_arrays(y, d, x_selected, z)
-    beta_hat, converged, message = fit_post_selection_beta(
+    evaluation = _evaluate_alpha_ch_ivqr(
         y=y,
         d=d,
-        x_selected=x_selected,
+        z=z,
+        x_controls=x_selected,
         alpha=alpha,
         tau=tau,
         max_iter=max_iter,
     )
-    if not converged:
-        return np.inf, False, message
-
-    x_design = add_intercept(x_selected)
-    x_beta = x_design @ beta_hat
-    residuals = residuals_alpha(y, d, x_beta, alpha)
-    instruments = make_instruments(z, x_selected)
-    contributions = moment_contributions(residuals, tau, instruments)
-    statistic = weighted_gmm_statistic(contributions, ridge=gmm_ridge)
-
-    return float(statistic), True, "ok"
+    return evaluation.statistic, evaluation.converged, evaluation.message
 
 
 def estimate_post_selection_ivqr(
@@ -201,6 +188,7 @@ def estimate_post_selection_ivqr(
     if quantreg_max_iter <= 0:
         raise ValueError("quantreg_max_iter must be positive")
     y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
+    z_2d = _as_2d_instruments(z)
 
     try:
         selected_indices, selection_message = select_controls_lasso(
@@ -281,12 +269,14 @@ def estimate_post_selection_ivqr(
         )
 
     alpha_hat, min_statistic, at_boundary = argmin_grid(alphas, statistics)
-    critical = critical_value_chi_square(confidence_level, df=1)
+    critical = critical_value_chi_square(confidence_level, df=z_2d.shape[1])
     region = invert_score_test(
         alphas=alphas,
         statistics=statistics,
         critical_value=critical,
         alpha_true=data.alpha_true,
+        statistic_reference=0.0,
+        inversion_type="absolute",
     )
 
     message = f"ok; failed_alpha_points={num_failed}/{len(alphas)}; {selection_message}"

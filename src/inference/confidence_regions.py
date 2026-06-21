@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 from scipy.stats import chi2
@@ -27,6 +28,7 @@ class ConfidenceRegion:
     covers_true: bool | None
     selected_grid: np.ndarray
     critical_value: float
+    statistic_reference: float
 
     @property
     def region_length(self) -> float:
@@ -133,11 +135,82 @@ def _covers_alpha(
     return any(lower <= alpha_true <= upper for lower, upper in blocks)
 
 
+def _interpolate_crossing(
+    alpha_left: float,
+    value_left: float,
+    alpha_right: float,
+    value_right: float,
+    critical_value: float,
+) -> float:
+    if value_left == value_right:
+        return float(alpha_left)
+    weight = (critical_value - value_left) / (value_right - value_left)
+    return float(alpha_left + weight * (alpha_right - alpha_left))
+
+
+def _accepted_blocks_interpolated(
+    alpha_candidates: np.ndarray,
+    statistic_values: np.ndarray,
+    critical_value: float,
+    accepted: np.ndarray,
+) -> tuple[tuple[float, float], ...]:
+    alpha_candidates = _as_1d_array(alpha_candidates, "alpha candidates")
+    statistic_values = _as_1d_array(statistic_values, "statistic values")
+    _validate_strictly_increasing(alpha_candidates)
+
+    accepted = np.asarray(accepted, dtype=bool)
+    if accepted.ndim != 1:
+        raise ValueError("accepted mask must be one-dimensional")
+    if not (
+        accepted.size == alpha_candidates.size == statistic_values.size
+    ):
+        raise ValueError(
+            "accepted mask, alpha candidates, and statistic values must have equal length"
+        )
+    if not np.any(accepted):
+        return ()
+
+    accepted_indices = np.flatnonzero(accepted)
+    split_points = np.flatnonzero(np.diff(accepted_indices) > 1) + 1
+    index_blocks = np.split(accepted_indices, split_points)
+
+    blocks: list[tuple[float, float]] = []
+    for block in index_blocks:
+        start = int(block[0])
+        end = int(block[-1])
+
+        lower = float(alpha_candidates[start])
+        if start > 0:
+            lower = _interpolate_crossing(
+                float(alpha_candidates[start - 1]),
+                float(statistic_values[start - 1]),
+                float(alpha_candidates[start]),
+                float(statistic_values[start]),
+                critical_value,
+            )
+
+        upper = float(alpha_candidates[end])
+        if end < alpha_candidates.size - 1:
+            upper = _interpolate_crossing(
+                float(alpha_candidates[end]),
+                float(statistic_values[end]),
+                float(alpha_candidates[end + 1]),
+                float(statistic_values[end + 1]),
+                critical_value,
+            )
+
+        blocks.append((lower, upper))
+
+    return tuple(blocks)
+
+
 def invert_score_test(
     alphas: np.ndarray,
     statistics: np.ndarray,
     critical_value: float,
     alpha_true: float | None = None,
+    statistic_reference: float | None = None,
+    inversion_type: Literal["absolute", "qlr"] = "absolute",
 ) -> ConfidenceRegion:
     """Invert a grid-evaluated score test into a confidence region.
 
@@ -151,10 +224,25 @@ def invert_score_test(
         sort_alphas=True,
     )
     critical_value = _validate_critical_value(critical_value)
+    if inversion_type not in {"absolute", "qlr"}:
+        raise ValueError("inversion_type must be 'absolute' or 'qlr'")
+    if inversion_type == "absolute":
+        statistic_reference = 0.0
+    elif statistic_reference is None:
+        statistic_reference = 0.0
+    statistic_reference = float(statistic_reference)
+    if not np.isfinite(statistic_reference):
+        raise ValueError("statistic_reference must be finite when provided")
 
-    accepted_mask = statistics <= critical_value
+    statistic_values = statistics - statistic_reference
+    accepted_mask = statistic_values <= critical_value
     accepted = alphas[accepted_mask]
-    blocks = _accepted_blocks(alphas, accepted_mask)
+    blocks = _accepted_blocks_interpolated(
+        alphas,
+        statistic_values,
+        critical_value,
+        accepted_mask,
+    )
     covers_true = _covers_alpha(blocks, alpha_true)
 
     if accepted.size == 0:
@@ -171,10 +259,11 @@ def invert_score_test(
             covers_true=covers_true,
             selected_grid=accepted,
             critical_value=critical_value,
+            statistic_reference=statistic_reference,
         )
 
-    lower = float(accepted.min())
-    upper = float(accepted.max())
+    lower = float(min(block_lower for block_lower, _block_upper in blocks))
+    upper = float(max(block_upper for _block_lower, block_upper in blocks))
     region_length = float(sum(block_upper - block_lower for block_lower, block_upper in blocks))
     hull_length = upper - lower
 
@@ -191,6 +280,7 @@ def invert_score_test(
         covers_true=covers_true,
         selected_grid=accepted,
         critical_value=critical_value,
+        statistic_reference=statistic_reference,
     )
 
 

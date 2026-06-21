@@ -473,6 +473,8 @@ def estimate_dml_ivqr(
         statistics=statistics,
         critical_value=critical,
         alpha_true=data.alpha_true,
+        statistic_reference=min_statistic,
+        inversion_type="qlr",
     )
 
     return EstimationResult(

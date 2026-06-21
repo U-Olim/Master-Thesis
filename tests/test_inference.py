@@ -119,14 +119,17 @@ def test_invert_score_test_singleton_region() -> None:
     region = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=0.0)
 
     assert np.allclose(region.selected_grid, np.array([0.0]))
-    assert region.blocks == ((0.0, 0.0),)
-    assert region.lower == pytest.approx(0.0)
-    assert region.upper == pytest.approx(0.0)
-    assert region.length == pytest.approx(0.0)
-    assert region.hull_length == pytest.approx(0.0)
+    assert len(region.blocks) == 1
+    assert region.blocks[0][0] == pytest.approx(-1.0 / 9.0)
+    assert region.blocks[0][1] == pytest.approx(1.0 / 9.0)
+    assert region.lower == pytest.approx(-1.0 / 9.0)
+    assert region.upper == pytest.approx(1.0 / 9.0)
+    assert region.length == pytest.approx(2.0 / 9.0)
+    assert region.hull_length == pytest.approx(2.0 / 9.0)
     assert region.empty is False
     assert region.disconnected is False
     assert region.covers_true is True
+    assert region.statistic_reference == pytest.approx(0.0)
 
 
 def test_invert_score_test_empty_region() -> None:
@@ -158,10 +161,10 @@ def test_invert_score_test_disconnected_region_uses_block_length() -> None:
     assert np.allclose(region.selected_grid, np.array([0.0, 1.0, 3.0, 4.0]))
     assert region.lower == pytest.approx(0.0)
     assert region.upper == pytest.approx(4.0)
-    assert region.blocks == ((0.0, 1.0), (3.0, 4.0))
+    assert region.blocks == ((0.0, 10.0 / 9.0), (26.0 / 9.0, 4.0))
     assert region.n_blocks == 2
-    assert region.length == pytest.approx(2.0)
-    assert region.region_length == pytest.approx(2.0)
+    assert region.length == pytest.approx(20.0 / 9.0)
+    assert region.region_length == pytest.approx(20.0 / 9.0)
     assert region.hull_length == pytest.approx(4.0)
     assert region.disconnected is True
     assert region.covers_true is False
@@ -173,7 +176,7 @@ def test_invert_score_test_disconnected_region_covers_true_inside_block() -> Non
 
     region = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=3.5)
 
-    assert region.blocks == ((0.0, 1.0), (3.0, 4.0))
+    assert region.blocks == ((0.0, 10.0 / 9.0), (26.0 / 9.0, 4.0))
     assert region.covers_true is True
 
 
@@ -199,10 +202,58 @@ def test_invert_score_test_sorts_unsorted_alpha_grid_with_aligned_statistics() -
     region = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=0.5)
 
     assert np.allclose(region.selected_grid, np.array([0.0, 1.0]))
-    assert region.blocks == ((0.0, 1.0),)
+    assert region.blocks == ((0.0, 10.0 / 9.0),)
     assert region.lower == pytest.approx(0.0)
-    assert region.upper == pytest.approx(1.0)
-    assert region.length == pytest.approx(1.0)
+    assert region.upper == pytest.approx(10.0 / 9.0)
+    assert region.length == pytest.approx(10.0 / 9.0)
+    assert region.covers_true is True
+
+
+def test_invert_score_test_can_use_profiled_statistic_difference() -> None:
+    alphas = np.array([0.0, 1.0, 2.0])
+    stats = np.array([10.0, 6.0, 10.0])
+
+    absolute = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=1.0)
+    profiled = invert_score_test(
+        alphas,
+        stats,
+        critical_value=2.0,
+        alpha_true=1.0,
+        statistic_reference=6.0,
+        inversion_type="qlr",
+    )
+
+    assert absolute.empty is True
+    assert profiled.empty is False
+    assert profiled.blocks == ((0.5, 1.5),)
+    assert profiled.covers_true is True
+    assert profiled.statistic_reference == pytest.approx(6.0)
+
+
+def test_invert_score_test_absolute_ignores_statistic_reference() -> None:
+    alphas = np.array([0.0, 1.0, 2.0])
+    stats = np.array([10.0, 1.0, 10.0])
+
+    region = invert_score_test(
+        alphas,
+        stats,
+        critical_value=3.84,
+        statistic_reference=1.0,
+        inversion_type="absolute",
+    )
+
+    assert region.selected_grid.tolist() == [1.0]
+    assert region.statistic_reference == pytest.approx(0.0)
+
+
+def test_invert_score_test_interpolates_off_grid_coverage() -> None:
+    alphas = np.array([0.0, 1.0, 2.0])
+    stats = np.array([10.0, 1.0, 10.0])
+
+    region = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=0.95)
+
+    assert region.selected_grid.tolist() == [1.0]
+    assert region.lower < 0.95 < region.upper
     assert region.covers_true is True
 
 

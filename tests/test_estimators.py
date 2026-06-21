@@ -129,20 +129,72 @@ def test_evaluate_full_ivqr_alpha_returns_finite_statistic() -> None:
     data = generate_data(design)
     alpha_true = require_float(data.alpha_true, "alpha_true")
 
-    statistic, converged, message = full_ivqr_module._evaluate_alpha_full_ivqr(
+    evaluation = full_ivqr_module._evaluate_alpha_ch_ivqr(
         y=data.y,
         d=data.d,
-        x_design=add_intercept(data.x),
-        instruments=full_ivqr_module.make_instruments(data.z, data.x),
+        x_controls=data.x,
+        z=data.z,
         alpha=alpha_true,
         tau=0.5,
-        gmm_ridge=1e-6,
     )
 
-    assert message == "ok"
-    assert converged is True
-    assert np.isfinite(statistic)
-    assert statistic >= 0.0
+    assert evaluation.message == "ok"
+    assert evaluation.converged is True
+    assert evaluation.dim_z == 1
+    assert evaluation.gamma_hat.shape == (1,)
+    assert evaluation.cov_gamma.shape == (1, 1)
+    assert np.isfinite(evaluation.statistic)
+    assert evaluation.statistic >= 0.0
+
+
+def test_ch_ivqr_design_includes_controls_and_excluded_instruments() -> None:
+    x_controls = np.ones((8, 5))
+    z = np.arange(8, dtype=float)
+
+    design, z_block = full_ivqr_module._ch_ivqr_design(x_controls, z)
+
+    assert design.shape == (8, 7)
+    assert z_block == slice(6, 7)
+    assert np.allclose(design[:, 0], 1.0)
+    assert np.allclose(design[:, 1:6], x_controls)
+    assert np.allclose(design[:, 6], z)
+
+
+def test_ch_ivqr_evaluator_extracts_gamma_after_controls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, tuple[int, int]] = {}
+
+    class FakeQuantReg:
+        def __init__(self, y_alpha, design):
+            captured["design_shape"] = design.shape
+
+        def fit(self, q, max_iter):
+            class Result:
+                params = np.array([0.0, 10.0, 20.0, 2.0])
+
+                @staticmethod
+                def cov_params():
+                    return np.diag([1.0, 1.0, 1.0, 4.0])
+
+            return Result()
+
+    monkeypatch.setattr(full_ivqr_module, "QuantReg", FakeQuantReg)
+
+    evaluation = full_ivqr_module._evaluate_alpha_ch_ivqr(
+        y=np.arange(6, dtype=float),
+        d=np.ones(6),
+        x_controls=np.ones((6, 2)),
+        z=np.arange(6, dtype=float),
+        alpha=1.0,
+        tau=0.5,
+        max_iter=100,
+    )
+
+    assert captured["design_shape"] == (6, 4)
+    assert evaluation.dim_z == 1
+    assert evaluation.gamma_hat.tolist() == [2.0]
+    assert evaluation.statistic == pytest.approx(1.0)
 
 
 def test_estimate_full_ivqr_returns_estimation_result() -> None:
@@ -169,7 +221,10 @@ def test_estimate_full_ivqr_infeasible_high_dimensional_case_fails_cleanly() -> 
     design = Design("dgp1", n=20, p=25, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
 
-    with pytest.raises(ValueError, match=r"Received n=20, p=25, p\+1=26"):
+    with pytest.raises(
+        ValueError,
+        match=r"Received n=20, p=25, dim_z=1, regressors=27",
+    ):
         estimate_full_ivqr(data, tau=0.5, alphas=np.linspace(0.0, 2.0, 5))
 
 
@@ -244,16 +299,16 @@ def test_estimate_full_ivqr_passes_max_iter_to_quantreg_fit(
     data = generate_data(design)
     alpha_true = require_float(data.alpha_true, "alpha_true")
     captured: dict[str, int] = {}
-    original = full_ivqr_module._fit_control_quantile_regression
+    original = full_ivqr_module._evaluate_alpha_full_ivqr
 
-    def fake_fit_control_quantile_regression(*args, **kwargs):
+    def fake_evaluate_alpha_full_ivqr(*args, **kwargs):
         captured["max_iter"] = kwargs["max_iter"]
         return original(*args, **kwargs)
 
     monkeypatch.setattr(
         full_ivqr_module,
-        "_fit_control_quantile_regression",
-        fake_fit_control_quantile_regression,
+        "_evaluate_alpha_full_ivqr",
+        fake_evaluate_alpha_full_ivqr,
     )
 
     result = estimate_full_ivqr(
@@ -424,6 +479,43 @@ def test_evaluate_post_selection_alpha_returns_finite_statistic() -> None:
     assert converged is True
     assert np.isfinite(statistic)
     assert statistic >= 0.0
+
+
+def test_post_selection_alpha_uses_ch_ivqr_evaluator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, tuple[int, int]] = {}
+
+    def fake_evaluate(**kwargs):
+        captured["x_shape"] = kwargs["x_controls"].shape
+        captured["z_shape"] = np.asarray(kwargs["z"]).shape
+        return full_ivqr_module.AlphaEvaluation(
+            statistic=1.25,
+            gamma_hat=np.array([0.5]),
+            cov_gamma=np.array([[0.2]]),
+            dim_z=1,
+            converged=True,
+            message="ok",
+        )
+
+    import estimators.post_selection_ivqr as post_module
+
+    monkeypatch.setattr(post_module, "_evaluate_alpha_ch_ivqr", fake_evaluate)
+
+    statistic, converged, message = evaluate_post_selection_alpha(
+        y=np.arange(10, dtype=float),
+        d=np.ones(10),
+        z=np.arange(10, dtype=float),
+        x_selected=np.ones((10, 3)),
+        alpha=1.0,
+        tau=0.5,
+    )
+
+    assert captured["x_shape"] == (10, 3)
+    assert captured["z_shape"] == (10,)
+    assert statistic == pytest.approx(1.25)
+    assert converged is True
+    assert message == "ok"
 
 
 def test_estimate_post_selection_ivqr_returns_estimation_result() -> None:
