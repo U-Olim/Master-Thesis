@@ -151,7 +151,28 @@ python scripts/02_run_full_simulation.py --preset main
 python scripts/02_run_full_simulation.py --preset full-control-benchmark
 python scripts/02_run_full_simulation.py --preset main --alpha-grid-size 13
 python scripts/02_run_full_simulation.py --preset main --dml-k-folds 5
+python scripts/02_run_full_simulation.py --preset main --reps 10 --n-jobs 6 --output results/raw/main_diagnostic_R10.csv
+python scripts/02_run_full_simulation.py --preset main --reps 1 --n-jobs 1 --dry-run
 ```
+
+`--n-jobs` controls parallel worker processes across independent simulation
+designs. The project default is 6 workers; use `--n-jobs 1` for serial/debug
+runs. On a laptop, 2-6 workers is the recommended range. Prefer one command
+with `--n-jobs` instead of running multiple PowerShell windows against the same
+output file, since only one main process should write a given CSV.
+
+Statsmodels `QuantReg` in full-control, oracle, and post-selection IVQR can
+occasionally reach its iteration limit during diagnostic runs. The project
+default is `--quantreg-max-iter 1000`; increase it when debugging difficult
+designs:
+
+```bash
+python scripts/02_run_full_simulation.py --preset main --quantreg-max-iter 2000
+```
+
+Repeated QuantReg iteration-limit warnings are suppressed in long simulation
+logs by default. Use `--show-quantreg-warnings` when you need to inspect those
+warnings directly.
 
 Safe final-run planning and chunking examples:
 

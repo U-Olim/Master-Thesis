@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from collections.abc import Callable
+import warnings
 
 import numpy as np
 import pandas as pd
+from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp.generators import generate_data
 from dgp.true_parameters import get_oracle_control_indices, true_alpha
@@ -15,7 +18,11 @@ from estimators.full_ivqr import estimate_full_ivqr
 from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import estimate_post_selection_ivqr
 from dgp.designs import Design
-from simulation.config import DEFAULT_ALPHA_GRID_SIZE, DEFAULT_DML_K_FOLDS
+from simulation.config import (
+    DEFAULT_ALPHA_GRID_SIZE,
+    DEFAULT_DML_K_FOLDS,
+    DEFAULT_QUANTREG_MAX_ITER,
+)
 
 
 EstimatorFn = Callable[..., EstimationResult]
@@ -61,6 +68,18 @@ RESULT_COLUMNS = [
 ]
 DESIGN_KEY_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep", "seed"]
 MAX_ERROR_MESSAGE_LENGTH = 500
+
+
+@contextmanager
+def quantreg_iteration_warning_filter(show_warnings: bool = False):
+    """Suppress repeated statsmodels QuantReg iteration-limit warnings by default."""
+    if show_warnings:
+        yield
+        return
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=IterationLimitWarning)
+        yield
 
 
 def _validate_estimators(estimators: tuple[str, ...]) -> None:
@@ -274,7 +293,7 @@ def run_single_replication(
     design: Design,
     alphas: np.ndarray,
     estimators: tuple[str, ...] = DEFAULT_PILOT_ESTIMATORS,
-    quantreg_max_iter: int = 500,
+    quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     selection_cv: int = 3,
     selection_max_iter: int = 10000,
     dml_k_folds: int = DEFAULT_DML_K_FOLDS,
@@ -282,9 +301,12 @@ def run_single_replication(
     dml_ridge_alpha: float = 1.0,
     dml_fold_random_state: int | None = 123,
     gmm_ridge: float = 1e-8,
+    show_quantreg_warnings: bool = False,
 ) -> list[dict[str, object]]:
     """Generate one dataset and run requested estimators on it."""
     _validate_estimators(estimators)
+    if quantreg_max_iter <= 0:
+        raise ValueError("quantreg_max_iter must be positive")
     alphas = np.asarray(alphas, dtype=float)
     if alphas.ndim != 1 or alphas.size == 0:
         raise ValueError("alphas must be a nonempty one-dimensional array")
@@ -304,45 +326,46 @@ def run_single_replication(
 
         try:
             estimator = estimator_map[estimator_name]
-            if estimator_name == "post_selection":
-                result = estimator(
-                    data,
-                    tau=design.tau,
-                    alphas=alphas,
-                    selection_cv=selection_cv,
-                    selection_max_iter=selection_max_iter,
-                    quantreg_max_iter=quantreg_max_iter,
-                    gmm_ridge=gmm_ridge,
-                )
-            elif estimator_name == "dml":
-                result = estimator(
-                    data,
-                    tau=design.tau,
-                    alphas=alphas,
-                    k_folds=dml_k_folds,
-                    fold_random_state=dml_fold_random_state,
-                    quantile_penalty=dml_quantile_penalty,
-                    ridge_alpha=dml_ridge_alpha,
-                    gmm_ridge=gmm_ridge,
-                )
-            elif estimator_name == "oracle":
-                oracle_indices = get_oracle_control_indices(design.dgp, design.p)
-                result = estimator(
-                    data,
-                    tau=design.tau,
-                    alphas=alphas,
-                    oracle_indices=oracle_indices,
-                    max_iter=quantreg_max_iter,
-                    gmm_ridge=gmm_ridge,
-                )
-            else:
-                result = estimator(
-                    data,
-                    tau=design.tau,
-                    alphas=alphas,
-                    max_iter=quantreg_max_iter,
-                    gmm_ridge=gmm_ridge,
-                )
+            with quantreg_iteration_warning_filter(show_quantreg_warnings):
+                if estimator_name == "post_selection":
+                    result = estimator(
+                        data,
+                        tau=design.tau,
+                        alphas=alphas,
+                        selection_cv=selection_cv,
+                        selection_max_iter=selection_max_iter,
+                        quantreg_max_iter=quantreg_max_iter,
+                        gmm_ridge=gmm_ridge,
+                    )
+                elif estimator_name == "dml":
+                    result = estimator(
+                        data,
+                        tau=design.tau,
+                        alphas=alphas,
+                        k_folds=dml_k_folds,
+                        fold_random_state=dml_fold_random_state,
+                        quantile_penalty=dml_quantile_penalty,
+                        ridge_alpha=dml_ridge_alpha,
+                        gmm_ridge=gmm_ridge,
+                    )
+                elif estimator_name == "oracle":
+                    oracle_indices = get_oracle_control_indices(design.dgp, design.p)
+                    result = estimator(
+                        data,
+                        tau=design.tau,
+                        alphas=alphas,
+                        oracle_indices=oracle_indices,
+                        max_iter=quantreg_max_iter,
+                        gmm_ridge=gmm_ridge,
+                    )
+                else:
+                    result = estimator(
+                        data,
+                        tau=design.tau,
+                        alphas=alphas,
+                        max_iter=quantreg_max_iter,
+                        gmm_ridge=gmm_ridge,
+                    )
             rows.append(_result_to_row(design, result))
         except Exception as exc:
             rows.append(_failure_row_for_estimator(design, estimator_name, alphas, exc))
@@ -363,19 +386,22 @@ def run_pilot_simulation(
     alpha_grid_size: int = DEFAULT_ALPHA_GRID_SIZE,
     alpha_min: float = -1.0,
     alpha_max: float = 3.0,
-    quantreg_max_iter: int = 500,
+    quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     selection_cv: int = 3,
     selection_max_iter: int = 10000,
     dml_k_folds: int = DEFAULT_DML_K_FOLDS,
     dml_quantile_penalty: float = 0.01,
     dml_ridge_alpha: float = 1.0,
     gmm_ridge: float = 1e-8,
+    show_quantreg_warnings: bool = False,
 ) -> pd.DataFrame:
     """Run a small pilot simulation and return raw estimator-level rows."""
     if reps < 1:
         raise ValueError("reps must be positive")
     if alpha_grid_size < 3:
         raise ValueError("alpha_grid_size must be at least 3")
+    if quantreg_max_iter <= 0:
+        raise ValueError("quantreg_max_iter must be positive")
     _validate_estimators(estimators)
 
     if alphas is None:
@@ -406,6 +432,7 @@ def run_pilot_simulation(
                 dml_quantile_penalty=dml_quantile_penalty,
                 dml_ridge_alpha=dml_ridge_alpha,
                 gmm_ridge=gmm_ridge,
+                show_quantreg_warnings=show_quantreg_warnings,
             )
         )
 

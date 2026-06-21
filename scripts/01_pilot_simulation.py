@@ -5,17 +5,19 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
-import warnings
 
 import pandas as pd
-from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from simulation.config import DEFAULT_ALPHA_GRID_SIZE, DEFAULT_DML_K_FOLDS  # noqa: E402
+from simulation.config import (  # noqa: E402
+    DEFAULT_ALPHA_GRID_SIZE,
+    DEFAULT_DML_K_FOLDS,
+    DEFAULT_QUANTREG_MAX_ITER,
+)
 from simulation.runner import (  # noqa: E402
     DEFAULT_PILOT_ESTIMATORS,
     VALID_ESTIMATORS,
@@ -32,7 +34,7 @@ MODE_CONFIGS = {
         "tau": 0.5,
         "reps": 3,
         "alpha_grid_size": DEFAULT_ALPHA_GRID_SIZE,
-        "quantreg_max_iter": 500,
+        "quantreg_max_iter": DEFAULT_QUANTREG_MAX_ITER,
         "selection_cv": 3,
         "dml_k_folds": DEFAULT_DML_K_FOLDS,
         "estimators": DEFAULT_PILOT_ESTIMATORS,
@@ -46,7 +48,7 @@ MODE_CONFIGS = {
         "tau": 0.5,
         "reps": 2,
         "alpha_grid_size": DEFAULT_ALPHA_GRID_SIZE,
-        "quantreg_max_iter": 500,
+        "quantreg_max_iter": DEFAULT_QUANTREG_MAX_ITER,
         "selection_cv": 3,
         "dml_k_folds": DEFAULT_DML_K_FOLDS,
         "estimators": DEFAULT_PILOT_ESTIMATORS,
@@ -170,7 +172,6 @@ def main() -> None:
         tuple(args.estimators) if args.estimators is not None else config["estimators"]
     )
 
-    warnings.filterwarnings("ignore", category=IterationLimitWarning)
     _print_config(args.mode, config, estimators)
 
     results = run_pilot_simulation(

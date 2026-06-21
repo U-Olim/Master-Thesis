@@ -31,6 +31,16 @@ from estimators.post_selection_ivqr import (
 )
 
 
+def require_float(value: float | None, name: str = "value") -> float:
+    assert value is not None, f"{name} should not be None"
+    return value
+
+
+def require_array(value: np.ndarray | None, name: str = "array") -> np.ndarray:
+    assert value is not None, f"{name} should not be None"
+    return value
+
+
 def test_estimation_result_can_be_instantiated() -> None:
     result = EstimationResult(
         estimator="full_ivqr",
@@ -87,6 +97,7 @@ def test_empty_confidence_region_is_separate_from_estimator_failure() -> None:
     assert result.converged is True
     assert result.cr_empty is True
 
+
 def test_add_intercept_prepends_ones() -> None:
     x = np.array([[1.0, 2.0], [3.0, 4.0]])
 
@@ -116,13 +127,14 @@ def test_fit_profile_beta_works_on_small_data() -> None:
 def test_evaluate_full_ivqr_alpha_returns_finite_statistic() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
+    alpha_true = require_float(data.alpha_true, "alpha_true")
 
     statistic, converged, message = full_ivqr_module._evaluate_alpha_full_ivqr(
         y=data.y,
         d=data.d,
         x_design=add_intercept(data.x),
         instruments=full_ivqr_module.make_instruments(data.z, data.x),
-        alpha=data.alpha_true,
+        alpha=alpha_true,
         tau=0.5,
         gmm_ridge=1e-6,
     )
@@ -212,16 +224,61 @@ def test_estimate_full_ivqr_invalid_tau_raises_value_error() -> None:
         estimate_full_ivqr(data, tau=0.0, alphas=np.linspace(0.0, 2.0, 5))
 
 
+def test_estimate_full_ivqr_invalid_max_iter_raises_value_error() -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    data = generate_data(design)
+
+    with pytest.raises(ValueError, match="max_iter must be positive"):
+        estimate_full_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.linspace(0.0, 2.0, 5),
+            max_iter=0,
+        )
+
+
+def test_estimate_full_ivqr_passes_max_iter_to_quantreg_fit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    data = generate_data(design)
+    alpha_true = require_float(data.alpha_true, "alpha_true")
+    captured: dict[str, int] = {}
+    original = full_ivqr_module._fit_control_quantile_regression
+
+    def fake_fit_control_quantile_regression(*args, **kwargs):
+        captured["max_iter"] = kwargs["max_iter"]
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        full_ivqr_module,
+        "_fit_control_quantile_regression",
+        fake_fit_control_quantile_regression,
+    )
+
+    result = estimate_full_ivqr(
+        data,
+        tau=0.5,
+        alphas=np.array([alpha_true]),
+        max_iter=2000,
+        gmm_ridge=1e-6,
+    )
+
+    assert result.failed is False
+    assert captured["max_iter"] == 2000
+
+
 def test_estimate_full_ivqr_feasible_high_pn_emits_no_pn_warning() -> None:
     design = Design("dgp1", n=30, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
+    alpha_true = require_float(data.alpha_true, "alpha_true")
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         estimate_full_ivqr(
             data,
             tau=0.5,
-            alphas=np.array([data.alpha_true]),
+            alphas=np.array([alpha_true]),
             max_iter=50,
             gmm_ridge=1e-6,
         )
@@ -251,10 +308,23 @@ def test_estimate_full_ivqr_output_is_deterministic() -> None:
     result_1 = estimate_full_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
     result_2 = estimate_full_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
 
+    assert result_1.alpha_hat is not None
+    assert result_2.alpha_hat is not None
+    assert result_1.objective_value is not None
+    assert result_2.objective_value is not None
     assert result_1.alpha_hat == pytest.approx(result_2.alpha_hat)
     assert result_1.objective_value == pytest.approx(result_2.objective_value)
-    assert result_1.cr_lower == pytest.approx(result_2.cr_lower)
-    assert result_1.cr_upper == pytest.approx(result_2.cr_upper)
+    if result_1.cr_lower is None:
+        assert result_2.cr_lower is None
+    else:
+        assert result_2.cr_lower is not None
+        assert result_1.cr_lower == pytest.approx(result_2.cr_lower)
+    if result_1.cr_upper is None:
+        assert result_2.cr_upper is None
+    else:
+        assert result_2.cr_upper is not None
+        assert result_1.cr_upper == pytest.approx(result_2.cr_upper)
+
 
 def test_select_controls_lasso_returns_valid_indices() -> None:
     data = generate_data(Design("dgp1", n=100, p=10, pi=1.0, tau=0.5, rep=0, seed=123))
@@ -300,12 +370,13 @@ def test_select_controls_lasso_handles_no_signal_artificial_data() -> None:
 def test_fit_post_selection_beta_works_with_selected_controls() -> None:
     data = generate_data(Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
     x_selected = data.x[:, :3]
+    alpha_true = require_float(data.alpha_true, "alpha_true")
 
     beta_hat, converged, message = fit_post_selection_beta(
         data.y,
         data.d,
         x_selected,
-        alpha=data.alpha_true,
+        alpha=alpha_true,
         tau=0.5,
     )
 
@@ -318,12 +389,13 @@ def test_fit_post_selection_beta_works_with_selected_controls() -> None:
 def test_fit_post_selection_beta_works_with_zero_selected_controls() -> None:
     data = generate_data(Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
     x_selected = np.empty((data.x.shape[0], 0))
+    alpha_true = require_float(data.alpha_true, "alpha_true")
 
     beta_hat, converged, message = fit_post_selection_beta(
         data.y,
         data.d,
         x_selected,
-        alpha=data.alpha_true,
+        alpha=alpha_true,
         tau=0.5,
     )
 
@@ -336,13 +408,14 @@ def test_fit_post_selection_beta_works_with_zero_selected_controls() -> None:
 def test_evaluate_post_selection_alpha_returns_finite_statistic() -> None:
     data = generate_data(Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
     x_selected = data.x[:, :3]
+    alpha_true = require_float(data.alpha_true, "alpha_true")
 
     statistic, converged, message = evaluate_post_selection_alpha(
         data.y,
         data.d,
         data.z,
         x_selected,
-        alpha=data.alpha_true,
+        alpha=alpha_true,
         tau=0.5,
         gmm_ridge=1e-6,
     )
@@ -425,16 +498,22 @@ def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
         gmm_ridge=1e-6,
     )
 
+    assert result_1.alpha_hat is not None
+    assert result_2.alpha_hat is not None
+    assert result_1.objective_value is not None
+    assert result_2.objective_value is not None
     assert result_1.alpha_hat == pytest.approx(result_2.alpha_hat)
     assert result_1.selected_controls == result_2.selected_controls
     assert result_1.objective_value == pytest.approx(result_2.objective_value)
     if result_1.cr_lower is None:
         assert result_2.cr_lower is None
     else:
+        assert result_2.cr_lower is not None
         assert result_1.cr_lower == pytest.approx(result_2.cr_lower)
     if result_1.cr_upper is None:
         assert result_2.cr_upper is None
     else:
+        assert result_2.cr_upper is not None
         assert result_1.cr_upper == pytest.approx(result_2.cr_upper)
 
 
@@ -565,6 +644,52 @@ def test_estimate_oracle_ivqr_alpha_hat_does_not_use_alpha_true() -> None:
     assert with_wrong_truth.selected_controls == 10
 
 
+def test_estimate_oracle_ivqr_passes_max_iter_to_full_control(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123))
+    captured: dict[str, int] = {}
+
+    def fake_full_estimator(reduced_data, **kwargs):
+        captured["max_iter"] = kwargs["max_iter"]
+        return EstimationResult(
+            estimator="full_ivqr",
+            alpha_hat=1.0,
+            alpha_true=reduced_data.alpha_true,
+            tau=kwargs["tau"],
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(kwargs["alphas"]),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=None,
+            runtime_seconds=0.0,
+        )
+
+    import estimators.oracle_ivqr as oracle_module
+
+    monkeypatch.setattr(oracle_module, "estimate_full_ivqr", fake_full_estimator)
+
+    result = estimate_oracle_ivqr(
+        data,
+        tau=0.5,
+        alphas=np.linspace(0.0, 2.0, 3),
+        oracle_indices=np.arange(10),
+        max_iter=2000,
+    )
+
+    assert result.estimator == "oracle"
+    assert captured["max_iter"] == 2000
+
+
 def test_estimate_oracle_ivqr_rejects_invalid_indices() -> None:
     data = generate_data(Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123))
 
@@ -608,17 +733,19 @@ def test_standardize_train_test_uses_training_moments() -> None:
     assert np.allclose(x_train_scaled.mean(axis=0), 0.0)
     assert np.allclose(x_train_scaled.std(axis=0), 1.0)
     assert x_test_scaled.shape == x_test.shape
-    assert np.allclose(scaler.mean_, x_train.mean(axis=0))
+    scaler_mean = require_array(scaler.mean_, "scaler.mean_")
+    np.testing.assert_allclose(scaler_mean, x_train.mean(axis=0))
 
 
 def test_fit_quantile_nuisance_returns_fitted_model() -> None:
     data = generate_data(Design("dgp1", n=100, p=10, pi=1.0, tau=0.5, rep=0, seed=123))
+    alpha_true = require_float(data.alpha_true, "alpha_true")
 
     model, converged, message = fit_quantile_nuisance(
         data.y,
         data.d,
         data.x,
-        alpha_value=data.alpha_true,
+        alpha_value=alpha_true,
         tau=0.5,
         penalty=0.01,
     )
@@ -653,13 +780,14 @@ def test_fit_instrument_residualizer_returns_fitted_model() -> None:
 
 def test_evaluate_dml_ivqr_alpha_returns_finite_statistic() -> None:
     data = generate_data(Design("dgp1", n=100, p=10, pi=1.0, tau=0.5, rep=0, seed=123))
+    alpha_true = require_float(data.alpha_true, "alpha_true")
 
     statistic, converged, message = evaluate_dml_ivqr_alpha(
         data.y,
         data.d,
         data.z,
         data.x,
-        alpha_value=data.alpha_true,
+        alpha_value=alpha_true,
         tau=0.5,
         k_folds=3,
         fold_random_state=123,
@@ -794,11 +922,27 @@ def test_estimate_dml_ivqr_cached_and_uncached_results_match() -> None:
 
     assert cached.failed is False
     assert uncached.failed is False
+    assert cached.alpha_hat is not None
+    assert uncached.alpha_hat is not None
+    assert cached.objective_value is not None
+    assert uncached.objective_value is not None
     assert cached.alpha_hat == pytest.approx(uncached.alpha_hat)
     assert cached.objective_value == pytest.approx(uncached.objective_value)
-    assert cached.cr_lower == pytest.approx(uncached.cr_lower)
-    assert cached.cr_upper == pytest.approx(uncached.cr_upper)
-    assert cached.cr_length == pytest.approx(uncached.cr_length)
+    if cached.cr_lower is None:
+        assert uncached.cr_lower is None
+    else:
+        assert uncached.cr_lower is not None
+        assert cached.cr_lower == pytest.approx(uncached.cr_lower)
+    if cached.cr_upper is None:
+        assert uncached.cr_upper is None
+    else:
+        assert uncached.cr_upper is not None
+        assert cached.cr_upper == pytest.approx(uncached.cr_upper)
+    if cached.cr_length is None:
+        assert uncached.cr_length is None
+    else:
+        assert uncached.cr_length is not None
+        assert cached.cr_length == pytest.approx(uncached.cr_length)
     assert cached.cr_covers_true is uncached.cr_covers_true
     assert cached.cr_empty is uncached.cr_empty
     assert cached.cr_disconnected is uncached.cr_disconnected
@@ -861,13 +1005,19 @@ def test_estimate_dml_ivqr_output_is_deterministic() -> None:
         gmm_ridge=1e-6,
     )
 
+    assert result_1.alpha_hat is not None
+    assert result_2.alpha_hat is not None
+    assert result_1.objective_value is not None
+    assert result_2.objective_value is not None
     assert result_1.alpha_hat == pytest.approx(result_2.alpha_hat)
     assert result_1.objective_value == pytest.approx(result_2.objective_value)
     if result_1.cr_lower is None:
         assert result_2.cr_lower is None
     else:
+        assert result_2.cr_lower is not None
         assert result_1.cr_lower == pytest.approx(result_2.cr_lower)
     if result_1.cr_upper is None:
         assert result_2.cr_upper is None
     else:
+        assert result_2.cr_upper is not None
         assert result_1.cr_upper == pytest.approx(result_2.cr_upper)

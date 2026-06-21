@@ -3,10 +3,12 @@
 import importlib.util
 from pathlib import Path
 import sys
+import warnings
 
 import numpy as np
 import pandas as pd
 import pytest
+from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from estimators.base import EstimationResult
 from dgp.designs import Design
@@ -20,12 +22,15 @@ from simulation.batching import (
 from simulation.chunking import select_design_chunk
 from simulation.runner import (
     DEFAULT_DML_K_FOLDS,
+    DEFAULT_QUANTREG_MAX_ITER,
     DEFAULT_PILOT_ESTIMATORS,
     VALID_ESTIMATORS,
     make_simulation_grid,
+    quantreg_iteration_warning_filter,
     run_pilot_simulation,
     run_single_replication,
 )
+from simulation.config import DEFAULT_N_JOBS
 
 FULL_SIMULATION_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
 spec = importlib.util.spec_from_file_location("full_simulation_cli", FULL_SIMULATION_SCRIPT)
@@ -68,6 +73,13 @@ REQUIRED_KEYS = {
     "alpha_grid_size",
     "message",
 }
+
+
+STABLE_ROW_SORT_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep", "seed", "estimator"]
+
+
+def _sort_result_rows(results: pd.DataFrame) -> pd.DataFrame:
+    return results.sort_values(STABLE_ROW_SORT_COLUMNS).reset_index(drop=True)
 
 
 def test_run_single_replication_returns_one_row_per_estimator() -> None:
@@ -167,6 +179,33 @@ def test_default_pilot_estimators_do_not_include_oracle() -> None:
 
 def test_default_dml_k_folds_is_three() -> None:
     assert DEFAULT_DML_K_FOLDS == 3
+
+
+def test_default_n_jobs_is_six() -> None:
+    assert DEFAULT_N_JOBS == 6
+
+
+def test_default_quantreg_max_iter_is_1000() -> None:
+    assert DEFAULT_QUANTREG_MAX_ITER == 1000
+
+
+def test_quantreg_iteration_warning_filter_suppresses_by_default() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with quantreg_iteration_warning_filter(show_warnings=False):
+            warnings.warn("iteration limit", IterationLimitWarning)
+
+    assert caught == []
+
+
+def test_quantreg_iteration_warning_filter_can_show_warnings() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with quantreg_iteration_warning_filter(show_warnings=True):
+            warnings.warn("iteration limit", IterationLimitWarning)
+
+    assert len(caught) == 1
+    assert issubclass(caught[0].category, IterationLimitWarning)
 
 
 def test_quantreg_max_iter_is_passed_to_full_estimator(monkeypatch) -> None:
@@ -416,6 +455,7 @@ def test_run_simulation_batch_returns_expected_rows() -> None:
         designs,
         np.linspace(0.0, 2.0, 5),
         estimators=("post_selection", "dml"),
+        n_jobs=1,
     )
 
     assert len(results) == 4
@@ -432,11 +472,117 @@ def test_run_simulation_batch_writes_csv(tmp_path: Path) -> None:
         np.linspace(0.0, 2.0, 5),
         estimators=("post_selection",),
         output_path=output_path,
+        n_jobs=1,
     )
 
     written = pd.read_csv(output_path)
     assert len(written) == 1
     assert written.loc[0, "estimator"] == "post_selection_ivqr"
+
+
+def test_run_simulation_batch_parallel_writes_valid_csv(tmp_path: Path) -> None:
+    output_path = tmp_path / "parallel_batch.csv"
+    designs = [
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123),
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=1, seed=124),
+    ]
+
+    results = run_simulation_batch(
+        designs,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("post_selection",),
+        output_path=output_path,
+        n_jobs=2,
+    )
+
+    written = pd.read_csv(output_path)
+    assert len(results) == 2
+    assert len(written) == 2
+    assert set(written["rep"]) == {0, 1}
+    assert set(written["estimator"]) == {"post_selection_ivqr"}
+
+
+def test_run_simulation_batch_serial_and_parallel_are_equivalent() -> None:
+    designs = [
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123),
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=1, seed=124),
+    ]
+    alphas = np.linspace(0.0, 2.0, 5)
+
+    serial = _sort_result_rows(
+        run_simulation_batch(
+            designs,
+            alphas,
+            estimators=("post_selection",),
+            n_jobs=1,
+        )
+    )
+    parallel = _sort_result_rows(
+        run_simulation_batch(
+            designs,
+            alphas,
+            estimators=("post_selection",),
+            n_jobs=2,
+        )
+    )
+
+    assert len(serial) == len(parallel)
+    pd.testing.assert_frame_equal(
+        serial[STABLE_ROW_SORT_COLUMNS + ["status"]],
+        parallel[STABLE_ROW_SORT_COLUMNS + ["status"]],
+    )
+    np.testing.assert_allclose(
+        serial["alpha_hat"].to_numpy(dtype=float),
+        parallel["alpha_hat"].to_numpy(dtype=float),
+        equal_nan=True,
+    )
+
+
+def test_run_simulation_batch_rejects_invalid_n_jobs() -> None:
+    with pytest.raises(ValueError, match="n_jobs must be at least 1"):
+        run_simulation_batch(
+            [Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)],
+            np.linspace(0.0, 2.0, 5),
+            estimators=("post_selection",),
+            n_jobs=0,
+        )
+
+
+def test_parallel_resume_filters_completed_designs_without_duplicates(
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "resume_parallel.csv"
+    designs = [
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123),
+        Design("dgp1", 80, 5, 1.0, 0.5, rep=1, seed=124),
+    ]
+    alphas = np.linspace(0.0, 2.0, 5)
+
+    run_simulation_batch(
+        [designs[0]],
+        alphas,
+        estimators=("post_selection",),
+        output_path=output_path,
+        n_jobs=1,
+    )
+    pending = filter_completed_designs(
+        designs,
+        output_path,
+        estimators=("post_selection",),
+    )
+    run_simulation_batch(
+        pending,
+        alphas,
+        estimators=("post_selection",),
+        output_path=output_path,
+        append=True,
+        n_jobs=2,
+    )
+
+    written = pd.read_csv(output_path)
+    assert len(written) == 2
+    assert not written.duplicated(STABLE_ROW_SORT_COLUMNS).any()
+    assert set(written["rep"]) == {0, 1}
 
 
 def test_filter_completed_designs_removes_fully_completed_design(tmp_path: Path) -> None:
@@ -839,6 +985,75 @@ def test_full_simulation_parser_dml_k_folds_default_and_override(monkeypatch) ->
     )
     args = full_simulation_cli._parse_args()
     assert args.dml_k_folds == 5
+
+
+def test_full_simulation_parser_n_jobs_default_and_override(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["02_run_full_simulation.py"])
+    args = full_simulation_cli._parse_args()
+    assert args.n_jobs == 6
+
+    for n_jobs in (1, 4, 6):
+        monkeypatch.setattr(
+            "sys.argv",
+            ["02_run_full_simulation.py", "--preset", "main", "--n-jobs", str(n_jobs)],
+        )
+        args = full_simulation_cli._parse_args()
+        assert args.n_jobs == n_jobs
+
+
+def test_full_simulation_parser_quantreg_max_iter_default_and_override(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("sys.argv", ["02_run_full_simulation.py"])
+    args = full_simulation_cli._parse_args()
+    assert args.quantreg_max_iter == 1000
+    assert args.show_quantreg_warnings is False
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "02_run_full_simulation.py",
+            "--preset",
+            "main",
+            "--quantreg-max-iter",
+            "2000",
+            "--show-quantreg-warnings",
+        ],
+    )
+    args = full_simulation_cli._parse_args()
+    assert args.quantreg_max_iter == 2000
+    assert args.show_quantreg_warnings is True
+
+
+def test_full_simulation_rejects_invalid_n_jobs(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["02_run_full_simulation.py", "--quick-test", "--dry-run", "--n-jobs", "0"],
+    )
+    with pytest.raises(ValueError, match="--n-jobs must be at least 1"):
+        full_simulation_main()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["02_run_full_simulation.py", "--quick-test", "--dry-run", "--n-jobs", "-1"],
+    )
+    with pytest.raises(ValueError, match="--n-jobs must be at least 1"):
+        full_simulation_main()
+
+
+def test_full_simulation_rejects_invalid_quantreg_max_iter(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "02_run_full_simulation.py",
+            "--quick-test",
+            "--dry-run",
+            "--quantreg-max-iter",
+            "0",
+        ],
+    )
+    with pytest.raises(ValueError, match="--quantreg-max-iter must be at least 1"):
+        full_simulation_main()
 
 
 def test_manual_full_control_uses_benchmark_scenario_defaults() -> None:

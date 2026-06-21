@@ -15,6 +15,7 @@ from reporting.summaries import (
 )
 from reporting.tables import (
     ESTIMATOR_LABELS,
+    _round_numeric,
     add_estimator_labels,
     filter_summary,
     load_summary,
@@ -53,6 +54,79 @@ def _raw_results() -> pd.DataFrame:
             "selected_controls": [None, None, 3, 4],
         }
     )
+
+
+def _r10_style_raw_results() -> pd.DataFrame:
+    rows = []
+    for rep in range(2):
+        rows.extend(
+            [
+                {
+                    "dgp": "dgp1",
+                    "n": 500,
+                    "p": 200,
+                    "pi": 0.1,
+                    "tau": 0.25,
+                    "rep": rep,
+                    "seed": 100 + rep,
+                    "estimator": "oracle",
+                    "alpha_hat": 1.0 + 0.1 * rep,
+                    "alpha_true": 1.0,
+                    "failed": False,
+                    "converged": True,
+                    "cr_length": 1.0,
+                    "cr_covers_true": rep == 0,
+                    "cr_empty": False,
+                    "cr_disconnected": False,
+                    "runtime_seconds": 0.1,
+                    "failed_alpha_count": 0,
+                    "selected_controls": 10,
+                },
+                {
+                    "dgp": "dgp1",
+                    "n": 500,
+                    "p": 200,
+                    "pi": 0.1,
+                    "tau": 0.25,
+                    "rep": rep,
+                    "seed": 100 + rep,
+                    "estimator": "post_selection_ivqr",
+                    "alpha_hat": 0.9 + 0.1 * rep,
+                    "alpha_true": 1.0,
+                    "failed": False,
+                    "converged": True,
+                    "cr_length": 1.5,
+                    "cr_covers_true": True,
+                    "cr_empty": False,
+                    "cr_disconnected": False,
+                    "runtime_seconds": 0.2,
+                    "failed_alpha_count": 0,
+                    "selected_controls": 20,
+                },
+                {
+                    "dgp": "dgp1",
+                    "n": 500,
+                    "p": 200,
+                    "pi": 0.1,
+                    "tau": 0.25,
+                    "rep": rep,
+                    "seed": 100 + rep,
+                    "estimator": "dml_ivqr",
+                    "alpha_hat": 1.1 + 0.1 * rep,
+                    "alpha_true": 1.0,
+                    "failed": False,
+                    "converged": True,
+                    "cr_length": 2.0,
+                    "cr_covers_true": True,
+                    "cr_empty": False,
+                    "cr_disconnected": False,
+                    "runtime_seconds": 0.3,
+                    "failed_alpha_count": 0,
+                    "selected_controls": None,
+                },
+            ]
+        )
+    return pd.DataFrame(rows)
 
 
 def _row(summary: pd.DataFrame, estimator: str) -> pd.Series:
@@ -392,10 +466,29 @@ def test_filter_summary_filters_values_and_empty_matches() -> None:
 def test_make_wide_metric_table_uses_display_labels_and_values() -> None:
     wide = make_wide_metric_table(_summary(), "rmse", round_digits=2)
 
-    assert "Post-selection IVQR" in wide.columns
-    assert "DML-IVQR" in wide.columns
-    assert wide.iloc[0]["DML-IVQR"] == pytest.approx(0.23)
-    assert wide.iloc[0]["Post-selection IVQR"] == pytest.approx(0.3)
+    assert "post_selection_rmse" in wide.columns
+    assert "dml_rmse" in wide.columns
+    assert not wide.columns.duplicated().any()
+    assert wide.iloc[0]["dml_rmse"] == pytest.approx(0.23)
+    assert wide.iloc[0]["post_selection_rmse"] == pytest.approx(0.3)
+
+
+def test_make_wide_metric_table_keeps_oracle_column_unique() -> None:
+    summary = aggregate_results(_r10_style_raw_results(), expected_replications=2)
+
+    wide = make_wide_metric_table(summary, "rmse", round_digits=3)
+
+    assert wide.columns.tolist() == [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "oracle_rmse",
+        "post_selection_rmse",
+        "dml_rmse",
+    ]
+    assert not wide.columns.duplicated().any()
 
 
 def test_make_wide_metric_table_missing_metric_raises() -> None:
@@ -408,6 +501,13 @@ def test_make_wide_metric_table_duplicate_rows_raise() -> None:
 
     with pytest.raises(ValueError, match="duplicate scenario-estimator"):
         make_wide_metric_table(duplicate, "rmse")
+
+
+def test_round_numeric_duplicate_column_raises_clear_error() -> None:
+    table = pd.DataFrame([[1.234, 5.678]], columns=["rmse", "rmse"])
+
+    with pytest.raises(ValueError, match="Column 'rmse' is duplicated"):
+        _round_numeric(table, ["rmse"], round_digits=2)
 
 
 def test_make_comparison_table_contains_metrics_labels_and_rounded_values() -> None:
@@ -447,7 +547,7 @@ def test_cr_length_wide_uses_strict_avg_cr_length(tmp_path: Path) -> None:
 
     cr_length = pd.read_csv(written["cr_length"])
 
-    assert cr_length.iloc[0]["DML-IVQR"] == pytest.approx(1.235)
+    assert cr_length.iloc[0]["dml_avg_cr_length"] == pytest.approx(1.235)
 
 
 def test_write_tables_writes_expected_csv_files(tmp_path: Path) -> None:
@@ -466,6 +566,26 @@ def test_write_tables_writes_expected_csv_files(tmp_path: Path) -> None:
     }
     assert expected_keys.issubset(written)
     assert all(path.exists() for path in written.values())
+
+
+def test_write_tables_from_r10_style_raw_results_does_not_crash(tmp_path: Path) -> None:
+    summary = aggregate_results(_r10_style_raw_results(), expected_replications=2)
+
+    written = write_tables(summary, tmp_path, round_digits=3)
+
+    assert written["coverage"].exists()
+    assert written["rmse"].exists()
+
+
+def test_wide_csv_files_do_not_have_duplicate_columns(tmp_path: Path) -> None:
+    summary = aggregate_results(_r10_style_raw_results(), expected_replications=2)
+    written = write_tables(summary, tmp_path, round_digits=3)
+
+    coverage = pd.read_csv(written["coverage"])
+    rmse = pd.read_csv(written["rmse"])
+
+    assert not coverage.columns.duplicated().any()
+    assert not rmse.columns.duplicated().any()
 
 
 def test_load_summary_missing_file_raises(tmp_path: Path) -> None:

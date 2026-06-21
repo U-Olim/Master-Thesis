@@ -8,11 +8,9 @@ import json
 from pathlib import Path
 import sys
 import time
-import warnings
 
 import numpy as np
 import pandas as pd
-from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = PROJECT_ROOT / "src"
@@ -24,7 +22,9 @@ from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa
 from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_DML_K_FOLDS,
+    DEFAULT_N_JOBS,
     DEFAULT_OUTPUT,
+    DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
     FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
     FULL_CONTROL_BENCHMARK_DGPS,
@@ -70,6 +70,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--output", default=None)
     parser.add_argument("--reps", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=10)
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=DEFAULT_N_JOBS,
+        help=(
+            "Number of parallel worker processes for independent simulation "
+            "designs. Default is 6. Use --n-jobs 1 for serial execution."
+        ),
+    )
     parser.add_argument("--base-seed", type=int, default=12345)
     parser.add_argument("--alpha-min", type=float, default=-1.0)
     parser.add_argument("--alpha-max", type=float, default=3.0)
@@ -82,6 +91,20 @@ def _parse_args() -> argparse.Namespace:
             "Number of cross-fitting folds for DML-IVQR. Default is 3 for "
             "faster diagnostics/main simulations; use 5 for robustness checks."
         ),
+    )
+    parser.add_argument(
+        "--quantreg-max-iter",
+        type=int,
+        default=DEFAULT_QUANTREG_MAX_ITER,
+        help=(
+            "Maximum iterations for statsmodels QuantReg used by "
+            "full-control/oracle/post-selection IVQR. Default is 1000."
+        ),
+    )
+    parser.add_argument(
+        "--show-quantreg-warnings",
+        action="store_true",
+        help="Show statsmodels QuantReg IterationLimitWarning messages.",
     )
     parser.add_argument(
         "--estimators",
@@ -187,6 +210,7 @@ def _print_plan(
     estimators: tuple[str, ...],
     alphas: np.ndarray,
     batch_size: int,
+    n_jobs: int,
     resume: bool,
     rerun_failed: bool,
     dry_run: bool,
@@ -194,6 +218,8 @@ def _print_plan(
     num_chunks: int | None,
     preset: str,
     dml_k_folds: int,
+    quantreg_max_iter: int,
+    show_quantreg_warnings: bool,
 ) -> None:
     expected_rows = designs_in_run * len(estimators)
     print("Full simulation plan")
@@ -213,7 +239,10 @@ def _print_plan(
         f"size={alphas.size}, min={float(alphas.min())}, max={float(alphas.max())}"
     )
     print(f"batch size: {batch_size}")
+    print(f"Parallel workers: {n_jobs}")
     print(f"DML folds: {dml_k_folds}")
+    print(f"QuantReg max iterations: {quantreg_max_iter}")
+    print(f"Show QuantReg warnings: {show_quantreg_warnings}")
     print(f"resume: {resume}")
     print(f"rerun_failed: {rerun_failed}")
     print(f"preset: {preset}")
@@ -282,10 +311,14 @@ def main() -> None:
 
     if args.batch_size < 1:
         raise ValueError("--batch-size must be at least 1")
+    if args.n_jobs < 1:
+        raise ValueError("--n-jobs must be at least 1")
     if args.alpha_grid_size < 3:
         raise ValueError("--alpha-grid-size must be at least 3")
     if args.dml_k_folds < 2:
         raise ValueError("--dml-k-folds must be at least 2")
+    if args.quantreg_max_iter < 1:
+        raise ValueError("--quantreg-max-iter must be at least 1")
     if args.alpha_max <= args.alpha_min:
         raise ValueError("--alpha-max must exceed --alpha-min")
     validate_chunk_args(args.chunk_index, args.num_chunks)
@@ -294,7 +327,6 @@ def main() -> None:
     if args.rerun_failed and not args.resume:
         print("--rerun-failed has no effect without --resume.")
 
-    warnings.filterwarnings("ignore", category=IterationLimitWarning)
     output_path = Path(args.output)
     estimators = tuple(args.estimators)
     alphas = np.linspace(args.alpha_min, args.alpha_max, args.alpha_grid_size)
@@ -333,6 +365,7 @@ def main() -> None:
         estimators=estimators,
         alphas=alphas,
         batch_size=args.batch_size,
+        n_jobs=args.n_jobs,
         resume=args.resume,
         rerun_failed=args.rerun_failed,
         dry_run=args.dry_run,
@@ -340,6 +373,8 @@ def main() -> None:
         num_chunks=args.num_chunks,
         preset=args.preset,
         dml_k_folds=args.dml_k_folds,
+        quantreg_max_iter=args.quantreg_max_iter,
+        show_quantreg_warnings=args.show_quantreg_warnings,
     )
     _write_manifest(
         args.manifest,
@@ -366,7 +401,10 @@ def main() -> None:
             estimators=estimators,
             output_path=output_path,
             append=append,
+            quantreg_max_iter=args.quantreg_max_iter,
             dml_k_folds=args.dml_k_folds,
+            n_jobs=args.n_jobs,
+            show_quantreg_warnings=args.show_quantreg_warnings,
         )
         completed += len(batch)
         elapsed = time.perf_counter() - start

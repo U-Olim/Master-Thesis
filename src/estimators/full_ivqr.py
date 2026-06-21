@@ -22,6 +22,7 @@ from inference.moments import (
     residuals_alpha,
     weighted_gmm_statistic,
 )
+from simulation.config import DEFAULT_QUANTREG_MAX_ITER
 from utils.validation import (
     validate_2d_array,
     validate_alpha_grid,
@@ -82,9 +83,12 @@ def _fit_control_quantile_regression(
     y_alpha: np.ndarray,
     x_design: np.ndarray,
     tau: float,
-    max_iter: int = 1000,
+    max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
 ) -> tuple[np.ndarray, bool, str]:
     """Fit Q_tau(Y - D alpha | X) using the intercept-augmented full controls."""
+    if max_iter <= 0:
+        raise ValueError("max_iter must be positive")
+
     beta_length = x_design.shape[1]
 
     try:
@@ -108,7 +112,7 @@ def _evaluate_alpha_full_ivqr(
     instruments: np.ndarray,
     alpha: float,
     tau: float,
-    max_iter: int = 1000,
+    max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
     """Evaluate the covariance-weighted full-control IVQR objective."""
@@ -137,11 +141,13 @@ def estimate_full_ivqr(
     alpha_max: float = 4.0,
     alpha_step: float = 0.05,
     confidence_level: float = 0.95,
-    max_iter: int = 1000,
+    max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     gmm_ridge: float = 1e-8,
 ) -> EstimationResult:
     """Estimate full-control IVQR by weighted GMM over an alpha grid."""
     start = perf_counter()
+    if max_iter <= 0:
+        raise ValueError("max_iter must be positive")
     validate_tau(tau)
     y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
 

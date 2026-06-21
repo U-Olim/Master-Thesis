@@ -26,6 +26,7 @@ from inference.moments import (
     residuals_alpha,
     weighted_gmm_statistic,
 )
+from simulation.config import DEFAULT_QUANTREG_MAX_ITER
 from utils.validation import (
     validate_alpha_grid,
     validate_data_arrays,
@@ -114,10 +115,12 @@ def fit_post_selection_beta(
     x_selected: np.ndarray,
     alpha: float,
     tau: float,
-    max_iter: int = 1000,
+    max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
 ) -> tuple[np.ndarray, bool, str]:
     """Profile selected-control beta(alpha) with intercept by QuantReg."""
     validate_tau(tau)
+    if max_iter <= 0:
+        raise ValueError("max_iter must be positive")
     y, d, x_selected = validate_data_arrays(y, d, x_selected)
     x_design = add_intercept(x_selected)
     beta_length = x_design.shape[1]
@@ -152,7 +155,7 @@ def evaluate_post_selection_alpha(
     x_selected: np.ndarray,
     alpha: float,
     tau: float,
-    max_iter: int = 1000,
+    max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
     """Evaluate the covariance-weighted post-selection IVQR objective."""
@@ -189,12 +192,14 @@ def estimate_post_selection_ivqr(
     selection_random_state: int | None = 123,
     selection_cv: int = 5,
     selection_max_iter: int = 10000,
-    quantreg_max_iter: int = 1000,
+    quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     gmm_ridge: float = 1e-8,
 ) -> EstimationResult:
     """Estimate post-selection IVQR by Lasso selection and weighted GMM."""
     start = perf_counter()
     validate_tau(tau)
+    if quantreg_max_iter <= 0:
+        raise ValueError("quantreg_max_iter must be positive")
     y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
 
     try:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import pandas as pd
 
@@ -22,6 +23,13 @@ ESTIMATOR_LABELS = {
     "full_ivqr": "Full-control IVQR",
     "post_selection_ivqr": "Post-selection IVQR",
     "dml_ivqr": "DML-IVQR",
+}
+ESTIMATOR_COLUMN_NAMES = {
+    "oracle": "oracle",
+    "oracle_ivqr": "oracle_ivqr",
+    "full_ivqr": "full",
+    "post_selection_ivqr": "post_selection",
+    "dml_ivqr": "dml",
 }
 CORE_METRICS = [
     "bias",
@@ -63,6 +71,38 @@ WIDE_TABLE_METRICS = {
 }
 
 
+def _safe_column_name(value: object) -> str:
+    name = re.sub(r"[^0-9a-zA-Z]+", "_", str(value).strip().lower()).strip("_")
+    return name or "unknown"
+
+
+def _wide_metric_column_name(estimator: object, metric: str) -> str:
+    estimator_name = str(estimator)
+    prefix = ESTIMATOR_COLUMN_NAMES.get(
+        estimator_name,
+        _safe_column_name(estimator_name),
+    )
+    return f"{prefix}_{metric}"
+
+
+def _flatten_columns(columns: pd.Index) -> list[object]:
+    if not isinstance(columns, pd.MultiIndex):
+        return list(columns)
+    flattened: list[object] = []
+    for column in columns.to_flat_index():
+        parts = [str(part) for part in column if part not in ("", None)]
+        flattened.append("_".join(parts))
+    return flattened
+
+
+def _assert_unique_columns(df: pd.DataFrame) -> None:
+    duplicated = df.columns[df.columns.duplicated()].tolist()
+    if duplicated:
+        raise ValueError(
+            f"table contains duplicate columns before rounding: {duplicated}"
+        )
+
+
 def _validate_summary_columns(summary: pd.DataFrame) -> None:
     required = set(TABLE_GROUP_COLUMNS + [ESTIMATOR_COLUMN])
     missing = sorted(required - set(summary.columns))
@@ -88,9 +128,17 @@ def _round_numeric(
         return df
     rounded = df.copy()
     for column in columns:
-        if column in rounded.columns:
-            values = pd.to_numeric(rounded[column], errors="coerce")
-            rounded[column] = values.round(round_digits)
+        if column not in rounded.columns:
+            continue
+        if isinstance(rounded[column], pd.DataFrame):
+            raise ValueError(
+                f"Column {column!r} is duplicated in table; "
+                "fix wide-table column construction."
+            )
+        rounded[column] = pd.to_numeric(
+            rounded[column], errors="coerce"
+        ).round(round_digits)
+    _assert_unique_columns(rounded)
     return rounded
 
 
@@ -179,15 +227,25 @@ def make_wide_metric_table(
         raise ValueError("duplicate scenario-estimator rows cannot be pivoted")
 
     labeled = add_estimator_labels(summary)
-    wide = labeled.pivot(index=index_columns, columns="estimator_label", values=metric)
+    wide = labeled.pivot(index=index_columns, columns=ESTIMATOR_COLUMN, values=metric)
+    wide.columns = _flatten_columns(wide.columns)
 
-    ordered_labels = [ESTIMATOR_LABELS[estimator] for estimator in ESTIMATOR_ORDER]
-    existing_ordered = [label for label in ordered_labels if label in wide.columns]
-    remaining = [label for label in wide.columns if label not in existing_ordered]
+    existing_ordered = [
+        estimator for estimator in ESTIMATOR_ORDER if estimator in wide.columns
+    ]
+    remaining = [estimator for estimator in wide.columns if estimator not in existing_ordered]
     wide = wide[existing_ordered + remaining]
+    wide = wide.rename(
+        columns={
+            estimator: _wide_metric_column_name(estimator, metric)
+            for estimator in wide.columns
+        }
+    )
     wide = wide.reset_index()
 
     metric_columns = [column for column in wide.columns if column not in index_columns]
+    assert not wide.columns.duplicated().any()
+    _assert_unique_columns(wide)
     return _round_numeric(wide, metric_columns, round_digits)
 
 

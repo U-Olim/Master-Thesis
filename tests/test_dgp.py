@@ -19,7 +19,9 @@ from dgp.true_parameters import get_oracle_control_count, get_oracle_control_ind
 from simulation.config import (
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_DML_K_FOLDS,
+    DEFAULT_N_JOBS,
     DEFAULT_OUTPUT,
+    DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
     FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
     FULL_CONTROL_BENCHMARK_DGPS,
@@ -56,6 +58,8 @@ def test_project_design_constants_exist() -> None:
     assert DEFAULT_OUTPUT == "results/raw/full_simulation_results.csv"
     assert DEFAULT_ALPHA_GRID_SIZE == 9
     assert DEFAULT_DML_K_FOLDS == 3
+    assert DEFAULT_N_JOBS == 6
+    assert DEFAULT_QUANTREG_MAX_ITER == 1000
     assert K_FOLDS == 3
 
 
