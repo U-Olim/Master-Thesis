@@ -136,8 +136,10 @@ def _apply_quick_test(args: argparse.Namespace) -> None:
     args.p_values = [10]
     args.pi_values = [1.0]
     args.taus = [0.5]
-    args.reps = 2
-    args.alpha_grid_size = 5
+    if args.reps is None:
+        args.reps = 2
+    if args.alpha_grid_size is None:
+        args.alpha_grid_size = 5
     args.estimators = ["oracle", "post_selection", "dml"]
     args.batch_size = 2
     if original_n_jobs == DEFAULT_N_JOBS:
@@ -256,8 +258,8 @@ def _validate_args(args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = _parse_args()
-    _apply_mode_defaults(args)
     _apply_quick_test(args)
+    _apply_mode_defaults(args)
     _validate_args(args)
     if args.rerun_failed and not args.resume:
         print("--rerun-failed has no effect without --resume.")

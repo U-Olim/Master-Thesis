@@ -116,7 +116,7 @@ def run_simulation_batch(
     dml_k_folds: int = DEFAULT_DML_K_FOLDS,
     dml_quantile_penalty: float = 0.01,
     dml_ridge_alpha: float = 1.0,
-    dml_fold_random_state: int | None = 123,
+    dml_fold_random_state: int | None = None,
     gmm_ridge: float = 1e-8,
     n_jobs: int = DEFAULT_N_JOBS,
     show_quantreg_warnings: bool = False,

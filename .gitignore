@@ -22,5 +22,6 @@ venv/
 env/
 ENV/
 .env
+.vscode/
 .ipynb_checkpoints/
 *.egg-info/

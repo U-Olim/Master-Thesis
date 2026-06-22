@@ -13,23 +13,23 @@ ESTIMATOR_COLUMN = "estimator"
 ESTIMATOR_ORDER = [
     "oracle",
     "oracle_ivqr",
-    "full_ivqr",
     "post_selection_ivqr",
     "dml_ivqr",
+    "full_control_ivqr",
 ]
 ESTIMATOR_LABELS = {
     "oracle_ivqr": "Oracle IVQR",
     "oracle": "Oracle IVQR",
-    "full_ivqr": "Full-control IVQR",
     "post_selection_ivqr": "Post-selection IVQR",
     "dml_ivqr": "DML-IVQR",
+    "full_control_ivqr": "Full-control IVQR",
 }
 ESTIMATOR_COLUMN_NAMES = {
     "oracle": "oracle",
     "oracle_ivqr": "oracle_ivqr",
-    "full_ivqr": "full",
     "post_selection_ivqr": "post_selection",
     "dml_ivqr": "dml",
+    "full_control_ivqr": "full_control",
 }
 CORE_METRICS = [
     "bias",

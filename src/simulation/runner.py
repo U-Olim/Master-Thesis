@@ -297,7 +297,7 @@ def run_single_replication(
     dml_k_folds: int = DEFAULT_DML_K_FOLDS,
     dml_quantile_penalty: float = 0.01,
     dml_ridge_alpha: float = 1.0,
-    dml_fold_random_state: int | None = 123,
+    dml_fold_random_state: int | None = None,
     gmm_ridge: float = 1e-8,
     show_quantreg_warnings: bool = False,
 ) -> list[dict[str, object]]:
@@ -332,15 +332,19 @@ def run_single_replication(
                         selection_cv=selection_cv,
                         selection_max_iter=selection_max_iter,
                         quantreg_max_iter=quantreg_max_iter,
-                        gmm_ridge=gmm_ridge,
                     )
                 elif estimator_name == "dml":
+                    fold_random_state = (
+                        design.seed
+                        if dml_fold_random_state is None
+                        else dml_fold_random_state
+                    )
                     result = estimator(
                         data,
                         tau=design.tau,
                         alphas=alphas,
                         k_folds=dml_k_folds,
-                        fold_random_state=dml_fold_random_state,
+                        fold_random_state=fold_random_state,
                         quantile_penalty=dml_quantile_penalty,
                         ridge_alpha=dml_ridge_alpha,
                         gmm_ridge=gmm_ridge,

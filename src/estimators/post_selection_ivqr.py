@@ -8,12 +8,10 @@ import numpy as np
 from sklearn.linear_model import LassoCV
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-from statsmodels.regression.quantile_regression import QuantReg
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
 from estimators.ch_ivqr_common import (
-    add_intercept,
     as_2d_instruments,
     evaluate_alpha_ch_ivqr,
 )
@@ -111,45 +109,6 @@ def select_controls_lasso(
     return selected, message
 
 
-def fit_post_selection_beta(
-    y: np.ndarray,
-    d: np.ndarray,
-    x_selected: np.ndarray,
-    alpha: float,
-    tau: float,
-    max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
-) -> tuple[np.ndarray, bool, str]:
-    """Profile selected-control beta(alpha) with intercept by QuantReg."""
-    validate_tau(tau)
-    if max_iter <= 0:
-        raise ValueError("max_iter must be positive")
-    y, d, x_selected = validate_data_arrays(y, d, x_selected)
-    x_design = add_intercept(x_selected)
-    beta_length = x_design.shape[1]
-
-    if beta_length >= len(y):
-        return (
-            np.full(beta_length, np.nan),
-            False,
-            "Post-selection IVQR infeasible: selected nuisance dimension is at least sample size.",
-        )
-
-    y_tilde = y - d * alpha
-
-    try:
-        result = QuantReg(y_tilde, x_design).fit(q=tau, max_iter=max_iter)
-        beta_hat = np.asarray(result.params, dtype=float)
-    except Exception as exc:  # noqa: BLE001 - QuantReg can fail in several ways.
-        return np.full(beta_length, np.nan), False, str(exc)
-
-    if beta_hat.shape != (beta_length,):
-        return np.full(beta_length, np.nan), False, "QuantReg returned invalid coefficient shape."
-    if not np.all(np.isfinite(beta_hat)):
-        return beta_hat, False, "QuantReg returned non-finite coefficients."
-
-    return beta_hat, True, "ok"
-
-
 def evaluate_post_selection_alpha(
     y: np.ndarray,
     d: np.ndarray,
@@ -158,7 +117,6 @@ def evaluate_post_selection_alpha(
     alpha: float,
     tau: float,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
-    gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
     """Evaluate post-selection CH-IVQR by testing gamma_Z(alpha)=0."""
     y, d, z, x_selected = validate_data_arrays(y, d, x_selected, z)
@@ -186,7 +144,6 @@ def estimate_post_selection_ivqr(
     selection_cv: int = 5,
     selection_max_iter: int = 10000,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
-    gmm_ridge: float = 1e-8,
 ) -> EstimationResult:
     """Estimate post-selection IVQR by Lasso selection and weighted GMM."""
     start = perf_counter()
@@ -252,7 +209,6 @@ def estimate_post_selection_ivqr(
                 alpha=float(alpha),
                 tau=tau,
                 max_iter=quantreg_max_iter,
-                gmm_ridge=gmm_ridge,
             )
         except Exception as exc:  # noqa: BLE001 - failed grid points are recorded.
             statistic, converged, message = np.inf, False, str(exc)

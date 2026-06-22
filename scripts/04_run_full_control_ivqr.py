@@ -55,13 +55,13 @@ MAX_ERROR_MESSAGE_LENGTH = 500
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run separate Full-Control IVQR benchmark.")
     parser.add_argument("--output", default=FULL_CONTROL_BENCHMARK_OUTPUT)
-    parser.add_argument("--reps", type=int, default=R_FULL_CONTROL_BENCHMARK)
+    parser.add_argument("--reps", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=5)
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS)
     parser.add_argument("--base-seed", type=int, default=54321)
     parser.add_argument("--alpha-min", type=float, default=-1.0)
     parser.add_argument("--alpha-max", type=float, default=3.0)
-    parser.add_argument("--alpha-grid-size", type=int, default=FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE)
+    parser.add_argument("--alpha-grid-size", type=int, default=None)
     parser.add_argument("--quantreg-max-iter", type=int, default=DEFAULT_QUANTREG_MAX_ITER)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--chunk-index", type=int, default=None)
@@ -81,6 +81,13 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _apply_defaults(args: argparse.Namespace) -> None:
+    if args.reps is None:
+        args.reps = R_FULL_CONTROL_BENCHMARK
+    if args.alpha_grid_size is None:
+        args.alpha_grid_size = FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE
+
+
 def _apply_quick_test(args: argparse.Namespace) -> None:
     if not args.quick_test:
         return
@@ -90,8 +97,10 @@ def _apply_quick_test(args: argparse.Namespace) -> None:
     args.p_values = [10]
     args.pi_values = [1.0]
     args.taus = [0.5]
-    args.reps = 2
-    args.alpha_grid_size = 5
+    if args.reps is None:
+        args.reps = 2
+    if args.alpha_grid_size is None:
+        args.alpha_grid_size = 5
     args.batch_size = 2
     if original_n_jobs == DEFAULT_N_JOBS:
         args.n_jobs = 1
@@ -262,6 +271,7 @@ def _validate_args(args: argparse.Namespace) -> None:
 def main() -> None:
     args = _parse_args()
     _apply_quick_test(args)
+    _apply_defaults(args)
     _validate_args(args)
     alphas = np.linspace(args.alpha_min, args.alpha_max, args.alpha_grid_size)
     output_path = Path(args.output)

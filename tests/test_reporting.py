@@ -197,7 +197,7 @@ def test_aggregate_results_ignores_status_failed_rows_for_performance_metrics() 
             "pi": [1.0, 1.0],
             "tau": [0.5, 0.5],
             "rep": [0, 1],
-            "estimator": ["full_ivqr", "full_ivqr"],
+            "estimator": ["full_control_ivqr", "full_control_ivqr"],
             "alpha_hat": [1.2, None],
             "alpha_true": [1.0, 1.0],
             "failed": [False, True],
@@ -211,7 +211,7 @@ def test_aggregate_results_ignores_status_failed_rows_for_performance_metrics() 
     )
 
     summary = aggregate_results(raw, expected_replications=2)
-    row = _row(summary, "full_ivqr")
+    row = _row(summary, "full_control_ivqr")
 
     assert row["valid_estimates"] == 1
     assert row["bias"] == pytest.approx(0.2)

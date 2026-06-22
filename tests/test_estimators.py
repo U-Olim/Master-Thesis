@@ -6,7 +6,6 @@ import warnings
 
 from dgp import generate_data
 from dgp.designs import Design
-from estimators import full_ivqr as full_ivqr_module
 from estimators import ch_ivqr_common
 from estimators.base import EstimationResult
 from estimators.dml_ivqr import (
@@ -19,16 +18,12 @@ from estimators.dml_ivqr import (
     make_folds,
     standardize_train_test,
 )
-from estimators.full_ivqr import (
-    add_intercept,
-    estimate_full_ivqr,
-)
+from estimators.ch_ivqr_common import add_intercept
 from estimators.full_control_ivqr import estimate_full_control_ivqr
 from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import (
     estimate_post_selection_ivqr,
     evaluate_post_selection_alpha,
-    fit_post_selection_beta,
     select_controls_lasso,
 )
 
@@ -45,7 +40,7 @@ def require_array(value: np.ndarray | None, name: str = "array") -> np.ndarray:
 
 def test_estimation_result_can_be_instantiated() -> None:
     result = EstimationResult(
-        estimator="full_ivqr",
+        estimator="full_control_ivqr",
         alpha_hat=None,
         alpha_true=1.0,
         tau=0.5,
@@ -66,7 +61,7 @@ def test_estimation_result_can_be_instantiated() -> None:
         runtime_seconds=0.0,
     )
 
-    assert result.estimator == "full_ivqr"
+    assert result.estimator == "full_control_ivqr"
     assert result.failed is True
     assert result.cr_empty is True
     assert result.cr_disconnected is None
@@ -110,28 +105,12 @@ def test_add_intercept_prepends_ones() -> None:
     assert np.allclose(x_design[:, 1:], x)
 
 
-def test_fit_profile_beta_works_on_small_data() -> None:
-    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
-    data = generate_data(design)
-
-    beta_hat, converged, message = full_ivqr_module._fit_control_quantile_regression(
-        y_alpha=data.y - data.d * data.alpha_true,
-        x_design=add_intercept(data.x),
-        tau=0.5,
-    )
-
-    assert message == "ok"
-    assert converged is True
-    assert beta_hat.shape == (data.x.shape[1] + 1,)
-    assert np.all(np.isfinite(beta_hat))
-
-
-def test_evaluate_full_ivqr_alpha_returns_finite_statistic() -> None:
+def test_evaluate_full_control_ivqr_alpha_returns_finite_statistic() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
     alpha_true = require_float(data.alpha_true, "alpha_true")
 
-    evaluation = full_ivqr_module._evaluate_alpha_ch_ivqr(
+    evaluation = ch_ivqr_common.evaluate_alpha_ch_ivqr(
         y=data.y,
         d=data.d,
         x_controls=data.x,
@@ -153,7 +132,7 @@ def test_ch_ivqr_design_includes_controls_and_excluded_instruments() -> None:
     x_controls = np.ones((8, 5))
     z = np.arange(8, dtype=float)
 
-    design, z_block = full_ivqr_module._ch_ivqr_design(x_controls, z)
+    design, z_block = ch_ivqr_common.ch_ivqr_design(x_controls, z)
 
     assert design.shape == (8, 7)
     assert z_block == slice(6, 7)
@@ -181,9 +160,9 @@ def test_ch_ivqr_evaluator_extracts_gamma_after_controls(
 
             return Result()
 
-    monkeypatch.setattr(full_ivqr_module, "QuantReg", FakeQuantReg)
+    monkeypatch.setattr(ch_ivqr_common, "QuantReg", FakeQuantReg)
 
-    evaluation = full_ivqr_module._evaluate_alpha_ch_ivqr(
+    evaluation = ch_ivqr_common.evaluate_alpha_ch_ivqr(
         y=np.arange(6, dtype=float),
         d=np.ones(6),
         x_controls=np.ones((6, 2)),
@@ -199,14 +178,14 @@ def test_ch_ivqr_evaluator_extracts_gamma_after_controls(
     assert evaluation.statistic == pytest.approx(1.0)
 
 
-def test_estimate_full_ivqr_returns_estimation_result() -> None:
+def test_estimate_full_control_ivqr_returns_estimation_result() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
     alphas = np.linspace(0.0, 2.0, 11)
 
-    result = estimate_full_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
+    result = estimate_full_control_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
 
-    assert result.estimator == "full_ivqr"
+    assert result.estimator == "full_control_ivqr"
     assert result.alpha_true == pytest.approx(data.alpha_true)
     assert result.tau == 0.5
     assert result.failed is False
@@ -219,7 +198,7 @@ def test_estimate_full_ivqr_returns_estimation_result() -> None:
     assert result.runtime_seconds >= 0.0
 
 
-def test_estimate_full_ivqr_infeasible_high_dimensional_case_fails_cleanly() -> None:
+def test_estimate_full_control_ivqr_infeasible_high_dimensional_case_fails_cleanly() -> None:
     design = Design("dgp1", n=20, p=25, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
 
@@ -232,7 +211,7 @@ def test_estimate_full_ivqr_infeasible_high_dimensional_case_fails_cleanly() -> 
     assert "regressors=27" in result.message
 
 
-def test_estimate_full_ivqr_some_failed_alphas_still_converges(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_estimate_full_control_ivqr_some_failed_alphas_still_converges(monkeypatch: pytest.MonkeyPatch) -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
     alphas = np.array([0.0, 1.0, 2.0])
@@ -252,7 +231,7 @@ def test_estimate_full_ivqr_some_failed_alphas_still_converges(monkeypatch: pyte
 
     monkeypatch.setattr(ch_ivqr_common, "evaluate_alpha_ch_ivqr", fake_evaluate)
 
-    result = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
+    result = estimate_full_control_ivqr(data, tau=0.5, alphas=alphas)
 
     assert result.failed is False
     assert result.converged is True
@@ -262,7 +241,7 @@ def test_estimate_full_ivqr_some_failed_alphas_still_converges(monkeypatch: pyte
     assert "failed_alpha_points=1/3" in result.message
 
 
-def test_estimate_full_ivqr_all_failed_alphas_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_estimate_full_control_ivqr_all_failed_alphas_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
     alphas = np.array([0.0, 1.0, 2.0])
@@ -279,7 +258,7 @@ def test_estimate_full_ivqr_all_failed_alphas_fails(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(ch_ivqr_common, "evaluate_alpha_ch_ivqr", fake_evaluate)
 
-    result = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
+    result = estimate_full_control_ivqr(data, tau=0.5, alphas=alphas)
 
     assert result.failed is True
     assert result.converged is False
@@ -289,20 +268,20 @@ def test_estimate_full_ivqr_all_failed_alphas_fails(monkeypatch: pytest.MonkeyPa
     assert "All alpha-grid evaluations failed" in result.message
 
 
-def test_estimate_full_ivqr_invalid_tau_raises_value_error() -> None:
+def test_estimate_full_control_ivqr_invalid_tau_raises_value_error() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
 
     with pytest.raises(ValueError):
-        estimate_full_ivqr(data, tau=0.0, alphas=np.linspace(0.0, 2.0, 5))
+        estimate_full_control_ivqr(data, tau=0.0, alphas=np.linspace(0.0, 2.0, 5))
 
 
-def test_estimate_full_ivqr_invalid_max_iter_raises_value_error() -> None:
+def test_estimate_full_control_ivqr_invalid_max_iter_raises_value_error() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
 
     with pytest.raises(ValueError, match="max_iter must be positive"):
-        estimate_full_ivqr(
+        estimate_full_control_ivqr(
             data,
             tau=0.5,
             alphas=np.linspace(0.0, 2.0, 5),
@@ -310,7 +289,7 @@ def test_estimate_full_ivqr_invalid_max_iter_raises_value_error() -> None:
         )
 
 
-def test_estimate_full_ivqr_passes_max_iter_to_quantreg_fit(
+def test_estimate_full_control_ivqr_passes_max_iter_to_quantreg_fit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
@@ -329,7 +308,7 @@ def test_estimate_full_ivqr_passes_max_iter_to_quantreg_fit(
         fake_evaluate_alpha_ch_ivqr,
     )
 
-    result = estimate_full_ivqr(
+    result = estimate_full_control_ivqr(
         data,
         tau=0.5,
         alphas=np.array([alpha_true]),
@@ -341,14 +320,14 @@ def test_estimate_full_ivqr_passes_max_iter_to_quantreg_fit(
     assert captured["max_iter"] == 2000
 
 
-def test_estimate_full_ivqr_feasible_high_pn_emits_no_pn_warning() -> None:
+def test_estimate_full_control_ivqr_feasible_high_pn_emits_no_pn_warning() -> None:
     design = Design("dgp1", n=30, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
     alpha_true = require_float(data.alpha_true, "alpha_true")
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        estimate_full_ivqr(
+        estimate_full_control_ivqr(
             data,
             tau=0.5,
             alphas=np.array([alpha_true]),
@@ -360,11 +339,11 @@ def test_estimate_full_ivqr_feasible_high_pn_emits_no_pn_warning() -> None:
     assert not any("p/n" in message or "high-dimensional" in message for message in messages)
 
 
-def test_estimate_full_ivqr_confidence_region_fields_are_coherent() -> None:
+def test_estimate_full_control_ivqr_confidence_region_fields_are_coherent() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
 
-    result = estimate_full_ivqr(data, tau=0.5, alphas=np.linspace(0.0, 2.0, 11))
+    result = estimate_full_control_ivqr(data, tau=0.5, alphas=np.linspace(0.0, 2.0, 11))
 
     if result.cr_empty is False:
         assert result.cr_lower is not None
@@ -373,13 +352,13 @@ def test_estimate_full_ivqr_confidence_region_fields_are_coherent() -> None:
         assert result.cr_upper >= result.cr_lower
 
 
-def test_estimate_full_ivqr_output_is_deterministic() -> None:
+def test_estimate_full_control_ivqr_output_is_deterministic() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
     alphas = np.linspace(0.0, 2.0, 11)
 
-    result_1 = estimate_full_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
-    result_2 = estimate_full_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
+    result_1 = estimate_full_control_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
+    result_2 = estimate_full_control_ivqr(data, tau=0.5, alphas=alphas, gmm_ridge=1e-6)
 
     assert result_1.alpha_hat is not None
     assert result_2.alpha_hat is not None
@@ -440,44 +419,6 @@ def test_select_controls_lasso_handles_no_signal_artificial_data() -> None:
     assert isinstance(message, str)
 
 
-def test_fit_post_selection_beta_works_with_selected_controls() -> None:
-    data = generate_data(Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
-    x_selected = data.x[:, :3]
-    alpha_true = require_float(data.alpha_true, "alpha_true")
-
-    beta_hat, converged, message = fit_post_selection_beta(
-        data.y,
-        data.d,
-        x_selected,
-        alpha=alpha_true,
-        tau=0.5,
-    )
-
-    assert message == "ok"
-    assert converged is True
-    assert beta_hat.shape == (4,)
-    assert np.all(np.isfinite(beta_hat))
-
-
-def test_fit_post_selection_beta_works_with_zero_selected_controls() -> None:
-    data = generate_data(Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
-    x_selected = np.empty((data.x.shape[0], 0))
-    alpha_true = require_float(data.alpha_true, "alpha_true")
-
-    beta_hat, converged, message = fit_post_selection_beta(
-        data.y,
-        data.d,
-        x_selected,
-        alpha=alpha_true,
-        tau=0.5,
-    )
-
-    assert message == "ok"
-    assert converged is True
-    assert beta_hat.shape == (1,)
-    assert np.all(np.isfinite(beta_hat))
-
-
 def test_evaluate_post_selection_alpha_returns_finite_statistic() -> None:
     data = generate_data(Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
     x_selected = data.x[:, :3]
@@ -490,7 +431,6 @@ def test_evaluate_post_selection_alpha_returns_finite_statistic() -> None:
         x_selected,
         alpha=alpha_true,
         tau=0.5,
-        gmm_ridge=1e-6,
     )
 
     assert message == "ok"
@@ -507,7 +447,7 @@ def test_post_selection_alpha_uses_ch_ivqr_evaluator(
     def fake_evaluate(**kwargs):
         captured["x_shape"] = kwargs["x_controls"].shape
         captured["z_shape"] = np.asarray(kwargs["z"]).shape
-        return full_ivqr_module.AlphaEvaluation(
+        return ch_ivqr_common.AlphaEvaluation(
             statistic=1.25,
             gamma_hat=np.array([0.5]),
             cov_gamma=np.array([[0.2]]),
@@ -545,7 +485,6 @@ def test_estimate_post_selection_ivqr_returns_estimation_result() -> None:
         tau=0.5,
         alphas=alphas,
         selection_cv=3,
-        gmm_ridge=1e-6,
     )
 
     assert result.estimator == "post_selection_ivqr"
@@ -560,24 +499,6 @@ def test_estimate_post_selection_ivqr_returns_estimation_result() -> None:
     assert result.alpha_grid_size == len(alphas)
     assert result.failed_alpha_count == 0
     assert result.runtime_seconds >= 0.0
-
-
-def test_fit_post_selection_beta_infeasible_selected_dimension_fails_cleanly() -> None:
-    y = np.array([1.0, 2.0, 3.0, 4.0])
-    d = np.array([0.0, 1.0, 0.0, 1.0])
-    x_selected = np.ones((4, 3))
-
-    beta_hat, converged, message = fit_post_selection_beta(
-        y,
-        d,
-        x_selected,
-        alpha=1.0,
-        tau=0.5,
-    )
-
-    assert converged is False
-    assert np.all(np.isnan(beta_hat))
-    assert "infeasible" in message
 
 
 def test_estimate_post_selection_ivqr_invalid_tau_raises_value_error() -> None:
@@ -597,7 +518,6 @@ def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
         alphas=alphas,
         selection_random_state=123,
         selection_cv=3,
-        gmm_ridge=1e-6,
     )
     result_2 = estimate_post_selection_ivqr(
         data,
@@ -605,7 +525,6 @@ def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
         alphas=alphas,
         selection_random_state=123,
         selection_cv=3,
-        gmm_ridge=1e-6,
     )
 
     assert result_1.alpha_hat is not None
@@ -628,7 +547,7 @@ def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
 
 
 def test_estimate_oracle_ivqr_is_not_full_control_alias() -> None:
-    assert estimate_oracle_ivqr is not estimate_full_ivqr
+    assert estimate_oracle_ivqr is not estimate_full_control_ivqr
 
 
 def test_estimate_oracle_ivqr_uses_reduced_controls(monkeypatch: pytest.MonkeyPatch) -> None:
