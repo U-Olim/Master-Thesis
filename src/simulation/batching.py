@@ -107,7 +107,7 @@ def _row_sort_key(row: dict[str, object]) -> tuple[object, ...]:
 def run_simulation_batch(
     designs: list[Design],
     alphas: np.ndarray,
-    estimators: tuple[str, ...] = ("full", "post_selection", "dml"),
+    estimators: tuple[str, ...] = ("oracle", "post_selection", "dml"),
     output_path: str | Path | None = None,
     append: bool = False,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,

@@ -106,14 +106,14 @@ def test_run_pilot_simulation_returns_dataframe() -> None:
     results = run_pilot_simulation(reps=2, n=80, p=5, alphas=alphas)
 
     assert len(results) == 6
-    assert set(results["estimator"]) == {"full_ivqr", "post_selection_ivqr", "dml_ivqr"}
+    assert set(results["estimator"]) == {"oracle", "post_selection_ivqr", "dml_ivqr"}
     assert REQUIRED_KEYS.issubset(results.columns)
     assert {"cr_disconnected", "failed_alpha_count", "alpha_grid_size"}.issubset(
         results.columns
     )
 
 
-def test_run_pilot_simulation_default_grid_has_9_points() -> None:
+def test_run_pilot_simulation_default_grid_has_21_points() -> None:
     results = run_pilot_simulation(
         dgp="dgp1",
         n=80,
@@ -125,7 +125,7 @@ def test_run_pilot_simulation_default_grid_has_9_points() -> None:
         alphas=None,
     )
 
-    assert results["alpha_grid_size"].dropna().unique().tolist() == [9]
+    assert results["alpha_grid_size"].dropna().unique().tolist() == [21]
 
 
 def test_run_pilot_simulation_explicit_grid_size_has_17_points() -> None:
@@ -172,9 +172,8 @@ def test_valid_estimators_includes_oracle() -> None:
     assert "oracle" in VALID_ESTIMATORS
 
 
-def test_default_pilot_estimators_do_not_include_oracle() -> None:
-    assert DEFAULT_PILOT_ESTIMATORS == ("full", "post_selection", "dml")
-    assert "oracle" not in DEFAULT_PILOT_ESTIMATORS
+def test_default_pilot_estimators_are_main_estimators() -> None:
+    assert DEFAULT_PILOT_ESTIMATORS == ("oracle", "post_selection", "dml")
 
 
 def test_default_dml_k_folds_is_three() -> None:
@@ -208,13 +207,14 @@ def test_quantreg_iteration_warning_filter_can_show_warnings() -> None:
     assert issubclass(caught[0].category, IterationLimitWarning)
 
 
-def test_quantreg_max_iter_is_passed_to_full_estimator(monkeypatch) -> None:
+def test_quantreg_max_iter_is_passed_to_oracle_estimator(monkeypatch) -> None:
     captured: dict[str, int] = {}
 
-    def fake_full_estimator(data, tau, alphas, max_iter, gmm_ridge):
+    def fake_oracle_estimator(data, tau, alphas, oracle_indices, max_iter, gmm_ridge):
         captured["max_iter"] = max_iter
+        captured["oracle_indices"] = len(oracle_indices)
         return EstimationResult(
-            estimator="full_ivqr",
+            estimator="oracle",
             alpha_hat=1.0,
             alpha_true=data.alpha_true,
             tau=tau,
@@ -235,18 +235,19 @@ def test_quantreg_max_iter_is_passed_to_full_estimator(monkeypatch) -> None:
             runtime_seconds=0.0,
         )
 
-    monkeypatch.setattr(runner_module, "estimate_full_ivqr", fake_full_estimator)
-    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    monkeypatch.setattr(runner_module, "estimate_oracle_ivqr", fake_oracle_estimator)
+    design = Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
 
     rows = run_single_replication(
         design,
         np.linspace(0.0, 2.0, 5),
-        estimators=("full",),
+        estimators=("oracle",),
         quantreg_max_iter=123,
     )
 
     assert len(rows) == 1
     assert captured["max_iter"] == 123
+    assert captured["oracle_indices"] == 10
 
 
 def test_dml_k_folds_is_passed_to_dml_estimator(monkeypatch) -> None:
@@ -369,65 +370,43 @@ def test_make_simulation_grid_loop_order_is_deterministic() -> None:
 def test_run_single_replication_catches_unexpected_estimator_exception(
     monkeypatch,
 ) -> None:
-    def broken_full_estimator(*args, **kwargs):
+    def broken_oracle_estimator(*args, **kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(runner_module, "estimate_full_ivqr", broken_full_estimator)
-    design = Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)
+    monkeypatch.setattr(runner_module, "estimate_oracle_ivqr", broken_oracle_estimator)
+    design = Design("dgp1", 80, 20, 1.0, 0.5, rep=0, seed=123)
 
     rows = run_single_replication(
         design,
         np.linspace(0.0, 2.0, 5),
-        estimators=("full", "post_selection"),
+        estimators=("oracle", "post_selection"),
     )
 
     assert len(rows) == 2
     by_estimator = {row["estimator"]: row for row in rows}
-    assert by_estimator["full_ivqr"]["failed"] is True
-    assert by_estimator["full_ivqr"]["status"] == "failed"
-    assert by_estimator["full_ivqr"]["error_type"] == "RuntimeError"
-    assert by_estimator["full_ivqr"]["error_message"] == "boom"
-    assert by_estimator["full_ivqr"]["converged"] is False
-    full_message = by_estimator["full_ivqr"]["message"]
-    assert isinstance(full_message, str)
-    assert "Unexpected estimator error: RuntimeError: boom" in full_message
+    assert by_estimator["oracle"]["failed"] is True
+    assert by_estimator["oracle"]["status"] == "failed"
+    assert by_estimator["oracle"]["error_type"] == "RuntimeError"
+    assert by_estimator["oracle"]["error_message"] == "boom"
+    assert by_estimator["oracle"]["converged"] is False
+    oracle_message = by_estimator["oracle"]["message"]
+    assert isinstance(oracle_message, str)
+    assert "Unexpected estimator error: RuntimeError: boom" in oracle_message
     assert "post_selection_ivqr" in by_estimator
-    assert by_estimator["post_selection_ivqr"]["message"] != by_estimator["full_ivqr"][
+    assert by_estimator["post_selection_ivqr"]["message"] != by_estimator["oracle"][
         "message"
     ]
 
 
-def test_run_single_replication_records_infeasible_full_control_failure() -> None:
-    design = Design("dgp1", 20, 25, 1.0, 0.5, rep=0, seed=123)
+def test_run_single_replication_rejects_full_control_in_main_runner() -> None:
+    design = Design("dgp1", 80, 20, 1.0, 0.5, rep=0, seed=123)
 
-    rows = run_single_replication(
-        design,
-        np.linspace(0.0, 2.0, 5),
-        estimators=("full",),
-    )
-
-    assert len(rows) == 1
-    row = rows[0]
-    assert row["estimator"] == "full_ivqr"
-    assert row["status"] == "failed"
-    assert row["failed"] is True
-    assert row["error_type"] == "ValueError"
-    assert "Received n=20, p=25" in str(row["error_message"])
-    assert row["alpha_hat"] is None
-
-
-def test_run_single_replication_successful_row_has_ok_status() -> None:
-    design = Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)
-
-    rows = run_single_replication(
-        design,
-        np.linspace(0.0, 2.0, 5),
-        estimators=("full",),
-    )
-
-    assert len(rows) == 1
-    assert rows[0]["status"] == "ok"
-    assert rows[0]["error_type"] is None
+    with pytest.raises(ValueError, match="Unknown estimator"):
+        run_single_replication(
+            design,
+            np.linspace(0.0, 2.0, 5),
+            estimators=("full",),
+        )
 
 
 def test_run_single_replication_accepts_oracle_estimator() -> None:
@@ -872,9 +851,9 @@ def test_full_simulation_dry_run_does_not_write_output_csv(
     assert manifest_path.exists()
 
 
-def test_full_simulation_main_preset_excludes_full_control_by_default() -> None:
+def test_full_simulation_fast_mode_defaults_exclude_full_control() -> None:
     args = full_simulation_cli.argparse.Namespace(
-        preset="main",
+        mode="fast",
         estimators=None,
         dgps=None,
         n_values=None,
@@ -884,9 +863,12 @@ def test_full_simulation_main_preset_excludes_full_control_by_default() -> None:
         reps=None,
         alpha_grid_size=None,
         output=None,
+        summary_output=None,
+        tables_dir=None,
+        figures_dir=None,
     )
 
-    full_simulation_cli._apply_preset_defaults(args)
+    full_simulation_cli._apply_mode_defaults(args)
 
     assert args.estimators == ["oracle", "post_selection", "dml"]
     assert "full" not in args.estimators
@@ -895,14 +877,17 @@ def test_full_simulation_main_preset_excludes_full_control_by_default() -> None:
     assert args.p_values == [200, 500]
     assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
-    assert args.reps == 100
-    assert args.alpha_grid_size == 9
-    assert args.output == "results/raw/full_simulation_results.csv"
+    assert args.reps == 10
+    assert args.alpha_grid_size == 21
+    assert args.output == "results/raw/fast_simulation_results.csv"
+    assert args.summary_output == "results/summary/fast_summary.csv"
+    assert args.tables_dir == "results/tables"
+    assert args.figures_dir == "results/figures"
 
 
-def test_full_simulation_full_control_benchmark_preset() -> None:
+def test_full_simulation_full_mode_defaults_use_500_reps() -> None:
     args = full_simulation_cli.argparse.Namespace(
-        preset="full-control-benchmark",
+        mode="full",
         estimators=None,
         dgps=None,
         n_values=None,
@@ -912,51 +897,61 @@ def test_full_simulation_full_control_benchmark_preset() -> None:
         reps=None,
         alpha_grid_size=None,
         output=None,
+        summary_output=None,
+        tables_dir=None,
+        figures_dir=None,
     )
 
-    full_simulation_cli._apply_preset_defaults(args)
+    full_simulation_cli._apply_mode_defaults(args)
 
-    assert args.estimators == ["full"]
+    assert args.estimators == ["oracle", "post_selection", "dml"]
     assert args.dgps == ["dgp1", "dgp2", "dgp3"]
     assert args.n_values == [500, 1000]
-    assert args.p_values == [100, 200]
-    assert args.pi_values == [1.0, 0.5, 0.25]
+    assert args.p_values == [200, 500]
+    assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
-    assert args.reps == 100
-    assert args.alpha_grid_size == 9
-    assert args.output.endswith("full_control_benchmark_R100.csv")
+    assert args.reps == 500
+    assert args.alpha_grid_size == 21
+    assert args.output == "results/raw/full_simulation_results.csv"
+    assert args.summary_output == "results/summary/full_summary.csv"
 
 
-def test_full_simulation_preset_respects_explicit_overrides() -> None:
+def test_full_simulation_mode_defaults_respect_explicit_overrides() -> None:
     args = full_simulation_cli.argparse.Namespace(
-        preset="full-control-benchmark",
-        estimators=["full"],
+        mode="fast",
+        estimators=["oracle"],
         dgps=["dgp1"],
         n_values=[500],
-        p_values=[100],
+        p_values=[200],
         pi_values=None,
         taus=None,
         reps=10,
         alpha_grid_size=3,
         output="custom.csv",
+        summary_output="custom_summary.csv",
+        tables_dir="custom_tables",
+        figures_dir="custom_figures",
     )
 
-    full_simulation_cli._apply_preset_defaults(args)
+    full_simulation_cli._apply_mode_defaults(args)
 
-    assert args.estimators == ["full"]
+    assert args.estimators == ["oracle"]
     assert args.dgps == ["dgp1"]
     assert args.n_values == [500]
-    assert args.p_values == [100]
-    assert args.pi_values == [1.0, 0.5, 0.25]
+    assert args.p_values == [200]
+    assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 10
     assert args.alpha_grid_size == 3
     assert args.output == "custom.csv"
+    assert args.summary_output == "custom_summary.csv"
+    assert args.tables_dir == "custom_tables"
+    assert args.figures_dir == "custom_figures"
 
 
-def test_full_simulation_main_preset_respects_alpha_grid_override() -> None:
+def test_full_simulation_main_mode_respects_alpha_grid_override() -> None:
     args = full_simulation_cli.argparse.Namespace(
-        preset="main",
+        mode="fast",
         estimators=None,
         dgps=None,
         n_values=None,
@@ -966,9 +961,12 @@ def test_full_simulation_main_preset_respects_alpha_grid_override() -> None:
         reps=None,
         alpha_grid_size=13,
         output=None,
+        summary_output=None,
+        tables_dir=None,
+        figures_dir=None,
     )
 
-    full_simulation_cli._apply_preset_defaults(args)
+    full_simulation_cli._apply_mode_defaults(args)
 
     assert args.estimators == ["oracle", "post_selection", "dml"]
     assert args.alpha_grid_size == 13
@@ -981,7 +979,7 @@ def test_full_simulation_parser_dml_k_folds_default_and_override(monkeypatch) ->
 
     monkeypatch.setattr(
         "sys.argv",
-        ["02_run_full_simulation.py", "--preset", "main", "--dml-k-folds", "5"],
+        ["02_run_full_simulation.py", "--mode", "full", "--dml-k-folds", "5"],
     )
     args = full_simulation_cli._parse_args()
     assert args.dml_k_folds == 5
@@ -995,7 +993,7 @@ def test_full_simulation_parser_n_jobs_default_and_override(monkeypatch) -> None
     for n_jobs in (1, 4, 6):
         monkeypatch.setattr(
             "sys.argv",
-            ["02_run_full_simulation.py", "--preset", "main", "--n-jobs", str(n_jobs)],
+            ["02_run_full_simulation.py", "--mode", "full", "--n-jobs", str(n_jobs)],
         )
         args = full_simulation_cli._parse_args()
         assert args.n_jobs == n_jobs
@@ -1013,8 +1011,8 @@ def test_full_simulation_parser_quantreg_max_iter_default_and_override(
         "sys.argv",
         [
             "02_run_full_simulation.py",
-            "--preset",
-            "main",
+            "--mode",
+            "full",
             "--quantreg-max-iter",
             "2000",
             "--show-quantreg-warnings",
@@ -1056,33 +1054,39 @@ def test_full_simulation_rejects_invalid_quantreg_max_iter(monkeypatch) -> None:
         full_simulation_main()
 
 
-def test_manual_full_control_uses_benchmark_scenario_defaults() -> None:
+def test_main_runner_validation_rejects_full_control() -> None:
     args = full_simulation_cli.argparse.Namespace(
-        preset="main",
+        mode="fast",
         estimators=["full"],
-        dgps=None,
+        dgps=["dgp1"],
         n_values=[500],
         p_values=[100],
-        pi_values=None,
-        taus=None,
+        pi_values=[1.0],
+        taus=[0.5],
         reps=1,
         alpha_grid_size=3,
         output="manual.csv",
+        summary_output=None,
+        tables_dir=None,
+        figures_dir=None,
+        batch_size=1,
+        n_jobs=1,
+        dml_k_folds=3,
+        quantreg_max_iter=1000,
+        alpha_min=-1.0,
+        alpha_max=3.0,
+        chunk_index=None,
+        num_chunks=None,
+        max_designs=None,
     )
 
-    full_simulation_cli._apply_preset_defaults(args)
-
-    assert args.estimators == ["full"]
-    assert args.dgps == ["dgp1"]
-    assert args.pi_values == [1.0]
-    assert args.taus == [0.5]
-    assert args.alpha_grid_size == 3
-    assert args.output == "manual.csv"
+    with pytest.raises(ValueError, match="Main runner only allows"):
+        full_simulation_cli._validate_args(args)
 
 
 def test_manual_oracle_uses_single_scenario_defaults() -> None:
     args = full_simulation_cli.argparse.Namespace(
-        preset="main",
+        mode="fast",
         estimators=["oracle"],
         dgps=None,
         n_values=[100],
@@ -1092,11 +1096,14 @@ def test_manual_oracle_uses_single_scenario_defaults() -> None:
         reps=1,
         alpha_grid_size=3,
         output="oracle.csv",
+        summary_output=None,
+        tables_dir=None,
+        figures_dir=None,
     )
 
-    full_simulation_cli._apply_preset_defaults(args)
+    full_simulation_cli._apply_mode_defaults(args)
 
     assert args.estimators == ["oracle"]
-    assert args.dgps == ["dgp1"]
-    assert args.pi_values == [1.0]
-    assert args.taus == [0.5]
+    assert args.dgps == ["dgp1", "dgp2", "dgp3"]
+    assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
+    assert args.taus == [0.25, 0.5, 0.75]

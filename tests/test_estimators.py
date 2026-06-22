@@ -7,6 +7,7 @@ import warnings
 from dgp import generate_data
 from dgp.designs import Design
 from estimators import full_ivqr as full_ivqr_module
+from estimators import ch_ivqr_common
 from estimators.base import EstimationResult
 from estimators.dml_ivqr import (
     _build_dml_fold_cache,
@@ -22,6 +23,7 @@ from estimators.full_ivqr import (
     add_intercept,
     estimate_full_ivqr,
 )
+from estimators.full_control_ivqr import estimate_full_control_ivqr
 from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import (
     estimate_post_selection_ivqr,
@@ -221,25 +223,34 @@ def test_estimate_full_ivqr_infeasible_high_dimensional_case_fails_cleanly() -> 
     design = Design("dgp1", n=20, p=25, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
 
-    with pytest.raises(
-        ValueError,
-        match=r"Received n=20, p=25, dim_z=1, regressors=27",
-    ):
-        estimate_full_ivqr(data, tau=0.5, alphas=np.linspace(0.0, 2.0, 5))
+    result = estimate_full_control_ivqr(data, tau=0.5, alphas=np.linspace(0.0, 2.0, 5))
+
+    assert result.estimator == "full_control_ivqr"
+    assert result.failed is True
+    assert result.converged is False
+    assert result.alpha_hat is None
+    assert "regressors=27" in result.message
 
 
 def test_estimate_full_ivqr_some_failed_alphas_still_converges(monkeypatch: pytest.MonkeyPatch) -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
     alphas = np.array([0.0, 1.0, 2.0])
-    original = full_ivqr_module._evaluate_alpha_full_ivqr
+    original = ch_ivqr_common.evaluate_alpha_ch_ivqr
 
-    def fake_evaluate(*args: object, **kwargs: object) -> tuple[float, bool, str]:
+    def fake_evaluate(*args: object, **kwargs: object):
         if kwargs["alpha"] == 1.0:
-            return np.inf, False, "forced failure"
+            return ch_ivqr_common.AlphaEvaluation(
+                statistic=np.inf,
+                gamma_hat=np.array([np.nan]),
+                cov_gamma=np.array([[np.nan]]),
+                dim_z=1,
+                converged=False,
+                message="forced failure",
+            )
         return original(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(full_ivqr_module, "_evaluate_alpha_full_ivqr", fake_evaluate)
+    monkeypatch.setattr(ch_ivqr_common, "evaluate_alpha_ch_ivqr", fake_evaluate)
 
     result = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
 
@@ -256,10 +267,17 @@ def test_estimate_full_ivqr_all_failed_alphas_fails(monkeypatch: pytest.MonkeyPa
     data = generate_data(design)
     alphas = np.array([0.0, 1.0, 2.0])
 
-    def fake_evaluate(*args: object, **kwargs: object) -> tuple[float, bool, str]:
-        return np.inf, False, "forced failure"
+    def fake_evaluate(*args: object, **kwargs: object):
+        return ch_ivqr_common.AlphaEvaluation(
+            statistic=np.inf,
+            gamma_hat=np.array([np.nan]),
+            cov_gamma=np.array([[np.nan]]),
+            dim_z=1,
+            converged=False,
+            message="forced failure",
+        )
 
-    monkeypatch.setattr(full_ivqr_module, "_evaluate_alpha_full_ivqr", fake_evaluate)
+    monkeypatch.setattr(ch_ivqr_common, "evaluate_alpha_ch_ivqr", fake_evaluate)
 
     result = estimate_full_ivqr(data, tau=0.5, alphas=alphas)
 
@@ -299,16 +317,16 @@ def test_estimate_full_ivqr_passes_max_iter_to_quantreg_fit(
     data = generate_data(design)
     alpha_true = require_float(data.alpha_true, "alpha_true")
     captured: dict[str, int] = {}
-    original = full_ivqr_module._evaluate_alpha_full_ivqr
+    original = ch_ivqr_common.evaluate_alpha_ch_ivqr
 
-    def fake_evaluate_alpha_full_ivqr(*args, **kwargs):
+    def fake_evaluate_alpha_ch_ivqr(*args, **kwargs):
         captured["max_iter"] = kwargs["max_iter"]
         return original(*args, **kwargs)
 
     monkeypatch.setattr(
-        full_ivqr_module,
-        "_evaluate_alpha_full_ivqr",
-        fake_evaluate_alpha_full_ivqr,
+        ch_ivqr_common,
+        "evaluate_alpha_ch_ivqr",
+        fake_evaluate_alpha_ch_ivqr,
     )
 
     result = estimate_full_ivqr(
@@ -617,12 +635,12 @@ def test_estimate_oracle_ivqr_uses_reduced_controls(monkeypatch: pytest.MonkeyPa
     data = generate_data(Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123))
     captured: dict[str, tuple[int, int]] = {}
 
-    def fake_full_estimator(reduced_data, **kwargs):
-        captured["x_shape"] = reduced_data.x.shape
+    def fake_common_estimator(data, x_controls, estimator_name, **kwargs):
+        captured["x_shape"] = x_controls.shape
         return EstimationResult(
-            estimator="full_ivqr",
+            estimator=estimator_name,
             alpha_hat=1.0,
-            alpha_true=reduced_data.alpha_true,
+            alpha_true=data.alpha_true,
             tau=kwargs["tau"],
             converged=True,
             failed=False,
@@ -641,10 +659,9 @@ def test_estimate_oracle_ivqr_uses_reduced_controls(monkeypatch: pytest.MonkeyPa
             runtime_seconds=0.0,
         )
 
-    monkeypatch.setattr(full_ivqr_module, "estimate_full_ivqr", fake_full_estimator)
     import estimators.oracle_ivqr as oracle_module
 
-    monkeypatch.setattr(oracle_module, "estimate_full_ivqr", fake_full_estimator)
+    monkeypatch.setattr(oracle_module, "estimate_ch_ivqr_controls", fake_common_estimator)
 
     result = estimate_oracle_ivqr(
         data,
@@ -662,12 +679,12 @@ def test_estimate_oracle_ivqr_accepts_array_api(monkeypatch: pytest.MonkeyPatch)
     data = generate_data(Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123))
     captured: dict[str, tuple[int, int]] = {}
 
-    def fake_full_estimator(reduced_data, **kwargs):
-        captured["x_shape"] = reduced_data.x.shape
+    def fake_common_estimator(data, x_controls, estimator_name, **kwargs):
+        captured["x_shape"] = x_controls.shape
         return EstimationResult(
-            estimator="full_ivqr",
+            estimator=estimator_name,
             alpha_hat=1.0,
-            alpha_true=reduced_data.alpha_true,
+            alpha_true=data.alpha_true,
             tau=kwargs["tau"],
             converged=True,
             failed=False,
@@ -688,7 +705,7 @@ def test_estimate_oracle_ivqr_accepts_array_api(monkeypatch: pytest.MonkeyPatch)
 
     import estimators.oracle_ivqr as oracle_module
 
-    monkeypatch.setattr(oracle_module, "estimate_full_ivqr", fake_full_estimator)
+    monkeypatch.setattr(oracle_module, "estimate_ch_ivqr_controls", fake_common_estimator)
 
     result = estimate_oracle_ivqr(
         data.y,
@@ -736,18 +753,19 @@ def test_estimate_oracle_ivqr_alpha_hat_does_not_use_alpha_true() -> None:
     assert with_wrong_truth.selected_controls == 10
 
 
-def test_estimate_oracle_ivqr_passes_max_iter_to_full_control(
+def test_estimate_oracle_ivqr_passes_max_iter_to_common_core(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     data = generate_data(Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123))
     captured: dict[str, int] = {}
 
-    def fake_full_estimator(reduced_data, **kwargs):
+    def fake_common_estimator(data, x_controls, estimator_name, **kwargs):
         captured["max_iter"] = kwargs["max_iter"]
+        captured["selected_controls"] = kwargs["selected_controls"]
         return EstimationResult(
-            estimator="full_ivqr",
+            estimator=estimator_name,
             alpha_hat=1.0,
-            alpha_true=reduced_data.alpha_true,
+            alpha_true=data.alpha_true,
             tau=kwargs["tau"],
             converged=True,
             failed=False,
@@ -768,7 +786,7 @@ def test_estimate_oracle_ivqr_passes_max_iter_to_full_control(
 
     import estimators.oracle_ivqr as oracle_module
 
-    monkeypatch.setattr(oracle_module, "estimate_full_ivqr", fake_full_estimator)
+    monkeypatch.setattr(oracle_module, "estimate_ch_ivqr_controls", fake_common_estimator)
 
     result = estimate_oracle_ivqr(
         data,
@@ -780,6 +798,7 @@ def test_estimate_oracle_ivqr_passes_max_iter_to_full_control(
 
     assert result.estimator == "oracle"
     assert captured["max_iter"] == 2000
+    assert captured["selected_controls"] == 10
 
 
 def test_estimate_oracle_ivqr_rejects_invalid_indices() -> None:

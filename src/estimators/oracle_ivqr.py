@@ -9,7 +9,7 @@ import numpy as np
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
-from estimators.full_ivqr import add_intercept, estimate_full_ivqr
+from estimators.ch_ivqr_common import add_intercept, estimate_ch_ivqr_controls
 from utils.validation import validate_1d_array, validate_2d_array, validate_data_arrays
 
 
@@ -44,6 +44,8 @@ def estimate_oracle_ivqr(
     """Estimate infeasible oracle IVQR using the true active controls only."""
     if alpha_candidates is None and "alphas" in kwargs:
         alpha_candidates = kwargs.pop("alphas")
+
+    kwargs.pop("gmm_ridge", None)
 
     if isinstance(y, SimData):
         if tau is None:
@@ -84,10 +86,13 @@ def estimate_oracle_ivqr(
         u=data.u,
         v=data.v,
     )
-    result = estimate_full_ivqr(
+    result = estimate_ch_ivqr_controls(
         oracle_data,
         tau=tau,
+        x_controls=oracle_data.x,
+        estimator_name="oracle",
         alphas=alpha_candidates,
+        selected_controls=int(indices.size),
         **kwargs,
     )
     return replace(result, estimator="oracle", selected_controls=int(indices.size))

@@ -1,28 +1,26 @@
-# Consolidated tests for the thematic project structure.
-
 from pathlib import Path
 import subprocess
 import sys
 
 import inference
 import pandas as pd
-from estimators.base import EstimationResult
 from dgp.designs import Design
+from estimators.base import EstimationResult
 from inference import metrics
 
 
-FULL_SIMULATION_SCRIPT = (
-    Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
-)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+FULL_SIMULATION_SCRIPT = PROJECT_ROOT / "scripts" / "02_run_full_simulation.py"
+FULL_CONTROL_SCRIPT = PROJECT_ROOT / "scripts" / "04_run_full_control_ivqr.py"
 
 
-def _run_full_simulation_dry_run(*args: str) -> subprocess.CompletedProcess[str]:
+def _run_script(script: Path, *args: str, timeout: int = 120) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(FULL_SIMULATION_SCRIPT), *args],
+        [sys.executable, str(script), *args],
         check=False,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=timeout,
     )
 
 
@@ -33,53 +31,20 @@ def test_core_phase1_imports_work() -> None:
     assert EstimationResult is not None
 
 
-def test_full_simulation_script_help_runs() -> None:
-    result = subprocess.run(
-        [sys.executable, str(FULL_SIMULATION_SCRIPT), "--help"],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+def test_main_simulation_help_uses_modes_not_full_control_preset() -> None:
+    result = _run_script(FULL_SIMULATION_SCRIPT, "--help", timeout=60)
 
     assert result.returncode == 0
-    assert "Run the full IVQR Monte Carlo simulation" in result.stdout
-    assert "--preset" in result.stdout
+    assert "Run the main IVQR Monte Carlo simulation" in result.stdout
+    assert "--mode {fast,full}" in result.stdout
+    assert "full-control-benchmark" not in result.stdout
 
 
-def test_full_simulation_full_control_benchmark_preset_dry_run() -> None:
-    result = _run_full_simulation_dry_run(
-        "--preset",
-        "full-control-benchmark",
-        "--dry-run",
-        "--reps",
-        "1",
-        "--dgps",
-        "dgp1",
-        "--pi-values",
-        "1.0",
-        "--taus",
-        "0.5",
-        "--n-values",
-        "500",
-        "--p-values",
-        "100",
-    )
-
-    assert result.returncode == 0
-    assert "preset: full-control-benchmark" in result.stdout
-    assert "estimators: full" in result.stdout
-    assert "alpha grid: size=9" in result.stdout
-    assert "DML folds: 3" in result.stdout
-    assert "Parallel workers: 6" in result.stdout
-    assert "QuantReg max iterations: 1000" in result.stdout
-    assert "Show QuantReg warnings: False" in result.stdout
-
-
-def test_full_simulation_main_preset_dry_run_includes_oracle_not_full() -> None:
-    result = _run_full_simulation_dry_run(
-        "--preset",
-        "main",
+def test_main_simulation_fast_dry_run_excludes_full_control() -> None:
+    result = _run_script(
+        FULL_SIMULATION_SCRIPT,
+        "--mode",
+        "fast",
         "--dry-run",
         "--reps",
         "1",
@@ -96,154 +61,18 @@ def test_full_simulation_main_preset_dry_run_includes_oracle_not_full() -> None:
     )
 
     assert result.returncode == 0
-    assert "preset: main" in result.stdout
+    assert "mode: fast" in result.stdout
+    assert "replications per scenario: 1" in result.stdout
     assert "estimators: oracle,post_selection,dml" in result.stdout
-    assert "estimators: full" not in result.stdout
-    assert "alpha grid: size=9" in result.stdout
-    assert "DML folds: 3" in result.stdout
-    assert "Parallel workers: 6" in result.stdout
-    assert "QuantReg max iterations: 1000" in result.stdout
+    assert "Full-control IVQR is excluded" in result.stdout
 
 
-def test_full_simulation_main_preset_alpha_grid_cli_override_dry_run() -> None:
-    result = _run_full_simulation_dry_run(
-        "--preset",
-        "main",
-        "--alpha-grid-size",
-        "13",
-        "--dry-run",
-        "--reps",
-        "1",
-        "--dgps",
-        "dgp1",
-        "--pi-values",
-        "1.0",
-        "--taus",
-        "0.5",
-        "--n-values",
-        "500",
-        "--p-values",
-        "200",
-    )
-
-    assert result.returncode == 0
-    assert "preset: main" in result.stdout
-    assert "alpha grid: size=13" in result.stdout
-
-
-def test_full_simulation_main_preset_dml_k_folds_cli_override_dry_run() -> None:
-    result = _run_full_simulation_dry_run(
-        "--preset",
-        "main",
-        "--dml-k-folds",
-        "5",
-        "--dry-run",
-        "--reps",
-        "1",
-        "--dgps",
-        "dgp1",
-        "--pi-values",
-        "1.0",
-        "--taus",
-        "0.5",
-        "--n-values",
-        "500",
-        "--p-values",
-        "200",
-    )
-
-    assert result.returncode == 0
-    assert "preset: main" in result.stdout
-    assert "DML folds: 5" in result.stdout
-
-
-def test_full_simulation_main_preset_n_jobs_cli_override_dry_run() -> None:
-    result = _run_full_simulation_dry_run(
-        "--preset",
-        "main",
-        "--n-jobs",
-        "2",
-        "--dry-run",
-        "--reps",
-        "1",
-        "--dgps",
-        "dgp1",
-        "--pi-values",
-        "1.0",
-        "--taus",
-        "0.5",
-        "--n-values",
-        "500",
-        "--p-values",
-        "200",
-    )
-
-    assert result.returncode == 0
-    assert "preset: main" in result.stdout
-    assert "Parallel workers: 2" in result.stdout
-
-
-def test_full_simulation_main_preset_quantreg_cli_override_dry_run() -> None:
-    result = _run_full_simulation_dry_run(
-        "--preset",
-        "main",
-        "--quantreg-max-iter",
-        "2000",
-        "--show-quantreg-warnings",
-        "--dry-run",
-        "--reps",
-        "1",
-        "--dgps",
-        "dgp1",
-        "--pi-values",
-        "1.0",
-        "--taus",
-        "0.5",
-        "--n-values",
-        "500",
-        "--p-values",
-        "200",
-    )
-
-    assert result.returncode == 0
-    assert "preset: main" in result.stdout
-    assert "QuantReg max iterations: 2000" in result.stdout
-    assert "Show QuantReg warnings: True" in result.stdout
-
-
-def test_full_simulation_full_control_alpha_grid_cli_override_dry_run() -> None:
-    result = _run_full_simulation_dry_run(
-        "--preset",
-        "full-control-benchmark",
-        "--alpha-grid-size",
-        "3",
-        "--dry-run",
-        "--reps",
-        "1",
-        "--dgps",
-        "dgp1",
-        "--pi-values",
-        "1.0",
-        "--taus",
-        "0.5",
-        "--n-values",
-        "500",
-        "--p-values",
-        "100",
-    )
-
-    assert result.returncode == 0
-    assert "preset: full-control-benchmark" in result.stdout
-    assert "alpha grid: size=3" in result.stdout
-
-
-def test_full_simulation_manual_full_control_dry_run() -> None:
-    result = _run_full_simulation_dry_run(
-        "--estimators",
+def test_main_simulation_full_dry_run_uses_500_reps() -> None:
+    result = _run_script(
+        FULL_SIMULATION_SCRIPT,
+        "--mode",
         "full",
         "--dry-run",
-        "--reps",
-        "1",
         "--dgps",
         "dgp1",
         "--pi-values",
@@ -253,122 +82,125 @@ def test_full_simulation_manual_full_control_dry_run() -> None:
         "--n-values",
         "500",
         "--p-values",
-        "100",
+        "200",
     )
 
     assert result.returncode == 0
-    assert "preset: main" in result.stdout
-    assert "estimators: full" in result.stdout
+    assert "mode: full" in result.stdout
+    assert "replications per scenario: 500" in result.stdout
+    assert "estimators: oracle,post_selection,dml" in result.stdout
 
 
-def test_full_simulation_oracle_estimator_runs(tmp_path: Path) -> None:
-    script = Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
-    output = tmp_path / "oracle_smoke.csv"
+def test_main_simulation_rejects_full_control_estimator() -> None:
+    result = _run_script(FULL_SIMULATION_SCRIPT, "--estimators", "full", "--dry-run")
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(script),
-            "--estimators",
-            "oracle",
-            "--reps",
-            "1",
-            "--dgps",
-            "dgp1",
-            "--n-values",
-            "200",
-            "--p-values",
-            "50",
-            "--pi-values",
-            "1.0",
-            "--taus",
-            "0.5",
-            "--alpha-grid-size",
-            "3",
-            "--output",
-            str(output),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    assert result.returncode != 0
+    assert "invalid choice: 'full'" in result.stderr
+
+
+def test_full_control_script_dry_run_uses_limited_design() -> None:
+    result = _run_script(FULL_CONTROL_SCRIPT, "--dry-run")
 
     assert result.returncode == 0
-    assert output.exists()
-    assert "estimators: oracle" in result.stdout
-    written = pd.read_csv(output)
-    assert written.loc[0, "estimator"] == "oracle"
-    assert "status" in written.columns
+    assert "Full-Control IVQR benchmark plan" in result.stdout
+    assert "replications per scenario: 100" in result.stdout
+    assert "separate naive benchmark" in result.stdout
 
 
-def test_full_simulation_parallel_smoke_runs(tmp_path: Path) -> None:
-    output = tmp_path / "parallel_smoke.csv"
+def test_main_fast_smoke_creates_reports(tmp_path: Path) -> None:
+    raw = tmp_path / "raw" / "fast.csv"
+    summary = tmp_path / "summary" / "fast_summary.csv"
+    tables = tmp_path / "tables"
+    figures = tmp_path / "figures"
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(FULL_SIMULATION_SCRIPT),
-            "--estimators",
-            "oracle",
-            "post_selection",
-            "dml",
-            "--reps",
-            "1",
-            "--dgps",
-            "dgp1",
-            "--n-values",
-            "200",
-            "--p-values",
-            "50",
-            "--pi-values",
-            "1.0",
-            "--taus",
-            "0.5",
-            "--alpha-grid-size",
-            "3",
-            "--dml-k-folds",
-            "3",
-            "--n-jobs",
-            "2",
-            "--quantreg-max-iter",
-            "1000",
-            "--output",
-            str(output),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=120,
+    result = _run_script(
+        FULL_SIMULATION_SCRIPT,
+        "--mode",
+        "fast",
+        "--quick-test",
+        "--reps",
+        "1",
+        "--output",
+        str(raw),
+        "--summary-output",
+        str(summary),
+        "--tables-dir",
+        str(tables),
+        "--figures-dir",
+        str(figures),
+        timeout=180,
     )
 
-    assert result.returncode == 0
-    assert output.exists()
-    assert "Parallel workers: 2" in result.stdout
-    written = pd.read_csv(output)
-    assert len(written) == 3
+    assert result.returncode == 0, result.stderr
+    assert raw.exists()
+    assert summary.exists()
+    assert (tables / "comparison_table.csv").exists()
+    assert (tables / "bias_wide.csv").exists()
+    assert (tables / "rmse_wide.csv").exists()
+    assert (tables / "coverage_wide.csv").exists()
+    assert (tables / "cr_length_wide.csv").exists()
+    assert (tables / "failure_rate_wide.csv").exists()
+    assert (figures / "fig_bias.png").exists()
+    assert (figures / "fig_rmse.png").exists()
+    assert (figures / "fig_coverage.png").exists()
+    assert (figures / "fig_cr_length.png").exists()
+    assert (figures / "fig_failure_rate.png").exists()
+
+    written = pd.read_csv(raw)
     assert set(written["estimator"]) == {"oracle", "post_selection_ivqr", "dml_ivqr"}
-    assert not written.duplicated(["dgp", "n", "p", "pi", "tau", "rep", "seed", "estimator"]).any()
+
+
+def test_full_control_smoke_creates_reports(tmp_path: Path) -> None:
+    raw = tmp_path / "raw" / "full_control.csv"
+    summary = tmp_path / "summary" / "full_control_summary.csv"
+    tables = tmp_path / "tables"
+    figures = tmp_path / "figures"
+
+    result = _run_script(
+        FULL_CONTROL_SCRIPT,
+        "--quick-test",
+        "--reps",
+        "1",
+        "--output",
+        str(raw),
+        "--summary-output",
+        str(summary),
+        "--tables-dir",
+        str(tables),
+        "--figures-dir",
+        str(figures),
+        timeout=180,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert raw.exists()
+    assert summary.exists()
+    assert (tables / "comparison_table.csv").exists()
+    assert (tables / "bias_wide.csv").exists()
+    assert (tables / "rmse_wide.csv").exists()
+    assert (tables / "coverage_wide.csv").exists()
+    assert (tables / "cr_length_wide.csv").exists()
+    assert (tables / "failure_rate_wide.csv").exists()
+    assert (figures / "fig_bias.png").exists()
+    assert (figures / "fig_rmse.png").exists()
+    assert (figures / "fig_coverage.png").exists()
+    assert (figures / "fig_cr_length.png").exists()
+    assert (figures / "fig_failure_rate.png").exists()
+
+    written = pd.read_csv(raw)
+    assert set(written["estimator"]) == {"full_control_ivqr"}
 
 
 def test_make_tables_script_help_runs() -> None:
-    script = Path(__file__).resolve().parents[1] / "scripts" / "03_make_tables.py"
-
-    result = subprocess.run(
-        [sys.executable, str(script), "--help"],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    script = PROJECT_ROOT / "scripts" / "03_make_tables.py"
+    result = _run_script(script, "--help", timeout=60)
 
     assert result.returncode == 0
     assert "Create tables from IVQR simulation results" in result.stdout
 
 
 def test_pilot_script_runs_end_to_end(tmp_path: Path) -> None:
-    script = Path(__file__).resolve().parents[1] / "scripts" / "01_pilot_simulation.py"
-
+    script = PROJECT_ROOT / "scripts" / "01_pilot_simulation.py"
     result = subprocess.run(
         [sys.executable, str(script), "--estimators", "dml"],
         cwd=tmp_path,
@@ -383,21 +215,3 @@ def test_pilot_script_runs_end_to_end(tmp_path: Path) -> None:
     assert output.exists()
     assert "dml_ivqr" in result.stdout
     assert "dml_k_folds=3" in result.stdout
-
-
-def test_pilot_script_dml_k_folds_override(tmp_path: Path) -> None:
-    script = Path(__file__).resolve().parents[1] / "scripts" / "01_pilot_simulation.py"
-
-    result = subprocess.run(
-        [sys.executable, str(script), "--estimators", "dml", "--dml-k-folds", "5"],
-        cwd=tmp_path,
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-
-    output = tmp_path / "results" / "raw" / "pilot_quick_results.csv"
-    assert result.returncode == 0
-    assert output.exists()
-    assert "dml_k_folds=5" in result.stdout

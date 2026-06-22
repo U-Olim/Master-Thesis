@@ -14,7 +14,6 @@ from dgp.generators import generate_data
 from dgp.true_parameters import get_oracle_control_indices, true_alpha
 from estimators.base import EstimationResult
 from estimators.dml_ivqr import estimate_dml_ivqr
-from estimators.full_ivqr import estimate_full_ivqr
 from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import estimate_post_selection_ivqr
 from dgp.designs import Design
@@ -26,11 +25,10 @@ from simulation.config import (
 
 
 EstimatorFn = Callable[..., EstimationResult]
-VALID_ESTIMATORS = ("full", "oracle", "post_selection", "dml")
-DEFAULT_PILOT_ESTIMATORS = ("full", "post_selection", "dml")
+VALID_ESTIMATORS = ("oracle", "post_selection", "dml")
+DEFAULT_PILOT_ESTIMATORS = ("oracle", "post_selection", "dml")
 VALID_DGPS = ("dgp1", "dgp2", "dgp3")
 ESTIMATOR_OUTPUT_NAMES = {
-    "full": "full_ivqr",
     "oracle": "oracle",
     "post_selection": "post_selection_ivqr",
     "dml": "dml_ivqr",
@@ -313,7 +311,6 @@ def run_single_replication(
 
     data = generate_data(design)
     estimator_map: dict[str, EstimatorFn] = {
-        "full": estimate_full_ivqr,
         "oracle": estimate_oracle_ivqr,
         "post_selection": estimate_post_selection_ivqr,
         "dml": estimate_dml_ivqr,
@@ -359,13 +356,7 @@ def run_single_replication(
                         gmm_ridge=gmm_ridge,
                     )
                 else:
-                    result = estimator(
-                        data,
-                        tau=design.tau,
-                        alphas=alphas,
-                        max_iter=quantreg_max_iter,
-                        gmm_ridge=gmm_ridge,
-                    )
+                    raise ValueError(f"Estimator is not available in main runner: {estimator_name}")
             rows.append(_result_to_row(design, result))
         except Exception as exc:
             rows.append(_failure_row_for_estimator(design, estimator_name, alphas, exc))

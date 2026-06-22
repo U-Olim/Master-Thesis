@@ -100,9 +100,10 @@ def generate_data(design: Design) -> SimData:
     d_latent = design.pi * z + x @ gamma + v
     d = (d_latent > 0).astype(int)
     alpha = true_alpha(design.tau, design.dgp, df=DF_T)
-    # Project_structure.pdf DGP outcome:
-    # Y_i = 1 + X_i' beta + D_i(1 + u_i),
-    # which implies alpha_0(tau) = 1 + F_u^{-1}(tau).
-    y = 1.0 + x @ beta + d * (1.0 + u)
+    # IVQR-compatible structural quantile outcome:
+    # Y_i(d) = 1 + X_i' beta + u_i + d(1 + u_i).
+    # Therefore q_d(tau, X_i) = 1 + X_i' beta + Q_u(tau)
+    # + d(1 + Q_u(tau)), and alpha_0(tau) = 1 + Q_u(tau).
+    y = 1.0 + x @ beta + u + d * (1.0 + u)
 
     return SimData(y=y, d=d, z=z, x=x, alpha_true=alpha, u=u, v=v)

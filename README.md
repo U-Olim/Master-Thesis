@@ -4,12 +4,13 @@ This repository contains the code architecture for a master thesis simulation st
 
 **High-Dimensional Instrumental Variable Quantile Regression under Weak Instruments: A Monte Carlo Study**
 
-The final project compares IVQR-type estimators:
+The main thesis simulation compares IVQR-type estimators:
 
-- Full-control IVQR
 - Oracle IVQR
 - Post-selection IVQR
 - DML-IVQR
+
+Full-control IVQR is kept as a separate appendix-style benchmark.
 
 The planned Monte Carlo design includes:
 
@@ -18,8 +19,8 @@ The planned Monte Carlo design includes:
 - Main control dimensions: `p = 200, 500`
 - Instrument strengths: `pi = 1.0, 0.5, 0.25, 0.10`
 - Quantiles: `tau = 0.25, 0.50, 0.75`
-- Main replications: `R = 100`
-- Main alpha grid size: `9`
+- Main replications: `R = 500` in full mode, `R = 10` in fast mode
+- Main alpha grid size: `21`
 - Default DML cross-fitting folds: `K = 3`
 
 ## Current Status
@@ -35,7 +36,8 @@ Implemented:
 - Corrected nonseparable outcome equation
 - Core IVQR moment functions
 - Confidence-region inversion
-- Full-control IVQR
+- Shared CH-IVQR inverse-grid core
+- Separate full-control IVQR benchmark wrapper
 - Oracle IVQR
 - Post-selection IVQR
 - DML-IVQR
@@ -47,7 +49,7 @@ Implemented:
 The corrected DGP outcome equation is
 
 ```text
-Y_i = 1 + X_i' beta + D_i(1 + u_i)
+Y_i = 1 + X_i' beta + u_i + D_i(1 + u_i)
 ```
 
 This implies
@@ -94,51 +96,45 @@ python scripts/01_pilot_simulation.py --mode stress
 python scripts/01_pilot_simulation.py --mode quick --estimators post_selection dml
 ```
 
-The default quick mode uses `n=100`, `p=20`, `reps=3`, and a 9-point alpha
-grid. The stress mode uses `n=250`, `p=200`, `reps=2`, and the same 9-point
+The default quick mode uses `n=100`, `p=20`, `reps=3`, and the default alpha
+grid. The stress mode uses `n=250`, `p=200`, `reps=2`, and the same alpha
 grid. These pilots are for checking estimator behavior and runtime, not for
 final Monte Carlo conclusions. Estimator iteration limits use realistic pilot
 defaults rather than an artificially tiny cap.
 
 Full-control IVQR is benchmark-only. It directly controls for all `X`
 variables, so it can be computationally heavy and is not part of the main
-high-dimensional default run. It runs when requested explicitly with
-`--estimators full` or through the full-control benchmark preset. It raises a
-hard error only for invalid inputs or infeasible designs where `p + 1 >= n`,
-since the auxiliary quantile regression includes an intercept plus all
-controls. No soft warning is emitted merely because `p / n` is high.
+high-dimensional default run. It is run only with:
 
-The final full-control benchmark preset is intentionally smaller than the main
+```bash
+python scripts/04_run_full_control_ivqr.py
+```
+
+The final full-control benchmark design is intentionally smaller than the main
 high-dimensional simulation:
 
-- Estimator: `full`
-- DGPs: `dgp1`, `dgp2`, `dgp3`
+- Estimator: `full_control_ivqr`
+- DGPs: `dgp1`
 - Sample sizes: `n = 500, 1000`
-- Control dimensions: `p = 100, 200`
-- Instrument strengths: `pi = 1.0, 0.5, 0.25`
+- Control dimensions: `p = 20, 50, 100`
+- Instrument strengths: `pi = 1.0`
 - Quantiles: `tau = 0.25, 0.50, 0.75`
 - Replications: `R = 100`
-- Alpha grid size: `9`
-- Output: `results/raw/full_control_benchmark_R100.csv`
-
-The benchmark excludes `p=500` and `pi=0.10` to keep the full-control run
-feasible and focused. Users can still manually run full-control on other
-feasible designs with `--estimators full`.
+- Alpha grid size: `21`
+- Output: `results/raw/full_control_ivqr_results.csv`
 
 Oracle IVQR is also simulation-only and infeasible in real applications. It
 knows the true active controls from the DGP, restricts `X` to those controls,
 and then runs the same IVQR procedure on the reduced control set. It is a
 benchmark for post-selection IVQR and DML-IVQR, not an implementable estimator.
 
-The main simulation preset runs Oracle IVQR, post-selection IVQR, and DML-IVQR
-on the full high-dimensional grid. It intentionally excludes full-control IVQR,
-which is available only through `--preset full-control-benchmark` or an
-explicit manual `--estimators full` run.
+The main simulation runner runs Oracle IVQR, post-selection IVQR, and DML-IVQR
+on the full high-dimensional grid. It intentionally excludes full-control IVQR.
 
-The default alpha grid size is 9. This is a computationally efficient default,
+The default alpha grid size is 21. This is a computationally efficient default,
 not a theoretically special value. Larger grids can still be used for
 robustness checks with `--alpha-grid-size`, for example
-`--alpha-grid-size 13`.
+`--alpha-grid-size 41`.
 
 The full simulation runner writes results batch-by-batch and supports resume:
 
@@ -147,12 +143,13 @@ python scripts/02_run_full_simulation.py --resume
 python scripts/02_run_full_simulation.py --resume --rerun-failed
 python scripts/02_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
 python scripts/02_run_full_simulation.py --estimators oracle post_selection dml --reps 10 --resume
-python scripts/02_run_full_simulation.py --preset main
-python scripts/02_run_full_simulation.py --preset full-control-benchmark
-python scripts/02_run_full_simulation.py --preset main --alpha-grid-size 13
-python scripts/02_run_full_simulation.py --preset main --dml-k-folds 5
-python scripts/02_run_full_simulation.py --preset main --reps 10 --n-jobs 6 --output results/raw/main_diagnostic_R10.csv
-python scripts/02_run_full_simulation.py --preset main --reps 1 --n-jobs 1 --dry-run
+python scripts/02_run_full_simulation.py --mode fast
+python scripts/02_run_full_simulation.py --mode full
+python scripts/02_run_full_simulation.py --mode full --alpha-grid-size 41
+python scripts/02_run_full_simulation.py --mode full --dml-k-folds 5
+python scripts/02_run_full_simulation.py --mode fast --reps 10 --n-jobs 6 --output results/raw/main_diagnostic_R10.csv
+python scripts/02_run_full_simulation.py --mode fast --reps 1 --n-jobs 1 --dry-run
+python scripts/04_run_full_control_ivqr.py
 ```
 
 `--n-jobs` controls parallel worker processes across independent simulation
@@ -167,7 +164,7 @@ default is `--quantreg-max-iter 1000`; increase it when debugging difficult
 designs:
 
 ```bash
-python scripts/02_run_full_simulation.py --preset main --quantreg-max-iter 2000
+python scripts/02_run_full_simulation.py --mode full --quantreg-max-iter 2000
 ```
 
 Repeated QuantReg iteration-limit warnings are suppressed in long simulation
@@ -180,6 +177,7 @@ Safe final-run planning and chunking examples:
 python scripts/02_run_full_simulation.py --dry-run
 
 python scripts/02_run_full_simulation.py \
+  --mode full \
   --resume \
   --num-chunks 4 \
   --chunk-index 0 \
@@ -196,12 +194,11 @@ python scripts/02_run_full_simulation.py \
   --estimators oracle post_selection dml \
   --output results/raw/mini_weak_iv.csv
 
-python scripts/02_run_full_simulation.py \
-  --preset full-control-benchmark \
-  --output results/raw/full_control_benchmark_R100.csv
+python scripts/04_run_full_control_ivqr.py \
+  --output results/raw/full_control_ivqr_results.csv
 
 python scripts/02_run_full_simulation.py \
-  --preset main \
+  --mode fast \
   --reps 10 \
   --dml-k-folds 3 \
   --dry-run
@@ -211,14 +208,14 @@ python scripts/02_run_full_simulation.py \
   --reps 10 \
   --n-values 500 \
   --p-values 200 \
-  --alpha-grid-size 9 \
+  --alpha-grid-size 21 \
   --output results/raw/oracle_post_dml_test.csv
 ```
 
 The main default grid is computationally expensive: 3 DGPs, 2 sample sizes, 2
-control dimensions, 4 instrument strengths, 3 quantiles, and 100 replications,
-using a 9-point alpha grid. It runs Oracle IVQR, post-selection IVQR, and
-DML-IVQR. Full-control IVQR stays out of the main preset. `--resume` skips
+control dimensions, 4 instrument strengths, 3 quantiles, and 500 replications,
+using a 21-point alpha grid. It runs Oracle IVQR, post-selection IVQR, and
+DML-IVQR. Full-control IVQR stays out of the main runner. `--resume` skips
 designs for which all requested estimator rows already exist in the output CSV.
 `--rerun-failed`
 makes resume stricter: failed estimator rows are not treated as completed. If

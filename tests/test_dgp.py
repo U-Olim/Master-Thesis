@@ -34,6 +34,7 @@ from simulation.config import (
     N_VALUES,
     P_VALUES,
     PI_VALUES,
+    R_FAST,
     R_FULL_CONTROL_BENCHMARK,
     R_MAIN,
     TAUS,
@@ -43,20 +44,21 @@ from simulation.config import (
 def test_project_design_constants_exist() -> None:
     assert N_VALUES == [500, 1000]
     assert P_VALUES == [200, 500]
-    assert FULL_CONTROL_BENCHMARK_DGPS == ["dgp1", "dgp2", "dgp3"]
+    assert FULL_CONTROL_BENCHMARK_DGPS == ["dgp1"]
     assert FULL_CONTROL_BENCHMARK_N_VALUES == [500, 1000]
-    assert FULL_CONTROL_BENCHMARK_P_VALUES == [100, 200]
-    assert FULL_CONTROL_BENCHMARK_PI_VALUES == [1.0, 0.5, 0.25]
+    assert FULL_CONTROL_BENCHMARK_P_VALUES == [20, 50, 100]
+    assert FULL_CONTROL_BENCHMARK_PI_VALUES == [1.0]
     assert FULL_CONTROL_BENCHMARK_TAUS == [0.25, 0.5, 0.75]
-    assert FULL_CONTROL_BENCHMARK_OUTPUT == "results/raw/full_control_benchmark_R100.csv"
-    assert FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE == 9
+    assert FULL_CONTROL_BENCHMARK_OUTPUT == "results/raw/full_control_ivqr_results.csv"
+    assert FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE == 21
     assert PI_VALUES == [1.0, 0.5, 0.25, 0.10]
     assert TAUS == [0.25, 0.50, 0.75]
     assert DGPS == ["dgp1", "dgp2", "dgp3"]
-    assert R_MAIN == 100
+    assert R_FAST == 10
+    assert R_MAIN == 500
     assert R_FULL_CONTROL_BENCHMARK == 100
     assert DEFAULT_OUTPUT == "results/raw/full_simulation_results.csv"
-    assert DEFAULT_ALPHA_GRID_SIZE == 9
+    assert DEFAULT_ALPHA_GRID_SIZE == 21
     assert DEFAULT_DML_K_FOLDS == 3
     assert DEFAULT_N_JOBS == 6
     assert DEFAULT_QUANTREG_MAX_ITER == 1000
@@ -296,9 +298,16 @@ def test_outcome_equation_is_nonseparable_structural_design() -> None:
     beta = generate_coefficients("dgp1", 50)["beta"]
 
     assert data.u is not None
-    expected_y = 1.0 + data.x @ beta + data.d * (1.0 + data.u)
+    expected_y = 1.0 + data.x @ beta + data.u + data.d * (1.0 + data.u)
 
     assert np.allclose(data.y, expected_y)
+
+
+def test_true_alpha_matches_corrected_structural_quantile_gap() -> None:
+    taus = [0.25, 0.5, 0.75]
+    for tau in taus:
+        q_u = norm.ppf(tau)
+        assert true_alpha(tau, "dgp1") == pytest.approx(1.0 + q_u)
 
 
 def test_dgp3_outcome_is_invariant_to_tau_for_same_seed() -> None:

@@ -12,7 +12,13 @@ from statsmodels.regression.quantile_regression import QuantReg
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
-from estimators.full_ivqr import _as_2d_instruments, _evaluate_alpha_ch_ivqr, add_intercept
+from estimators.ch_ivqr_common import (
+    add_intercept,
+    as_2d_instruments,
+    evaluate_alpha_ch_ivqr,
+)
+
+_evaluate_alpha_ch_ivqr = evaluate_alpha_ch_ivqr
 from inference.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
@@ -188,7 +194,7 @@ def estimate_post_selection_ivqr(
     if quantreg_max_iter <= 0:
         raise ValueError("quantreg_max_iter must be positive")
     y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
-    z_2d = _as_2d_instruments(z)
+    z_2d = as_2d_instruments(z)
 
     try:
         selected_indices, selection_message = select_controls_lasso(
