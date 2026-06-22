@@ -45,7 +45,12 @@ from simulation.config import (  # noqa: E402
     FULL_CONTROL_BENCHMARK_TAUS,
     R_FULL_CONTROL_BENCHMARK,
 )
-from simulation.runner import RESULT_COLUMNS, make_simulation_grid  # noqa: E402
+from simulation.runner import (  # noqa: E402
+    DESIGN_KEY_COLUMNS,
+    RESULT_COLUMNS,
+    make_simulation_grid,
+    quantreg_iteration_warning_filter,
+)
 
 
 ESTIMATOR_NAME = "full_control_ivqr"
@@ -63,18 +68,18 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--alpha-max", type=float, default=3.0)
     parser.add_argument("--alpha-grid-size", type=int, default=None)
     parser.add_argument("--quantreg-max-iter", type=int, default=DEFAULT_QUANTREG_MAX_ITER)
+    parser.add_argument("--show-quantreg-warnings", action="store_true")
+    parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--chunk-index", type=int, default=None)
     parser.add_argument("--num-chunks", type=int, default=None)
     parser.add_argument("--max-designs", type=int, default=None)
     parser.add_argument("--manifest", default=None)
-    parser.add_argument("--quick-test", action="store_true")
     parser.add_argument("--dgps", nargs="+", default=list(FULL_CONTROL_BENCHMARK_DGPS))
     parser.add_argument("--n-values", nargs="+", type=int, default=list(FULL_CONTROL_BENCHMARK_N_VALUES))
     parser.add_argument("--p-values", nargs="+", type=int, default=list(FULL_CONTROL_BENCHMARK_P_VALUES))
     parser.add_argument("--pi-values", nargs="+", type=float, default=list(FULL_CONTROL_BENCHMARK_PI_VALUES))
     parser.add_argument("--taus", nargs="+", type=float, default=list(FULL_CONTROL_BENCHMARK_TAUS))
-    parser.add_argument("--skip-reports", action="store_true")
     parser.add_argument("--summary-output", default="results/summary/full_control_ivqr_summary.csv")
     parser.add_argument("--tables-dir", default="results/tables/full_control")
     parser.add_argument("--figures-dir", default="results/figures/full_control")
@@ -86,24 +91,6 @@ def _apply_defaults(args: argparse.Namespace) -> None:
         args.reps = R_FULL_CONTROL_BENCHMARK
     if args.alpha_grid_size is None:
         args.alpha_grid_size = FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE
-
-
-def _apply_quick_test(args: argparse.Namespace) -> None:
-    if not args.quick_test:
-        return
-    original_n_jobs = args.n_jobs
-    args.dgps = ["dgp1"]
-    args.n_values = [80]
-    args.p_values = [10]
-    args.pi_values = [1.0]
-    args.taus = [0.5]
-    if args.reps is None:
-        args.reps = 2
-    if args.alpha_grid_size is None:
-        args.alpha_grid_size = 5
-    args.batch_size = 2
-    if original_n_jobs == DEFAULT_N_JOBS:
-        args.n_jobs = 1
 
 
 def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object]:
@@ -186,15 +173,21 @@ def _failure_row(design: Design, alphas: np.ndarray, exc: Exception) -> dict[str
     }
 
 
-def _run_one(design: Design, alphas: np.ndarray, quantreg_max_iter: int) -> dict[str, object]:
+def _run_one(
+    design: Design,
+    alphas: np.ndarray,
+    quantreg_max_iter: int,
+    show_quantreg_warnings: bool,
+) -> dict[str, object]:
     try:
         data = generate_data(design)
-        result = estimate_full_control_ivqr(
-            data,
-            tau=design.tau,
-            alphas=alphas,
-            max_iter=quantreg_max_iter,
-        )
+        with quantreg_iteration_warning_filter(show_quantreg_warnings):
+            result = estimate_full_control_ivqr(
+                data,
+                tau=design.tau,
+                alphas=alphas,
+                max_iter=quantreg_max_iter,
+            )
         return _result_to_row(design, result)
     except Exception as exc:  # noqa: BLE001 - record failed replications.
         return _failure_row(design, alphas, exc)
@@ -205,14 +198,24 @@ def _run_batch(
     alphas: np.ndarray,
     quantreg_max_iter: int,
     n_jobs: int,
+    show_quantreg_warnings: bool,
 ) -> pd.DataFrame:
     if n_jobs == 1 or len(designs) <= 1:
-        rows = [_run_one(design, alphas, quantreg_max_iter) for design in designs]
+        rows = [
+            _run_one(design, alphas, quantreg_max_iter, show_quantreg_warnings)
+            for design in designs
+        ]
     else:
         rows = []
         with ProcessPoolExecutor(max_workers=min(n_jobs, len(designs))) as executor:
             futures = {
-                executor.submit(_run_one, design, alphas, quantreg_max_iter): design
+                executor.submit(
+                    _run_one,
+                    design,
+                    alphas,
+                    quantreg_max_iter,
+                    show_quantreg_warnings,
+                ): design
                 for design in designs
             }
             for future in as_completed(futures):
@@ -252,6 +255,50 @@ def _make_reports(args: argparse.Namespace) -> None:
         print(f"  {name}: {path}")
 
 
+def _design_key(design: Design) -> tuple[object, ...]:
+    return (
+        design.dgp,
+        design.n,
+        design.p,
+        design.pi,
+        design.tau,
+        design.rep,
+        design.seed,
+    )
+
+
+def _row_design_key(row: pd.Series) -> tuple[object, ...]:
+    return (
+        row["dgp"],
+        int(row["n"]),
+        int(row["p"]),
+        float(row["pi"]),
+        float(row["tau"]),
+        int(row["rep"]),
+        int(row["seed"]),
+    )
+
+
+def _filter_completed_designs(designs: list[Design], results_path: Path) -> list[Design]:
+    if not results_path.exists():
+        return designs
+
+    required_columns = DESIGN_KEY_COLUMNS + ["estimator"]
+    try:
+        existing = pd.read_csv(results_path, usecols=required_columns)
+    except pd.errors.EmptyDataError as exc:
+        raise ValueError("results CSV is empty or malformed") from exc
+    except ValueError as exc:
+        raise ValueError("results CSV is missing required resume columns") from exc
+
+    completed = {
+        _row_design_key(row)
+        for _, row in existing.iterrows()
+        if str(row["estimator"]) == ESTIMATOR_NAME
+    }
+    return [design for design in designs if _design_key(design) not in completed]
+
+
 def _validate_args(args: argparse.Namespace) -> None:
     if args.reps < 1:
         raise ValueError("--reps must be at least 1")
@@ -270,7 +317,6 @@ def _validate_args(args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = _parse_args()
-    _apply_quick_test(args)
     _apply_defaults(args)
     _validate_args(args)
     alphas = np.linspace(args.alpha_min, args.alpha_max, args.alpha_grid_size)
@@ -285,39 +331,57 @@ def main() -> None:
         reps=args.reps,
         base_seed=args.base_seed,
     )
-    designs = select_design_chunk(designs, args.chunk_index, args.num_chunks)
+    total_designs = len(designs)
+    pending_designs = _filter_completed_designs(designs, output_path) if args.resume else designs
+    designs = select_design_chunk(pending_designs, args.chunk_index, args.num_chunks)
     if args.max_designs is not None:
         designs = designs[: args.max_designs]
 
     print("Full-Control IVQR benchmark plan")
+    print(f"total designs: {total_designs}")
+    print(f"pending designs after resume: {len(pending_designs)}")
+    print(f"chunk: {args.chunk_index}/{args.num_chunks}" if args.chunk_index is not None else "chunk: none")
     print(f"designs in this run: {len(designs)}")
     print(f"expected rows: {len(designs)}")
+    print(f"dry_run: {args.dry_run}")
     print(f"replications per scenario: {args.reps}")
     print(f"output path: {output_path}")
     print(f"alpha grid: size={len(alphas)}, min={float(alphas.min())}, max={float(alphas.max())}")
     print(f"Parallel workers: {args.n_jobs}")
+    print(f"QuantReg max iterations: {args.quantreg_max_iter}")
+    print(f"Show QuantReg warnings: {args.show_quantreg_warnings}")
+    print(f"resume: {args.resume}")
     print("This is a separate naive benchmark, not part of the main estimator comparison.")
     _write_manifest(args.manifest, args, designs, alphas)
     if args.dry_run:
         print("Dry run requested; no result rows written.")
         return
 
+    if output_path.exists() and not args.resume:
+        raise FileExistsError(
+            f"{output_path} already exists. Use --resume to continue from existing "
+            "results or delete the file manually before starting a fresh run."
+        )
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    if output_path.exists():
-        output_path.unlink()
 
     start = time.perf_counter()
     completed = 0
     for batch_start in range(0, len(designs), args.batch_size):
         batch = designs[batch_start : batch_start + args.batch_size]
-        batch_df = _run_batch(batch, alphas, args.quantreg_max_iter, args.n_jobs)
+        batch_df = _run_batch(
+            batch,
+            alphas,
+            args.quantreg_max_iter,
+            args.n_jobs,
+            args.show_quantreg_warnings,
+        )
         batch_df.to_csv(output_path, mode="a", header=not output_path.exists(), index=False)
         completed += len(batch)
         print(f"completed {completed}/{len(designs)} designs, elapsed {time.perf_counter() - start:.2f} seconds")
 
     print(f"final row count: {len(pd.read_csv(output_path))}")
-    if not args.skip_reports:
-        _make_reports(args)
+    _make_reports(args)
 
 
 if __name__ == "__main__":

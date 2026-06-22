@@ -1,4 +1,4 @@
-"""Pilot Monte Carlo runner utilities."""
+"""Monte Carlo runner utilities."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from simulation.config import (
 
 EstimatorFn = Callable[..., EstimationResult]
 VALID_ESTIMATORS = ("oracle", "post_selection", "dml")
-DEFAULT_PILOT_ESTIMATORS = ("oracle", "post_selection", "dml")
+DEFAULT_SIMULATION_ESTIMATORS = ("oracle", "post_selection", "dml")
 VALID_DGPS = ("dgp1", "dgp2", "dgp3")
 ESTIMATOR_OUTPUT_NAMES = {
     "oracle": "oracle",
@@ -290,7 +290,7 @@ def make_simulation_grid(
 def run_single_replication(
     design: Design,
     alphas: np.ndarray,
-    estimators: tuple[str, ...] = DEFAULT_PILOT_ESTIMATORS,
+    estimators: tuple[str, ...] = DEFAULT_SIMULATION_ESTIMATORS,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     selection_cv: int = 3,
     selection_max_iter: int = 10000,
@@ -368,7 +368,7 @@ def run_single_replication(
     return rows
 
 
-def run_pilot_simulation(
+def run_small_simulation(
     dgp: str = "dgp1",
     n: int = 250,
     p: int = 200,
@@ -377,7 +377,7 @@ def run_pilot_simulation(
     reps: int = 10,
     base_seed: int = 12345,
     alphas: np.ndarray | None = None,
-    estimators: tuple[str, ...] = DEFAULT_PILOT_ESTIMATORS,
+    estimators: tuple[str, ...] = DEFAULT_SIMULATION_ESTIMATORS,
     alpha_grid_size: int = DEFAULT_ALPHA_GRID_SIZE,
     alpha_min: float = -1.0,
     alpha_max: float = 3.0,
@@ -390,7 +390,7 @@ def run_pilot_simulation(
     gmm_ridge: float = 1e-8,
     show_quantreg_warnings: bool = False,
 ) -> pd.DataFrame:
-    """Run a small pilot simulation and return raw estimator-level rows."""
+    """Run a small simulation and return raw estimator-level rows."""
     if reps < 1:
         raise ValueError("reps must be positive")
     if alpha_grid_size < 3:

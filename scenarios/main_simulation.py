@@ -62,8 +62,6 @@ def _parse_args() -> argparse.Namespace:
         default="fast",
         help="fast uses R=10; full uses R=500. Full-control IVQR is separate.",
     )
-    # Backward-compatible alias for older commands/tests.
-    parser.add_argument("--preset", choices=("main",), default=None, help=argparse.SUPPRESS)
     parser.add_argument("--output", default=None)
     parser.add_argument("--reps", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=10)
@@ -83,17 +81,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-chunks", type=int, default=None)
     parser.add_argument("--max-designs", type=int, default=None)
     parser.add_argument("--manifest", default=None)
-    parser.add_argument("--quick-test", action="store_true")
     parser.add_argument("--dgps", nargs="+", default=None)
     parser.add_argument("--n-values", nargs="+", type=int, default=None)
     parser.add_argument("--p-values", nargs="+", type=int, default=None)
     parser.add_argument("--pi-values", nargs="+", type=float, default=None)
     parser.add_argument("--taus", nargs="+", type=float, default=None)
-    parser.add_argument(
-        "--skip-reports",
-        action="store_true",
-        help="Skip automatic aggregation, tables, and figures after the run.",
-    )
     parser.add_argument("--summary-output", default=None)
     parser.add_argument("--tables-dir", default=None)
     parser.add_argument("--figures-dir", default=None)
@@ -125,25 +117,6 @@ def _apply_mode_defaults(args: argparse.Namespace) -> None:
         args.tables_dir = "results/tables/main"
     if args.figures_dir is None:
         args.figures_dir = "results/figures/main"
-
-
-def _apply_quick_test(args: argparse.Namespace) -> None:
-    if not args.quick_test:
-        return
-    original_n_jobs = args.n_jobs
-    args.dgps = ["dgp1"]
-    args.n_values = [80]
-    args.p_values = [10]
-    args.pi_values = [1.0]
-    args.taus = [0.5]
-    if args.reps is None:
-        args.reps = 2
-    if args.alpha_grid_size is None:
-        args.alpha_grid_size = 5
-    args.estimators = ["oracle", "post_selection", "dml"]
-    args.batch_size = 2
-    if original_n_jobs == DEFAULT_N_JOBS:
-        args.n_jobs = 1
 
 
 def _print_plan(
@@ -258,7 +231,6 @@ def _validate_args(args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = _parse_args()
-    _apply_quick_test(args)
     _apply_mode_defaults(args)
     _validate_args(args)
     if args.rerun_failed and not args.resume:
@@ -323,8 +295,7 @@ def main() -> None:
 
     final_rows = _count_rows(output_path)
     print(f"final row count: {final_rows}" if final_rows is not None else "final row count unavailable")
-    if not args.skip_reports:
-        _make_reports(args)
+    _make_reports(args)
 
 
 if __name__ == "__main__":

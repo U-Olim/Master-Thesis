@@ -32,7 +32,7 @@ def test_core_phase1_imports_work() -> None:
     assert EstimationResult is not None
 
 
-def test_main_simulation_help_uses_modes_not_full_control_preset() -> None:
+def test_main_simulation_help_uses_modes() -> None:
     result = _run_script(FULL_SIMULATION_SCRIPT, "--help", timeout=60)
 
     assert result.returncode == 0
@@ -119,8 +119,21 @@ def test_main_fast_smoke_creates_reports(tmp_path: Path) -> None:
         FULL_SIMULATION_SCRIPT,
         "--mode",
         "fast",
-        "--quick-test",
         "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--n-values",
+        "80",
+        "--p-values",
+        "10",
+        "--alpha-grid-size",
+        "3",
+        "--n-jobs",
         "1",
         "--output",
         str(raw),
@@ -161,8 +174,21 @@ def test_full_control_smoke_creates_reports(tmp_path: Path) -> None:
 
     result = _run_script(
         FULL_CONTROL_SCRIPT,
-        "--quick-test",
         "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--n-values",
+        "80",
+        "--p-values",
+        "10",
+        "--alpha-grid-size",
+        "3",
+        "--n-jobs",
         "1",
         "--output",
         str(raw),

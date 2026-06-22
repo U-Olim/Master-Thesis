@@ -23,11 +23,11 @@ from simulation.chunking import select_design_chunk
 from simulation.runner import (
     DEFAULT_DML_K_FOLDS,
     DEFAULT_QUANTREG_MAX_ITER,
-    DEFAULT_PILOT_ESTIMATORS,
+    DEFAULT_SIMULATION_ESTIMATORS,
     VALID_ESTIMATORS,
     make_simulation_grid,
     quantreg_iteration_warning_filter,
-    run_pilot_simulation,
+    run_small_simulation,
     run_single_replication,
 )
 from simulation.config import DEFAULT_N_JOBS
@@ -100,10 +100,10 @@ def test_run_single_replication_returns_one_row_per_estimator() -> None:
         assert row["alpha_true"] == alpha_true
 
 
-def test_run_pilot_simulation_returns_dataframe() -> None:
+def test_run_small_simulation_returns_dataframe() -> None:
     alphas = np.linspace(0.0, 2.0, 5)
 
-    results = run_pilot_simulation(reps=2, n=80, p=5, alphas=alphas)
+    results = run_small_simulation(reps=2, n=80, p=5, alphas=alphas)
 
     assert len(results) == 6
     assert set(results["estimator"]) == {"oracle", "post_selection_ivqr", "dml_ivqr"}
@@ -113,8 +113,8 @@ def test_run_pilot_simulation_returns_dataframe() -> None:
     )
 
 
-def test_run_pilot_simulation_default_grid_has_9_points() -> None:
-    results = run_pilot_simulation(
+def test_run_small_simulation_default_grid_has_9_points() -> None:
+    results = run_small_simulation(
         dgp="dgp1",
         n=80,
         p=5,
@@ -128,8 +128,8 @@ def test_run_pilot_simulation_default_grid_has_9_points() -> None:
     assert results["alpha_grid_size"].dropna().unique().tolist() == [9]
 
 
-def test_run_pilot_simulation_explicit_grid_size_has_17_points() -> None:
-    results = run_pilot_simulation(
+def test_run_small_simulation_explicit_grid_size_has_17_points() -> None:
+    results = run_small_simulation(
         dgp="dgp1",
         n=80,
         p=5,
@@ -144,8 +144,8 @@ def test_run_pilot_simulation_explicit_grid_size_has_17_points() -> None:
     assert results["alpha_grid_size"].dropna().unique().tolist() == [17]
 
 
-def test_run_pilot_simulation_estimator_subset() -> None:
-    results = run_pilot_simulation(
+def test_run_small_simulation_estimator_subset() -> None:
+    results = run_small_simulation(
         reps=2,
         n=80,
         p=5,
@@ -157,9 +157,9 @@ def test_run_pilot_simulation_estimator_subset() -> None:
     assert set(results["estimator"]) == {"post_selection_ivqr"}
 
 
-def test_run_pilot_simulation_invalid_estimator_raises() -> None:
+def test_run_small_simulation_invalid_estimator_raises() -> None:
     with pytest.raises(ValueError, match="Unknown estimator"):
-        run_pilot_simulation(
+        run_small_simulation(
             reps=1,
             n=80,
             p=5,
@@ -172,8 +172,8 @@ def test_valid_estimators_includes_oracle() -> None:
     assert "oracle" in VALID_ESTIMATORS
 
 
-def test_default_pilot_estimators_are_main_estimators() -> None:
-    assert DEFAULT_PILOT_ESTIMATORS == ("oracle", "post_selection", "dml")
+def test_default_simulation_estimators_are_main_estimators() -> None:
+    assert DEFAULT_SIMULATION_ESTIMATORS == ("oracle", "post_selection", "dml")
 
 
 def test_default_dml_k_folds_is_three() -> None:
@@ -289,20 +289,20 @@ def test_dml_k_folds_is_passed_to_dml_estimator(monkeypatch) -> None:
     assert captured["k_folds"] == 5
 
 
-def test_run_pilot_simulation_bias_logic() -> None:
-    results = run_pilot_simulation(reps=1, n=80, p=5, alphas=np.linspace(0.0, 2.0, 5))
+def test_run_small_simulation_bias_logic() -> None:
+    results = run_small_simulation(reps=1, n=80, p=5, alphas=np.linspace(0.0, 2.0, 5))
 
     for row in results.to_dict("records"):
         if row["alpha_hat"] is not None and not np.isnan(row["alpha_hat"]):
             assert row["bias"] == row["alpha_hat"] - row["alpha_true"]
 
 
-def test_run_pilot_simulation_does_not_write_files(tmp_path: Path, monkeypatch) -> None:
+def test_run_small_simulation_does_not_write_files(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 
-    run_pilot_simulation(reps=1, n=80, p=5, alphas=np.linspace(0.0, 2.0, 5))
+    run_small_simulation(reps=1, n=80, p=5, alphas=np.linspace(0.0, 2.0, 5))
 
-    assert not Path("results/raw/pilot_results.csv").exists()
+    assert not Path("results/raw/small_simulation_results.csv").exists()
 
 
 def test_make_simulation_grid_size_and_unique_seeds() -> None:
@@ -836,8 +836,19 @@ def test_full_simulation_dry_run_does_not_write_output_csv(
         "sys.argv",
         [
             "main_simulation.py",
-            "--quick-test",
             "--dry-run",
+            "--dgps",
+            "dgp1",
+            "--n-values",
+            "80",
+            "--p-values",
+            "10",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--reps",
+            "1",
             "--output",
             str(output_path),
             "--manifest",
@@ -1026,14 +1037,14 @@ def test_full_simulation_parser_quantreg_max_iter_default_and_override(
 def test_full_simulation_rejects_invalid_n_jobs(monkeypatch) -> None:
     monkeypatch.setattr(
         "sys.argv",
-        ["main_simulation.py", "--quick-test", "--dry-run", "--n-jobs", "0"],
+        ["main_simulation.py", "--dry-run", "--n-jobs", "0"],
     )
     with pytest.raises(ValueError, match="--n-jobs must be at least 1"):
         full_simulation_main()
 
     monkeypatch.setattr(
         "sys.argv",
-        ["main_simulation.py", "--quick-test", "--dry-run", "--n-jobs", "-1"],
+        ["main_simulation.py", "--dry-run", "--n-jobs", "-1"],
     )
     with pytest.raises(ValueError, match="--n-jobs must be at least 1"):
         full_simulation_main()
@@ -1044,7 +1055,6 @@ def test_full_simulation_rejects_invalid_quantreg_max_iter(monkeypatch) -> None:
         "sys.argv",
         [
             "main_simulation.py",
-            "--quick-test",
             "--dry-run",
             "--quantreg-max-iter",
             "0",
