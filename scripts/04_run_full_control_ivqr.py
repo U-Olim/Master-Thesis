@@ -76,8 +76,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--taus", nargs="+", type=float, default=list(FULL_CONTROL_BENCHMARK_TAUS))
     parser.add_argument("--skip-reports", action="store_true")
     parser.add_argument("--summary-output", default="results/summary/full_control_ivqr_summary.csv")
-    parser.add_argument("--tables-dir", default="results/tables")
-    parser.add_argument("--figures-dir", default="results/figures")
+    parser.add_argument("--tables-dir", default="results/tables/full_control")
+    parser.add_argument("--figures-dir", default="results/figures/full_control")
     return parser.parse_args()
 
 

@@ -57,7 +57,7 @@ def test_project_design_constants_exist() -> None:
     assert R_FAST == 10
     assert R_MAIN == 500
     assert R_FULL_CONTROL_BENCHMARK == 100
-    assert DEFAULT_OUTPUT == "results/raw/full_simulation_results.csv"
+    assert DEFAULT_OUTPUT == "results/raw/main_simulation_results.csv"
     assert DEFAULT_ALPHA_GRID_SIZE == 21
     assert DEFAULT_DML_K_FOLDS == 3
     assert DEFAULT_N_JOBS == 6

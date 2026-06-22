@@ -3,18 +3,10 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ivqr-sim"
+name = "master-thesis-ivqr"
 version = "0.1.0"
-description = "Monte Carlo architecture for high-dimensional IVQR under weak instruments."
+description = "Monte Carlo simulation project for IVQR and DML-IVQR estimators."
 requires-python = ">=3.10"
-dependencies = [
-    "numpy",
-    "pandas",
-    "scipy",
-    "scikit-learn",
-    "statsmodels",
-    "matplotlib",
-]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -26,3 +18,27 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "--basetemp=.pytest_tmp"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
+[tool.pixi.dependencies]
+python = ">=3.10,<3.13"
+numpy = "*"
+pandas = "*"
+scipy = "*"
+scikit-learn = "*"
+statsmodels = "*"
+matplotlib = "*"
+pytest = "*"
+
+[tool.pixi.pypi-dependencies]
+master-thesis-ivqr = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+test_project = "pytest"
+fast_mode = "python scripts/run_main_simulation.py --mode fast --n-jobs 1 --output results/raw/main_simulation_results.csv --summary-output results/summary/main_simulation_summary.csv --tables-dir results/tables/main --figures-dir results/figures/main"
+full_mode = "python scripts/run_main_simulation.py --mode full --n-jobs 4 --output results/raw/main_simulation_results.csv --summary-output results/summary/main_simulation_summary.csv --tables-dir results/tables/main --figures-dir results/figures/main"
+full_control = "python scripts/run_full_control_benchmark.py --n-jobs 4 --tables-dir results/tables/full_control --figures-dir results/figures/full_control"
+clean_results = "python -c \"import shutil; shutil.rmtree('results', ignore_errors=True)\""

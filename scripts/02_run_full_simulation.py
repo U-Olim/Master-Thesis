@@ -120,11 +120,11 @@ def _apply_mode_defaults(args: argparse.Namespace) -> None:
     if args.output is None:
         args.output = FAST_OUTPUT if args.mode == "fast" else DEFAULT_OUTPUT
     if args.summary_output is None:
-        args.summary_output = f"results/summary/{args.mode}_summary.csv"
+        args.summary_output = "results/summary/main_simulation_summary.csv"
     if args.tables_dir is None:
-        args.tables_dir = "results/tables"
+        args.tables_dir = "results/tables/main"
     if args.figures_dir is None:
-        args.figures_dir = "results/figures"
+        args.figures_dir = "results/figures/main"
 
 
 def _apply_quick_test(args: argparse.Namespace) -> None:

@@ -879,10 +879,10 @@ def test_full_simulation_fast_mode_defaults_exclude_full_control() -> None:
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 10
     assert args.alpha_grid_size == 21
-    assert args.output == "results/raw/fast_simulation_results.csv"
-    assert args.summary_output == "results/summary/fast_summary.csv"
-    assert args.tables_dir == "results/tables"
-    assert args.figures_dir == "results/figures"
+    assert args.output == "results/raw/main_simulation_results.csv"
+    assert args.summary_output == "results/summary/main_simulation_summary.csv"
+    assert args.tables_dir == "results/tables/main"
+    assert args.figures_dir == "results/figures/main"
 
 
 def test_full_simulation_full_mode_defaults_use_500_reps() -> None:
@@ -912,8 +912,8 @@ def test_full_simulation_full_mode_defaults_use_500_reps() -> None:
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 500
     assert args.alpha_grid_size == 21
-    assert args.output == "results/raw/full_simulation_results.csv"
-    assert args.summary_output == "results/summary/full_summary.csv"
+    assert args.output == "results/raw/main_simulation_results.csv"
+    assert args.summary_output == "results/summary/main_simulation_summary.csv"
 
 
 def test_full_simulation_mode_defaults_respect_explicit_overrides() -> None:
