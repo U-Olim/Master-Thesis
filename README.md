@@ -271,23 +271,39 @@ Generated files include `comparison_table.csv`, `diagnostic_table.csv`,
 
 ## Installation
 
+Recommended Python: 3.10 or newer.
+
+Mac/Linux:
+
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Windows PowerShell:
+
+```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+Optional, if you want to import the package from outside the repository root:
+
+```bash
 pip install -e .
 ```
 
-Runnable command scripts live in the top-level `scripts/` folder and can be
+Runnable command scripts live in the top-level `scripts/` folder and should be
 run from the repository root.
 
-## Checks
+Minimal check:
 
 ```bash
-python -c "import dgp, simulation, estimators, reporting; print('import ok')"
-pytest -v
-python scripts/01_pilot_simulation.py --mode quick
-python scripts/02_run_full_simulation.py --quick-test --output results/raw/full_quick_test.csv
+python -m compileall src scripts
 ```
 
 ## Result Status

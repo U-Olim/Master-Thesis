@@ -1,4 +1,0 @@
-dgp,n,p,pi,tau,rep,seed,estimator,alpha_hat,alpha_true,bias,absolute_error,squared_error,status,error_type,error_message,failed,converged,cr_lower,cr_upper,cr_length,cr_empty,cr_disconnected,cr_covers_true,selected_controls,runtime_seconds,failed_alpha_count,alpha_grid_size,message
-dgp1,200,50,1.0,0.5,0,12345,oracle_ivqr,1.0,1.0,0.0,0.0,0.0,ok,,,False,True,,,0.0,True,False,False,10.0,0.011859700025524944,0,3,ok; failed_alpha_points=0/3
-dgp1,200,50,1.0,0.5,0,12345,post_selection_ivqr,1.0,1.0,0.0,0.0,0.0,ok,,,False,True,1.0,1.0,0.0,False,False,True,15.0,0.09340359998168424,0,3,ok; failed_alpha_points=0/3; selected_y=13; selected_d=5; selected_union=15
-dgp1,200,50,1.0,0.5,0,12345,dml_ivqr,1.0,1.0,0.0,0.0,0.0,ok,,,False,True,1.0,1.0,0.0,False,False,True,,0.29475609998917207,0,3,ok; failed_alpha_points=0/3
