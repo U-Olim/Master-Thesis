@@ -1,4 +1,4 @@
-"""Run the separate naive Full-Control IVQR benchmark.
+﻿"""Run the separate naive Full-Control IVQR benchmark.
 
 This script is intentionally independent from the main simulation script. It uses a
 limited benchmark design because full-control IVQR is slow and not appropriate as a

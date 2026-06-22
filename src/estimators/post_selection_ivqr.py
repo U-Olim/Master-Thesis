@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
-from estimators.ch_ivqr_common import (
+from estimators.ch_inverse_ivqr import (
     as_2d_instruments,
     evaluate_alpha_ch_ivqr,
 )

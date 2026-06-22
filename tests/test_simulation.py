@@ -32,7 +32,7 @@ from simulation.runner import (
 )
 from simulation.config import DEFAULT_N_JOBS
 
-FULL_SIMULATION_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "02_run_full_simulation.py"
+FULL_SIMULATION_SCRIPT = Path(__file__).resolve().parents[1] / "scenarios" / "main_simulation.py"
 spec = importlib.util.spec_from_file_location("full_simulation_cli", FULL_SIMULATION_SCRIPT)
 if spec is None or spec.loader is None:
     raise ImportError(f"Could not load {FULL_SIMULATION_SCRIPT}")
@@ -113,7 +113,7 @@ def test_run_pilot_simulation_returns_dataframe() -> None:
     )
 
 
-def test_run_pilot_simulation_default_grid_has_21_points() -> None:
+def test_run_pilot_simulation_default_grid_has_9_points() -> None:
     results = run_pilot_simulation(
         dgp="dgp1",
         n=80,
@@ -125,7 +125,7 @@ def test_run_pilot_simulation_default_grid_has_21_points() -> None:
         alphas=None,
     )
 
-    assert results["alpha_grid_size"].dropna().unique().tolist() == [21]
+    assert results["alpha_grid_size"].dropna().unique().tolist() == [9]
 
 
 def test_run_pilot_simulation_explicit_grid_size_has_17_points() -> None:
@@ -835,7 +835,7 @@ def test_full_simulation_dry_run_does_not_write_output_csv(
     monkeypatch.setattr(
         "sys.argv",
         [
-            "02_run_full_simulation.py",
+            "main_simulation.py",
             "--quick-test",
             "--dry-run",
             "--output",
@@ -878,7 +878,7 @@ def test_full_simulation_fast_mode_defaults_exclude_full_control() -> None:
     assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 10
-    assert args.alpha_grid_size == 21
+    assert args.alpha_grid_size == 9
     assert args.output == "results/raw/main_simulation_results.csv"
     assert args.summary_output == "results/summary/main_simulation_summary.csv"
     assert args.tables_dir == "results/tables/main"
@@ -911,7 +911,7 @@ def test_full_simulation_full_mode_defaults_use_500_reps() -> None:
     assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 500
-    assert args.alpha_grid_size == 21
+    assert args.alpha_grid_size == 9
     assert args.output == "results/raw/main_simulation_results.csv"
     assert args.summary_output == "results/summary/main_simulation_summary.csv"
 
@@ -973,27 +973,27 @@ def test_full_simulation_main_mode_respects_alpha_grid_override() -> None:
 
 
 def test_full_simulation_parser_dml_k_folds_default_and_override(monkeypatch) -> None:
-    monkeypatch.setattr("sys.argv", ["02_run_full_simulation.py"])
+    monkeypatch.setattr("sys.argv", ["main_simulation.py"])
     args = full_simulation_cli._parse_args()
     assert args.dml_k_folds == 3
 
     monkeypatch.setattr(
         "sys.argv",
-        ["02_run_full_simulation.py", "--mode", "full", "--dml-k-folds", "5"],
+        ["main_simulation.py", "--mode", "full", "--dml-k-folds", "5"],
     )
     args = full_simulation_cli._parse_args()
     assert args.dml_k_folds == 5
 
 
 def test_full_simulation_parser_n_jobs_default_and_override(monkeypatch) -> None:
-    monkeypatch.setattr("sys.argv", ["02_run_full_simulation.py"])
+    monkeypatch.setattr("sys.argv", ["main_simulation.py"])
     args = full_simulation_cli._parse_args()
     assert args.n_jobs == 6
 
     for n_jobs in (1, 4, 6):
         monkeypatch.setattr(
             "sys.argv",
-            ["02_run_full_simulation.py", "--mode", "full", "--n-jobs", str(n_jobs)],
+            ["main_simulation.py", "--mode", "full", "--n-jobs", str(n_jobs)],
         )
         args = full_simulation_cli._parse_args()
         assert args.n_jobs == n_jobs
@@ -1002,7 +1002,7 @@ def test_full_simulation_parser_n_jobs_default_and_override(monkeypatch) -> None
 def test_full_simulation_parser_quantreg_max_iter_default_and_override(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("sys.argv", ["02_run_full_simulation.py"])
+    monkeypatch.setattr("sys.argv", ["main_simulation.py"])
     args = full_simulation_cli._parse_args()
     assert args.quantreg_max_iter == 1000
     assert args.show_quantreg_warnings is False
@@ -1010,7 +1010,7 @@ def test_full_simulation_parser_quantreg_max_iter_default_and_override(
     monkeypatch.setattr(
         "sys.argv",
         [
-            "02_run_full_simulation.py",
+            "main_simulation.py",
             "--mode",
             "full",
             "--quantreg-max-iter",
@@ -1026,14 +1026,14 @@ def test_full_simulation_parser_quantreg_max_iter_default_and_override(
 def test_full_simulation_rejects_invalid_n_jobs(monkeypatch) -> None:
     monkeypatch.setattr(
         "sys.argv",
-        ["02_run_full_simulation.py", "--quick-test", "--dry-run", "--n-jobs", "0"],
+        ["main_simulation.py", "--quick-test", "--dry-run", "--n-jobs", "0"],
     )
     with pytest.raises(ValueError, match="--n-jobs must be at least 1"):
         full_simulation_main()
 
     monkeypatch.setattr(
         "sys.argv",
-        ["02_run_full_simulation.py", "--quick-test", "--dry-run", "--n-jobs", "-1"],
+        ["main_simulation.py", "--quick-test", "--dry-run", "--n-jobs", "-1"],
     )
     with pytest.raises(ValueError, match="--n-jobs must be at least 1"):
         full_simulation_main()
@@ -1043,7 +1043,7 @@ def test_full_simulation_rejects_invalid_quantreg_max_iter(monkeypatch) -> None:
     monkeypatch.setattr(
         "sys.argv",
         [
-            "02_run_full_simulation.py",
+            "main_simulation.py",
             "--quick-test",
             "--dry-run",
             "--quantreg-max-iter",

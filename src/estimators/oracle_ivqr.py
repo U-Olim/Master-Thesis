@@ -9,7 +9,7 @@ import numpy as np
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
-from estimators.ch_ivqr_common import add_intercept, estimate_ch_ivqr_controls
+from estimators.ch_inverse_ivqr import add_intercept, estimate_ch_ivqr_controls
 from utils.validation import validate_1d_array, validate_2d_array, validate_data_arrays
 
 

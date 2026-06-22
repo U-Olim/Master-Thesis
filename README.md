@@ -94,6 +94,7 @@ Main simulation:
 - Instrument strengths: `pi = 1.0, 0.5, 0.25, 0.10`
 - Quantiles: `tau = 0.25, 0.50, 0.75`
 - Replications: `R = 10` in fast mode, `R = 500` in full mode
+- Alpha grid size: `9`
 - Main estimators: `oracle`, `post_selection`, `dml`
 
 Separate full-control benchmark:
@@ -104,7 +105,8 @@ Separate full-control benchmark:
 - Control dimensions: `p = 20, 50, 100`
 - Instrument strengths: `pi = 1.0`
 - Quantiles: `tau = 0.25, 0.50, 0.75`
-- Replications: `R = 100`
+- Replications: `R = 500`
+- Alpha grid size: `9`
 
 ## Useful Pixi Tasks
 
@@ -113,19 +115,12 @@ pixi run test_project
 pixi run fast_mode
 pixi run full_mode
 pixi run full_control
-pixi run clean_results
+pixi run import_check
+pixi run test_slow
 ```
 
 `test_project` runs the test suite and may take time. The simulation tasks are
 computationally heavier, especially `full_mode` and `full_control`.
-
-## Optional Reporting Utility
-
-The normal workflow does not require a separate reporting step. The simulation
-scripts aggregate results and write tables/figures automatically.
-
-`scripts/03_make_tables.py` is kept only as an optional utility for regenerating
-tables from existing raw or summary results.
 
 ## Notes
 

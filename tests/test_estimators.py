@@ -6,7 +6,7 @@ import warnings
 
 from dgp import generate_data
 from dgp.designs import Design
-from estimators import ch_ivqr_common
+from estimators import ch_inverse_ivqr
 from estimators.base import EstimationResult
 from estimators.dml_ivqr import (
     _build_dml_fold_cache,
@@ -18,7 +18,7 @@ from estimators.dml_ivqr import (
     make_folds,
     standardize_train_test,
 )
-from estimators.ch_ivqr_common import add_intercept
+from estimators.ch_inverse_ivqr import add_intercept
 from estimators.full_control_ivqr import estimate_full_control_ivqr
 from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import (
@@ -110,7 +110,7 @@ def test_evaluate_full_control_ivqr_alpha_returns_finite_statistic() -> None:
     data = generate_data(design)
     alpha_true = require_float(data.alpha_true, "alpha_true")
 
-    evaluation = ch_ivqr_common.evaluate_alpha_ch_ivqr(
+    evaluation = ch_inverse_ivqr.evaluate_alpha_ch_ivqr(
         y=data.y,
         d=data.d,
         x_controls=data.x,
@@ -132,7 +132,7 @@ def test_ch_ivqr_design_includes_controls_and_excluded_instruments() -> None:
     x_controls = np.ones((8, 5))
     z = np.arange(8, dtype=float)
 
-    design, z_block = ch_ivqr_common.ch_ivqr_design(x_controls, z)
+    design, z_block = ch_inverse_ivqr.ch_ivqr_design(x_controls, z)
 
     assert design.shape == (8, 7)
     assert z_block == slice(6, 7)
@@ -160,9 +160,9 @@ def test_ch_ivqr_evaluator_extracts_gamma_after_controls(
 
             return Result()
 
-    monkeypatch.setattr(ch_ivqr_common, "QuantReg", FakeQuantReg)
+    monkeypatch.setattr(ch_inverse_ivqr, "QuantReg", FakeQuantReg)
 
-    evaluation = ch_ivqr_common.evaluate_alpha_ch_ivqr(
+    evaluation = ch_inverse_ivqr.evaluate_alpha_ch_ivqr(
         y=np.arange(6, dtype=float),
         d=np.ones(6),
         x_controls=np.ones((6, 2)),
@@ -215,11 +215,11 @@ def test_estimate_full_control_ivqr_some_failed_alphas_still_converges(monkeypat
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
     alphas = np.array([0.0, 1.0, 2.0])
-    original = ch_ivqr_common.evaluate_alpha_ch_ivqr
+    original = ch_inverse_ivqr.evaluate_alpha_ch_ivqr
 
     def fake_evaluate(*args: object, **kwargs: object):
         if kwargs["alpha"] == 1.0:
-            return ch_ivqr_common.AlphaEvaluation(
+            return ch_inverse_ivqr.AlphaEvaluation(
                 statistic=np.inf,
                 gamma_hat=np.array([np.nan]),
                 cov_gamma=np.array([[np.nan]]),
@@ -229,7 +229,7 @@ def test_estimate_full_control_ivqr_some_failed_alphas_still_converges(monkeypat
             )
         return original(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(ch_ivqr_common, "evaluate_alpha_ch_ivqr", fake_evaluate)
+    monkeypatch.setattr(ch_inverse_ivqr, "evaluate_alpha_ch_ivqr", fake_evaluate)
 
     result = estimate_full_control_ivqr(data, tau=0.5, alphas=alphas)
 
@@ -247,7 +247,7 @@ def test_estimate_full_control_ivqr_all_failed_alphas_fails(monkeypatch: pytest.
     alphas = np.array([0.0, 1.0, 2.0])
 
     def fake_evaluate(*args: object, **kwargs: object):
-        return ch_ivqr_common.AlphaEvaluation(
+        return ch_inverse_ivqr.AlphaEvaluation(
             statistic=np.inf,
             gamma_hat=np.array([np.nan]),
             cov_gamma=np.array([[np.nan]]),
@@ -256,7 +256,7 @@ def test_estimate_full_control_ivqr_all_failed_alphas_fails(monkeypatch: pytest.
             message="forced failure",
         )
 
-    monkeypatch.setattr(ch_ivqr_common, "evaluate_alpha_ch_ivqr", fake_evaluate)
+    monkeypatch.setattr(ch_inverse_ivqr, "evaluate_alpha_ch_ivqr", fake_evaluate)
 
     result = estimate_full_control_ivqr(data, tau=0.5, alphas=alphas)
 
@@ -296,14 +296,14 @@ def test_estimate_full_control_ivqr_passes_max_iter_to_quantreg_fit(
     data = generate_data(design)
     alpha_true = require_float(data.alpha_true, "alpha_true")
     captured: dict[str, int] = {}
-    original = ch_ivqr_common.evaluate_alpha_ch_ivqr
+    original = ch_inverse_ivqr.evaluate_alpha_ch_ivqr
 
     def fake_evaluate_alpha_ch_ivqr(*args, **kwargs):
         captured["max_iter"] = kwargs["max_iter"]
         return original(*args, **kwargs)
 
     monkeypatch.setattr(
-        ch_ivqr_common,
+        ch_inverse_ivqr,
         "evaluate_alpha_ch_ivqr",
         fake_evaluate_alpha_ch_ivqr,
     )
@@ -447,7 +447,7 @@ def test_post_selection_alpha_uses_ch_ivqr_evaluator(
     def fake_evaluate(**kwargs):
         captured["x_shape"] = kwargs["x_controls"].shape
         captured["z_shape"] = np.asarray(kwargs["z"]).shape
-        return ch_ivqr_common.AlphaEvaluation(
+        return ch_inverse_ivqr.AlphaEvaluation(
             statistic=1.25,
             gamma_hat=np.array([0.5]),
             cov_gamma=np.array([[0.2]]),

@@ -1,10 +1,10 @@
-"""Run the main IVQR Monte Carlo simulation.
+﻿"""Run the main IVQR Monte Carlo simulation.
 
 Modes:
 - fast: same main design with R=10 for diagnostics.
 - full: same main design with R=500 for thesis results.
 
-Full-control IVQR is deliberately excluded. Run scripts/04_run_full_control_ivqr.py
+Full-control IVQR is deliberately excluded. Run scenarios/full_control_ivqr.py
 for the separate naive benchmark.
 """
 
@@ -175,7 +175,7 @@ def _print_plan(
     print(f"Show QuantReg warnings: {args.show_quantreg_warnings}")
     print(f"resume: {args.resume}")
     print(f"rerun_failed: {args.rerun_failed}")
-    print("Full-control IVQR is excluded. Use scripts/04_run_full_control_ivqr.py separately.")
+    print("Full-control IVQR is excluded. Use scenarios/full_control_ivqr.py separately.")
 
 
 def _write_manifest(

@@ -10,7 +10,7 @@ import numpy as np
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
-from estimators.ch_ivqr_common import estimate_ch_ivqr_controls
+from estimators.ch_inverse_ivqr import estimate_ch_ivqr_controls
 from simulation.config import DEFAULT_QUANTREG_MAX_ITER
 from utils.validation import validate_alpha_grid, validate_data_arrays, validate_tau
 
