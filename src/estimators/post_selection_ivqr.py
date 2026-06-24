@@ -145,7 +145,7 @@ def estimate_post_selection_ivqr(
     selection_max_iter: int = 10000,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
 ) -> EstimationResult:
-    """Estimate post-selection IVQR by Lasso selection and weighted GMM."""
+    """Estimate post-selection IVQR by Lasso control selection and CH inverse-IVQR."""
     start = perf_counter()
     validate_tau(tau)
     if quantreg_max_iter <= 0:

@@ -14,6 +14,7 @@ from dgp import (
     make_covariance_matrix,
 )
 from dgp.designs import Design
+from dgp.generators import _structural_outcome, _treatment_from_latent_index
 from dgp.true_parameters import true_alpha
 from dgp.true_parameters import get_oracle_control_count, get_oracle_control_indices
 from simulation.config import (
@@ -117,14 +118,21 @@ def test_dgp1_coefficient_sparsity() -> None:
     assert np.count_nonzero(coefs["gamma"]) == 10
 
 
-def test_dgp2_coefficient_sparsity() -> None:
-    coefs = generate_coefficients("dgp2", p=30)
+def test_dgp2_is_denser_than_dgp1() -> None:
+    dgp1_coefs = generate_coefficients("dgp1", p=30)
+    dgp2_coefs = generate_coefficients("dgp2", p=30)
 
-    assert np.count_nonzero(coefs["beta"]) == 20
-    assert np.count_nonzero(coefs["gamma"]) == 20
+    assert np.count_nonzero(dgp2_coefs["beta"]) == 20
+    assert np.count_nonzero(dgp2_coefs["gamma"]) == 20
+    assert np.count_nonzero(dgp2_coefs["beta"]) > np.count_nonzero(
+        dgp1_coefs["beta"]
+    )
+    assert np.count_nonzero(dgp2_coefs["gamma"]) > np.count_nonzero(
+        dgp1_coefs["gamma"]
+    )
 
 
-def test_dgp2_coefficients_match_project_structure() -> None:
+def test_dgp2_coefficients_match_denser_sparse_design() -> None:
     coefs = generate_coefficients("dgp2", p=30)
     beta = coefs["beta"]
     gamma = coefs["gamma"]
@@ -180,7 +188,7 @@ def test_dgp3_errors_are_finite() -> None:
     assert np.all(np.isfinite(v))
 
 
-def test_dgp3_has_heavier_structural_error_tails_than_dgp1() -> None:
+def test_dgp3_uses_heavy_tailed_marginals() -> None:
     design_dgp1 = Design(dgp="dgp1", n=20_000, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
     design_dgp3 = Design(dgp="dgp3", n=20_000, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
 
@@ -189,11 +197,16 @@ def test_dgp3_has_heavier_structural_error_tails_than_dgp1() -> None:
 
     assert data_dgp1.u is not None
     assert data_dgp3.u is not None
+    assert data_dgp1.v is not None
+    assert data_dgp3.v is not None
 
-    tail_dgp1 = np.mean(np.abs(data_dgp1.u) > 3.0)
-    tail_dgp3 = np.mean(np.abs(data_dgp3.u) > 3.0)
+    u_tail_dgp1 = np.quantile(np.abs(data_dgp1.u), 0.95)
+    u_tail_dgp3 = np.quantile(np.abs(data_dgp3.u), 0.95)
+    v_tail_dgp1 = np.quantile(np.abs(data_dgp1.v), 0.95)
+    v_tail_dgp3 = np.quantile(np.abs(data_dgp3.v), 0.95)
 
-    assert tail_dgp3 > tail_dgp1
+    assert u_tail_dgp3 > u_tail_dgp1
+    assert v_tail_dgp3 > v_tail_dgp1
 
 
 def test_full_data_generation_shapes() -> None:
@@ -292,22 +305,30 @@ def test_data_arrays_are_invariant_to_tau_for_same_seed() -> None:
     assert data_50.alpha_true == pytest.approx(1.0)
 
 
-def test_outcome_equation_is_nonseparable_structural_design() -> None:
-    design = Design(dgp="dgp1", n=500, p=50, pi=0.5, tau=0.5, rep=0, seed=123)
-    data = generate_data(design)
-    beta = generate_coefficients("dgp1", 50)["beta"]
+def test_outcome_formula_matches_structural_equation() -> None:
+    x = np.array([[1.0, 2.0], [-1.0, 0.5], [0.0, -2.0]])
+    beta = np.array([0.5, -0.25])
+    u = np.array([-0.5, 0.0, 1.0])
+    d = np.array([0, 1, 1])
 
-    assert data.u is not None
-    expected_y = 1.0 + data.x @ beta + data.u + data.d * (1.0 + data.u)
+    expected_y = 1.0 + x @ beta + u + d * (1.0 + u)
 
-    assert np.allclose(data.y, expected_y)
+    np.testing.assert_allclose(_structural_outcome(x, beta, u, d), expected_y)
 
 
-def test_true_alpha_matches_corrected_structural_quantile_gap() -> None:
-    taus = [0.25, 0.5, 0.75]
-    for tau in taus:
-        q_u = norm.ppf(tau)
-        assert true_alpha(tau, "dgp1") == pytest.approx(1.0 + q_u)
+def test_treatment_formula_matches_latent_index() -> None:
+    x = np.array([[1.0, 0.0], [0.0, 2.0], [-1.0, 1.0]])
+    z = np.array([1.0, -1.0, 0.5])
+    gamma = np.array([0.5, -0.25])
+    v = np.array([-0.75, 1.0, 0.0])
+    pi = 0.5
+
+    expected_d = (pi * z + x @ gamma + v > 0).astype(int)
+
+    np.testing.assert_array_equal(
+        _treatment_from_latent_index(x, z, gamma, v, pi),
+        expected_d,
+    )
 
 
 def test_dgp3_outcome_is_invariant_to_tau_for_same_seed() -> None:
@@ -410,17 +431,17 @@ def test_median_effects_equal_one() -> None:
     assert true_alpha(0.5, "dgp3") == pytest.approx(1.0)
 
 
-def test_dgp1_and_dgp2_are_equal() -> None:
+def test_dgp2_true_alpha_equals_dgp1() -> None:
     for tau in [0.25, 0.5, 0.75]:
         assert true_alpha(tau, "dgp1") == pytest.approx(true_alpha(tau, "dgp2"))
 
 
-def test_dgp1_values_use_normal_quantiles() -> None:
+def test_dgp1_true_alpha_formula() -> None:
     assert true_alpha(0.25, "dgp1") == pytest.approx(1.0 + norm.ppf(0.25))
     assert true_alpha(0.75, "dgp1") == pytest.approx(1.0 + norm.ppf(0.75))
 
 
-def test_dgp3_values_use_scaled_student_t_quantiles() -> None:
+def test_dgp3_true_alpha_uses_scaled_student_t() -> None:
     scale = sqrt((5 - 2) / 5)
 
     assert true_alpha(0.25, "dgp3", df=5) == pytest.approx(

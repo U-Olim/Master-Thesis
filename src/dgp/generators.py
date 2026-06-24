@@ -1,4 +1,31 @@
-"""Data-generating processes for the IVQR simulation study."""
+"""Data-generating processes for the IVQR simulation study.
+
+The common structural design is
+
+    X_i ~ N(0, Sigma),  Sigma_jk = rho_x ** |j - k|,
+    Z_i ~ N(0, 1),
+    D_i = 1{pi Z_i + X_i' gamma + V_i > 0},
+    Y_i(d) = 1 + X_i' beta + U_i + d(1 + U_i),
+    Y_i = Y_i(D_i),
+    alpha_0(tau) = 1 + Q_U(tau).
+
+DGP1 is the baseline exact-sparse Gaussian IVQR design. It combines sparse
+high-dimensional controls with Gaussian U and V shocks. Positive correlation
+between U and V induces endogeneity, while pi controls excluded-instrument
+strength.
+
+DGP2 is the denser exact-sparse Gaussian IVQR design with slower coefficient
+decay. Its 20 active controls make control selection harder than in DGP1, but
+all coefficients outside the active set remain exactly zero.
+
+DGP3 is the heavy-tailed Gaussian-copula IVQR design with scaled Student-t
+structural shocks. It uses the same sparse coefficient support as DGP1 while
+giving U and V heavy-tailed, variance-normalized Student-t marginals. The
+parameter rho_uv is the latent Gaussian-copula correlation and need not equal
+the Pearson correlation of the transformed shocks. With the project's
+quartile and median targets, DGP3 is a heavy-tail robustness design rather
+than an extreme-quantile design.
+"""
 
 from math import sqrt
 
@@ -40,7 +67,11 @@ def generate_x(
 
 
 def generate_coefficients(dgp: str, p: int) -> dict[str, np.ndarray]:
-    """Generate sparse outcome and first-stage coefficient vectors."""
+    """Generate exact-sparse outcome and first-stage coefficient vectors.
+
+    DGP1 and DGP3 have 10 active controls. DGP2 is the denser exact-sparse
+    design and has 20 active controls, subject to the available dimension.
+    """
     beta, gamma = true_sparse_coefficients(dgp, p)
     return {"beta": beta, "gamma": gamma}
 
@@ -52,7 +83,13 @@ def generate_errors(
     df: int,
     rng: np.random.Generator,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate correlated structural and first-stage disturbances."""
+    """Generate structural shock U and first-stage shock V.
+
+    DGP1 and DGP2 use correlated standard-Gaussian shocks. DGP3 maps
+    correlated Gaussian draws through Student-t quantile functions, producing
+    heavy-tailed, variance-normalized marginals with Gaussian-copula
+    dependence.
+    """
 
     normalized_dgp = _normalize_dgp(dgp)
     if n <= 0:
@@ -79,8 +116,30 @@ def generate_errors(
     return u, v
 
 
+def _treatment_from_latent_index(
+    x: np.ndarray,
+    z: np.ndarray,
+    gamma: np.ndarray,
+    v: np.ndarray,
+    pi: float,
+) -> np.ndarray:
+    """Return D = 1{pi Z + X gamma + V > 0}."""
+    latent_index = pi * z + x @ gamma + v
+    return (latent_index > 0).astype(int)
+
+
+def _structural_outcome(
+    x: np.ndarray,
+    beta: np.ndarray,
+    u: np.ndarray,
+    d: np.ndarray,
+) -> np.ndarray:
+    """Return Y = 1 + X beta + U + D(1 + U)."""
+    return 1.0 + x @ beta + u + d * (1.0 + u)
+
+
 def generate_data(design: Design) -> SimData:
-    """Generate one simulated dataset for a Monte Carlo design."""
+    """Generate one dataset from the documented structural IVQR design."""
 
     if design.n <= 0:
         raise ValueError("design.n must be positive.")
@@ -97,13 +156,12 @@ def generate_data(design: Design) -> SimData:
     beta = coefficients["beta"]
     gamma = coefficients["gamma"]
 
-    d_latent = design.pi * z + x @ gamma + v
-    d = (d_latent > 0).astype(int)
+    d = _treatment_from_latent_index(x, z, gamma, v, design.pi)
     alpha = true_alpha(design.tau, design.dgp, df=DF_T)
     # IVQR-compatible structural quantile outcome:
     # Y_i(d) = 1 + X_i' beta + u_i + d(1 + u_i).
     # Therefore q_d(tau, X_i) = 1 + X_i' beta + Q_u(tau)
     # + d(1 + Q_u(tau)), and alpha_0(tau) = 1 + Q_u(tau).
-    y = 1.0 + x @ beta + u + d * (1.0 + u)
+    y = _structural_outcome(x, beta, u, d)
 
     return SimData(y=y, d=d, z=z, x=x, alpha_true=alpha, u=u, v=v)

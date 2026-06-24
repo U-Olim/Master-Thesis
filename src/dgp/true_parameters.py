@@ -22,7 +22,18 @@ def _normalize_dgp(dgp: str) -> str:
 
 
 def true_alpha(tau: float, dgp: str, df: int = 5) -> float:
-    """Return the true structural quantile treatment effect alpha_0(tau)."""
+    """Return the true structural quantile treatment effect.
+
+    For DGP1 and DGP2, the structural shock is standard Gaussian, so
+
+        alpha_0(tau) = 1 + Phi^{-1}(tau).
+
+    For DGP3, the structural shock is a variance-normalized Student-t random
+    variable, so
+
+        alpha_0(tau)
+            = 1 + sqrt((df - 2) / df) * t_df^{-1}(tau).
+    """
 
     if tau <= 0.0 or tau >= 1.0:
         raise ValueError("tau must be strictly between 0 and 1.")
@@ -76,7 +87,11 @@ def get_oracle_control_count(dgp_name: str, p: int) -> int:
 
 
 def true_sparse_coefficients(dgp: str, p: int) -> tuple[np.ndarray, np.ndarray]:
-    """Return true sparse outcome and first-stage coefficient vectors."""
+    """Return true exact-sparse outcome and first-stage coefficient vectors.
+
+    DGP2 is the denser exact-sparse design with up to 20 active controls.
+    DGP1 and DGP3 have up to 10 active controls.
+    """
     normalized_dgp = _normalize_dgp(dgp)
     if p <= 0:
         raise ValueError("p must be positive.")
