@@ -1,4 +1,12 @@
-"""Post-selection IVQR estimator."""
+"""Post-selection control-selected IVQR estimator.
+
+This estimator first selects controls by LassoCV from the reduced-form
+relations Y ~ X and D ~ X, then applies the Chernozhukov-Hansen
+inverse-IVQR estimator using only the selected controls.
+
+It is a feasible Monte Carlo benchmark. It is not the DML-IVQR estimator
+and does not implement the full orthogonal double-selection IV procedure.
+"""
 
 from __future__ import annotations
 
@@ -13,10 +21,8 @@ from dgp.designs import SimData
 from estimators.base import EstimationResult
 from estimators.ch_inverse_ivqr import (
     as_2d_instruments,
-    evaluate_alpha_ch_ivqr,
+    evaluate_alpha_ch_ivqr as _evaluate_alpha_ch_ivqr,
 )
-
-_evaluate_alpha_ch_ivqr = evaluate_alpha_ch_ivqr
 from inference.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
@@ -34,6 +40,17 @@ from utils.validation import (
 )
 
 
+def _validate_selection_config(cv: int, max_iter: int, n: int) -> None:
+    if not isinstance(cv, int) or isinstance(cv, bool):
+        raise ValueError("cv must be an integer")
+    if cv < 2 or cv > n:
+        raise ValueError("cv must satisfy 2 <= cv <= n")
+    if not isinstance(max_iter, int) or isinstance(max_iter, bool):
+        raise ValueError("max_iter must be an integer")
+    if max_iter <= 0:
+        raise ValueError("max_iter must be positive")
+
+
 def _failed_result(
     data: SimData,
     tau: float,
@@ -43,6 +60,18 @@ def _failed_result(
     alpha_grid_size: int | None = None,
     failed_alpha_count: int | None = None,
 ) -> EstimationResult:
+    if runtime_seconds < 0:
+        raise ValueError("runtime_seconds must be nonnegative")
+    if alpha_grid_size is not None and alpha_grid_size < 1:
+        raise ValueError("alpha_grid_size must be at least 1")
+    if failed_alpha_count is not None and failed_alpha_count < 0:
+        raise ValueError("failed_alpha_count must be nonnegative")
+    if (
+        alpha_grid_size is not None
+        and failed_alpha_count is not None
+        and failed_alpha_count > alpha_grid_size
+    ):
+        raise ValueError("failed_alpha_count cannot exceed alpha_grid_size")
     return EstimationResult(
         estimator="post_selection_ivqr",
         alpha_hat=None,
@@ -75,14 +104,23 @@ def select_controls_lasso(
     cv: int = 5,
     max_iter: int = 10000,
 ) -> tuple[np.ndarray, str]:
-    """Select controls by union of LassoCV selections for Y~X and D~X."""
+    """Select controls by union of LassoCV selections for Y~X and D~X.
+
+    The selection step is not quantile-specific; tau is validated for API
+    consistency with IVQR estimators.
+    """
     validate_tau(tau)
     y, d, x = validate_data_arrays(y, d, x)
+    n = x.shape[0]
+    if n < 2:
+        raise ValueError("at least two observations are required")
+    _validate_selection_config(cv, max_iter, n)
 
-    if cv < 2:
-        raise ValueError("cv must be at least 2")
-    if max_iter <= 0:
-        raise ValueError("max_iter must be positive")
+    if x.shape[1] == 0:
+        return (
+            np.empty(0, dtype=int),
+            "selected_y=0; selected_d=0; selected_union=0",
+        )
 
     model_y = make_pipeline(
         StandardScaler(),
@@ -152,6 +190,7 @@ def estimate_post_selection_ivqr(
         raise ValueError("quantreg_max_iter must be positive")
     y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
     z_2d = as_2d_instruments(z)
+    _validate_selection_config(selection_cv, selection_max_iter, x.shape[0])
 
     try:
         selected_indices, selection_message = select_controls_lasso(
@@ -180,11 +219,15 @@ def estimate_post_selection_ivqr(
     else:
         x_selected = x[:, selected_indices]
 
-    if selected_indices.size + 1 >= n:
+    num_qr_regressors = 1 + int(selected_indices.size) + int(z_2d.shape[1])
+    if num_qr_regressors >= n:
         return _failed_result(
             data=data,
             tau=tau,
-            message="Post-selection IVQR infeasible: selected nuisance dimension is at least sample size.",
+            message=(
+                "Post-selection IVQR infeasible: QR design dimension is at least "
+                f"sample size (regressors={num_qr_regressors}, n={n})."
+            ),
             selected_controls=int(selected_indices.size),
             runtime_seconds=perf_counter() - start,
             alpha_grid_size=None,
@@ -264,3 +307,10 @@ def estimate_post_selection_ivqr(
         selected_controls=int(selected_indices.size),
         runtime_seconds=perf_counter() - start,
     )
+
+
+__all__ = [
+    "select_controls_lasso",
+    "evaluate_post_selection_alpha",
+    "estimate_post_selection_ivqr",
+]

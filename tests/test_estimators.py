@@ -536,6 +536,49 @@ def test_select_controls_lasso_handles_no_signal_artificial_data() -> None:
     assert isinstance(message, str)
 
 
+@pytest.mark.parametrize("cv", [1, 41, True])
+def test_select_controls_lasso_rejects_invalid_cv(cv: int) -> None:
+    x = np.ones((40, 2))
+
+    with pytest.raises(ValueError, match="cv must"):
+        select_controls_lasso(
+            np.ones(40),
+            np.zeros(40),
+            x,
+            tau=0.5,
+            cv=cv,
+        )
+
+
+@pytest.mark.parametrize("max_iter", [0, True])
+def test_select_controls_lasso_rejects_invalid_max_iter(max_iter: int) -> None:
+    x = np.ones((40, 2))
+
+    with pytest.raises(ValueError, match="max_iter must"):
+        select_controls_lasso(
+            np.ones(40),
+            np.zeros(40),
+            x,
+            tau=0.5,
+            cv=3,
+            max_iter=max_iter,
+        )
+
+
+def test_select_controls_lasso_handles_zero_control_matrix() -> None:
+    selected, message = select_controls_lasso(
+        np.ones(20),
+        np.zeros(20),
+        np.empty((20, 0)),
+        tau=0.5,
+        cv=3,
+    )
+
+    assert selected.shape == (0,)
+    assert np.issubdtype(selected.dtype, np.integer)
+    assert "selected_union=0" in message
+
+
 def test_evaluate_post_selection_alpha_returns_finite_statistic() -> None:
     data = generate_data(Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
     x_selected = data.x[:, :3]
@@ -628,6 +671,102 @@ def test_estimate_post_selection_ivqr_invalid_tau_raises_value_error() -> None:
 
     with pytest.raises(ValueError):
         estimate_post_selection_ivqr(data, tau=0.0, alphas=np.linspace(0.0, 2.0, 5))
+
+
+@pytest.mark.parametrize(
+    ("argument", "value", "message"),
+    [
+        ("selection_cv", 1, "cv must"),
+        ("selection_cv", 101, "cv must"),
+        ("selection_cv", True, "cv must"),
+        ("selection_max_iter", 0, "max_iter must"),
+        ("selection_max_iter", True, "max_iter must"),
+    ],
+)
+def test_estimate_post_selection_ivqr_rejects_invalid_selection_config(
+    argument: str,
+    value: int,
+    message: str,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=100, p=10, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    kwargs = {argument: value}
+
+    with pytest.raises(ValueError, match=message):
+        estimate_post_selection_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.linspace(0.0, 2.0, 5),
+            **kwargs,
+        )
+
+
+@pytest.mark.parametrize(
+    ("diagnostics", "message"),
+    [
+        ({"runtime_seconds": -1.0}, "runtime_seconds must be nonnegative"),
+        ({"alpha_grid_size": 0}, "alpha_grid_size must be at least 1"),
+        ({"failed_alpha_count": -1}, "failed_alpha_count must be nonnegative"),
+        (
+            {"alpha_grid_size": 2, "failed_alpha_count": 3},
+            "failed_alpha_count cannot exceed alpha_grid_size",
+        ),
+    ],
+)
+def test_post_selection_failed_result_rejects_invalid_diagnostics(
+    diagnostics: dict[str, int | float],
+    message: str,
+) -> None:
+    import estimators.post_selection_ivqr as post_module
+
+    data = generate_data(
+        Design("dgp1", n=20, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    arguments: dict[str, object] = {
+        "data": data,
+        "tau": 0.5,
+        "message": "failed",
+        "selected_controls": None,
+        "runtime_seconds": 0.0,
+        "alpha_grid_size": 3,
+        "failed_alpha_count": 1,
+    }
+    arguments.update(diagnostics)
+
+    with pytest.raises(ValueError, match=message):
+        post_module._failed_result(**arguments)
+
+
+def test_post_selection_qr_feasibility_counts_instruments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import estimators.post_selection_ivqr as post_module
+
+    data = generate_data(
+        Design("dgp1", n=5, p=3, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    def fake_select_controls(*args, **kwargs):
+        return np.arange(3), "selected_y=3; selected_d=3; selected_union=3"
+
+    monkeypatch.setattr(
+        post_module,
+        "select_controls_lasso",
+        fake_select_controls,
+    )
+
+    result = estimate_post_selection_ivqr(
+        data,
+        tau=0.5,
+        alphas=np.linspace(0.0, 2.0, 3),
+        selection_cv=2,
+    )
+
+    assert result.failed is True
+    assert result.selected_controls == 3
+    assert "QR design dimension is at least sample size" in result.message
+    assert "regressors=5, n=5" in result.message
 
 
 def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
@@ -1000,7 +1139,7 @@ def test_make_folds_covers_each_observation_once() -> None:
 
 def test_standardize_train_test_uses_training_moments() -> None:
     x_train = np.array([[1.0, 2.0], [3.0, 6.0], [5.0, 10.0]])
-    x_test = np.array([[7.0, 14.0], [9.0, 18.0]])
+    x_test = np.array([[70.0, 140.0], [90.0, 180.0]])
 
     x_train_scaled, x_test_scaled, scaler = standardize_train_test(x_train, x_test)
 
@@ -1009,6 +1148,7 @@ def test_standardize_train_test_uses_training_moments() -> None:
     assert x_test_scaled.shape == x_test.shape
     scaler_mean = require_array(scaler.mean_, "scaler.mean_")
     np.testing.assert_allclose(scaler_mean, x_train.mean(axis=0))
+    assert not np.allclose(scaler_mean, np.vstack([x_train, x_test]).mean(axis=0))
 
 
 def test_fit_quantile_nuisance_returns_fitted_model() -> None:
@@ -1072,6 +1212,160 @@ def test_evaluate_dml_ivqr_alpha_returns_finite_statistic() -> None:
     assert converged is True
     assert np.isfinite(statistic)
     assert statistic >= 0.0
+
+
+@pytest.mark.parametrize("alpha_value", [np.nan, np.inf, -np.inf, True])
+def test_evaluate_dml_ivqr_alpha_rejects_nonfinite_alpha(
+    alpha_value: float,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(ValueError, match="alpha_value must be finite"):
+        evaluate_dml_ivqr_alpha(
+            data.y,
+            data.d,
+            data.z,
+            data.x,
+            alpha_value=alpha_value,
+            tau=0.5,
+            k_folds=3,
+        )
+
+
+@pytest.mark.parametrize(
+    ("argument", "value"),
+    [
+        ("quantile_penalty", np.nan),
+        ("quantile_penalty", -1.0),
+        ("quantile_penalty", True),
+        ("ridge_alpha", np.nan),
+        ("ridge_alpha", -1.0),
+        ("ridge_alpha", True),
+        ("gmm_ridge", np.nan),
+        ("gmm_ridge", -1.0),
+        ("gmm_ridge", True),
+    ],
+)
+def test_evaluate_dml_ivqr_alpha_rejects_invalid_penalties(
+    argument: str,
+    value: float,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(ValueError, match=f"{argument} must"):
+        evaluate_dml_ivqr_alpha(
+            data.y,
+            data.d,
+            data.z,
+            data.x,
+            alpha_value=1.0,
+            tau=0.5,
+            k_folds=3,
+            **{argument: value},
+        )
+
+
+@pytest.mark.parametrize("solver", ["warn", "bad_solver"])
+def test_evaluate_dml_ivqr_alpha_rejects_invalid_solver(solver: str) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(ValueError, match="Unknown quantile solver"):
+        evaluate_dml_ivqr_alpha(
+            data.y,
+            data.d,
+            data.z,
+            data.x,
+            alpha_value=1.0,
+            tau=0.5,
+            k_folds=3,
+            quantile_solver=solver,
+        )
+
+
+def test_evaluate_dml_ivqr_accepts_single_column_instrument() -> None:
+    data = generate_data(
+        Design("dgp1", n=60, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    statistic, converged, message = evaluate_dml_ivqr_alpha(
+        data.y,
+        data.d,
+        data.z[:, None],
+        data.x,
+        alpha_value=1.0,
+        tau=0.5,
+        k_folds=3,
+    )
+
+    assert converged is True
+    assert message == "ok"
+    assert np.isfinite(statistic)
+
+
+def test_evaluate_dml_ivqr_rejects_multiple_instruments() -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    z_multiple = np.column_stack([data.z, data.z])
+
+    with pytest.raises(
+        ValueError,
+        match="DML-IVQR currently supports exactly one excluded instrument",
+    ):
+        evaluate_dml_ivqr_alpha(
+            data.y,
+            data.d,
+            z_multiple,
+            data.x,
+            alpha_value=1.0,
+            tau=0.5,
+            k_folds=3,
+        )
+
+
+def test_evaluate_dml_ivqr_rejects_zero_control_matrix() -> None:
+    n = 30
+
+    with pytest.raises(
+        ValueError,
+        match="DML-IVQR requires at least one control column",
+    ):
+        evaluate_dml_ivqr_alpha(
+            np.ones(n),
+            np.zeros(n),
+            np.arange(n, dtype=float),
+            np.empty((n, 0)),
+            alpha_value=1.0,
+            tau=0.5,
+            k_folds=3,
+        )
+
+
+@pytest.mark.parametrize("use_cache", ["False", 1])
+def test_evaluate_dml_ivqr_rejects_nonboolean_use_cache(
+    use_cache: object,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(ValueError, match="use_cache must be a boolean"):
+        evaluate_dml_ivqr_alpha(
+            data.y,
+            data.d,
+            data.z,
+            data.x,
+            alpha_value=1.0,
+            tau=0.5,
+            k_folds=3,
+            use_cache=use_cache,
+        )
 
 
 def test_dml_fold_cache_has_disjoint_train_test_splits() -> None:
@@ -1169,6 +1463,234 @@ def test_estimate_dml_ivqr_returns_estimation_result() -> None:
     assert result.runtime_seconds >= 0.0
 
 
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"alpha_min": np.nan}, "alpha_min must be finite"),
+        ({"alpha_max": np.inf}, "alpha_max must be finite"),
+        ({"alpha_step": np.nan}, "alpha_step must be finite and positive"),
+        ({"alpha_step": 0.0}, "alpha_step must be finite and positive"),
+        ({"alpha_step": True}, "alpha_step must be finite and positive"),
+        (
+            {"alpha_min": 1.0, "alpha_max": 1.0},
+            "alpha_max must exceed alpha_min",
+        ),
+        (
+            {"alpha_min": 2.0, "alpha_max": 1.0},
+            "alpha_max must exceed alpha_min",
+        ),
+    ],
+)
+def test_estimate_dml_ivqr_rejects_invalid_alpha_grid_bounds(
+    arguments: dict[str, object],
+    message: str,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(ValueError, match=message):
+        estimate_dml_ivqr(
+            data,
+            tau=0.5,
+            k_folds=3,
+            **arguments,
+        )
+
+
+@pytest.mark.parametrize("use_cache", ["False", 1])
+def test_estimate_dml_ivqr_rejects_nonboolean_use_cache(
+    use_cache: object,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(ValueError, match="use_cache must be a boolean"):
+        estimate_dml_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.linspace(0.0, 2.0, 3),
+            k_folds=3,
+            use_cache=use_cache,
+        )
+
+
+@pytest.mark.parametrize("fold_random_state", [True, 1.5, "123"])
+def test_estimate_dml_ivqr_rejects_invalid_fold_random_state(
+    fold_random_state: object,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="fold_random_state must be an integer or None",
+    ):
+        estimate_dml_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.linspace(0.0, 2.0, 3),
+            k_folds=3,
+            fold_random_state=fold_random_state,
+        )
+
+
+def test_estimate_dml_ivqr_uses_absolute_score_inversion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import estimators.dml_ivqr as dml_module
+
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    alphas = np.array([0.0, 1.0, 2.0])
+    statistics = {0.0: 5.0, 1.0: 6.0, 2.0: 10.0}
+    captured: dict[str, object] = {}
+    original_invert = dml_module.invert_score_test
+
+    monkeypatch.setattr(dml_module, "_build_dml_fold_cache", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        dml_module,
+        "_evaluate_dml_ivqr_alpha_with_cache",
+        lambda **kwargs: (statistics[kwargs["alpha_value"]], True, "ok"),
+    )
+    monkeypatch.setattr(
+        dml_module,
+        "critical_value_chi_square",
+        lambda confidence_level, df: (
+            captured.update({"critical_df": df}) or 3.84
+        ),
+    )
+
+    def capture_inversion(**kwargs):
+        captured.update(kwargs)
+        return original_invert(**kwargs)
+
+    monkeypatch.setattr(dml_module, "invert_score_test", capture_inversion)
+
+    result = estimate_dml_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        k_folds=3,
+        use_cache=True,
+    )
+
+    assert captured["statistic_reference"] is None
+    assert captured["inversion_type"] == "absolute"
+    assert captured["critical_df"] == 1
+    assert result.cr_empty is True
+
+
+def test_estimate_dml_ivqr_cache_failure_is_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import estimators.dml_ivqr as dml_module
+
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    calls = {"cache": 0, "uncached": 0}
+
+    def fail_cache(*args, **kwargs):
+        calls["cache"] += 1
+        raise RuntimeError("forced cache failure")
+
+    def record_uncached(*args, **kwargs):
+        calls["uncached"] += 1
+        return 0.0, True, "ok"
+
+    monkeypatch.setattr(dml_module, "_build_dml_fold_cache", fail_cache)
+    monkeypatch.setattr(
+        dml_module,
+        "_evaluate_dml_ivqr_alpha_uncached",
+        record_uncached,
+    )
+
+    result = estimate_dml_ivqr(
+        data,
+        tau=0.5,
+        alphas=np.linspace(0.0, 2.0, 3),
+        k_folds=3,
+        use_cache=True,
+    )
+
+    assert result.failed is True
+    assert "Fold cache construction failed: forced cache failure" in result.message
+    assert calls == {"cache": 1, "uncached": 0}
+
+
+@pytest.mark.parametrize(
+    ("diagnostics", "message"),
+    [
+        ({"runtime_seconds": -1.0}, "runtime_seconds must be nonnegative"),
+        ({"alpha_grid_size": 0}, "alpha_grid_size must be at least 1"),
+        ({"failed_alpha_count": -1}, "failed_alpha_count must be nonnegative"),
+        (
+            {"alpha_grid_size": 2, "failed_alpha_count": 3},
+            "failed_alpha_count cannot exceed alpha_grid_size",
+        ),
+    ],
+)
+def test_dml_failed_result_rejects_invalid_diagnostics(
+    diagnostics: dict[str, int | float],
+    message: str,
+) -> None:
+    import estimators.dml_ivqr as dml_module
+
+    data = generate_data(
+        Design("dgp1", n=20, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    arguments: dict[str, object] = {
+        "data": data,
+        "tau": 0.5,
+        "message": "failed",
+        "runtime_seconds": 0.0,
+        "alpha_grid_size": 3,
+        "failed_alpha_count": 1,
+    }
+    arguments.update(diagnostics)
+
+    with pytest.raises(ValueError, match=message):
+        dml_module._failed_result(**arguments)
+
+
+def test_estimate_dml_ivqr_all_alpha_points_fail_cleanly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import estimators.dml_ivqr as dml_module
+
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    alphas = np.linspace(0.0, 2.0, 3)
+    monkeypatch.setattr(
+        dml_module,
+        "_build_dml_fold_cache",
+        lambda *args, **kwargs: [],
+    )
+    monkeypatch.setattr(
+        dml_module,
+        "_evaluate_dml_ivqr_alpha_with_cache",
+        lambda **kwargs: (np.inf, False, "forced alpha failure"),
+    )
+
+    result = estimate_dml_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        k_folds=3,
+    )
+
+    assert result.failed is True
+    assert result.failed_alpha_count == len(alphas)
+    assert result.alpha_grid_size == len(alphas)
+    assert "All alpha grid points failed" in result.message
+    assert "first_failure=forced alpha failure" in result.message
+
+
 def test_estimate_dml_ivqr_cached_and_uncached_results_match() -> None:
     data = generate_data(Design("dgp1", n=90, p=8, pi=1.0, tau=0.5, rep=0, seed=123))
     alphas = np.array([-0.5, 0.0, 0.5])
@@ -1230,6 +1752,8 @@ def test_estimate_dml_ivqr_invalid_k_folds_raises_value_error() -> None:
         estimate_dml_ivqr(data, tau=0.5, alphas=alphas, k_folds=0)
     with pytest.raises(ValueError):
         estimate_dml_ivqr(data, tau=0.5, alphas=alphas, k_folds=1)
+    with pytest.raises(ValueError, match="k_folds must be an integer"):
+        estimate_dml_ivqr(data, tau=0.5, alphas=alphas, k_folds=True)
     with pytest.raises(ValueError):
         estimate_dml_ivqr(data, tau=0.5, alphas=alphas, k_folds=data.x.shape[0] + 1)
 

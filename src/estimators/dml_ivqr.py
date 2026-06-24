@@ -1,4 +1,18 @@
-"""DML-IVQR estimator."""
+"""DML-style residualized IVQR estimator.
+
+For each structural alpha candidate, this estimator cross-fits a penalized
+quantile nuisance regression of Y - D*alpha on X and residualizes the scalar
+excluded instrument Z on X with unweighted Ridge regression. Its cross-fitted
+moment contribution is
+``(tau - 1{Y - D*alpha - q_hat_alpha(X) <= 0}) * Z_resid``. It evaluates
+these moments with the weighted GMM statistic
+``n * gbar' Sigma^(-1) gbar`` and constructs a weak-identification-robust
+confidence region by absolute score-test inversion.
+
+The current implementation supports one excluded instrument. It is a
+DML-style residualized-IVQR procedure, not the density-weighted
+Chen-Huang-Tien DML-IVQR implementation.
+"""
 
 from __future__ import annotations
 
@@ -37,8 +51,113 @@ QuantileSolver = Literal[
     "highs",
     "interior-point",
     "revised simplex",
-    "warn",
 ]
+_VALID_QUANTILE_SOLVERS = {
+    "highs-ds",
+    "highs-ipm",
+    "highs",
+    "interior-point",
+    "revised simplex",
+}
+
+
+def _validate_nonnegative_float(name: str, value: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a finite nonnegative number")
+    value = float(value)
+    if not np.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be finite and nonnegative")
+    return value
+
+
+def _validate_positive_int(name: str, value: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if value < 1:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
+def _validate_optional_random_state(value: int | None) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError("fold_random_state must be an integer or None")
+    return value
+
+
+def _validate_finite_alpha(alpha_value: float) -> float:
+    if isinstance(alpha_value, bool):
+        raise ValueError("alpha_value must be finite")
+    alpha_value = float(alpha_value)
+    if not np.isfinite(alpha_value):
+        raise ValueError("alpha_value must be finite")
+    return alpha_value
+
+
+def _validate_alpha_grid_bounds(
+    alpha_min: float,
+    alpha_max: float,
+    alpha_step: float,
+) -> tuple[float, float, float]:
+    if isinstance(alpha_min, bool):
+        raise ValueError("alpha_min must be finite")
+    alpha_min = float(alpha_min)
+    if not np.isfinite(alpha_min):
+        raise ValueError("alpha_min must be finite")
+    if isinstance(alpha_max, bool):
+        raise ValueError("alpha_max must be finite")
+    alpha_max = float(alpha_max)
+    if not np.isfinite(alpha_max):
+        raise ValueError("alpha_max must be finite")
+    if isinstance(alpha_step, bool):
+        raise ValueError("alpha_step must be finite and positive")
+    alpha_step = float(alpha_step)
+    if not np.isfinite(alpha_step) or alpha_step <= 0:
+        raise ValueError("alpha_step must be finite and positive")
+    if alpha_max <= alpha_min:
+        raise ValueError("alpha_max must exceed alpha_min")
+    return alpha_min, alpha_max, alpha_step
+
+
+def _validate_quantile_solver(solver: str) -> str:
+    if solver not in _VALID_QUANTILE_SOLVERS:
+        raise ValueError(f"Unknown quantile solver: {solver}")
+    return solver
+
+
+def _validate_scalar_instrument(
+    z: np.ndarray,
+    n: int | None = None,
+) -> np.ndarray:
+    z_array = np.asarray(z, dtype=float)
+    if z_array.ndim == 2:
+        if z_array.shape[1] != 1:
+            raise ValueError(
+                "DML-IVQR currently supports exactly one excluded instrument"
+            )
+        z_array = z_array[:, 0]
+    elif z_array.ndim != 1:
+        raise ValueError(
+            "DML-IVQR currently supports exactly one excluded instrument"
+        )
+    z_array = validate_1d_array("z", z_array)
+    if n is not None and len(z_array) != n:
+        raise ValueError("z must have the same number of rows as y")
+    return z_array
+
+
+def _validate_dml_data_arrays(
+    y: np.ndarray,
+    d: np.ndarray,
+    z: np.ndarray,
+    x: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    y_array, d_array, x_array = validate_data_arrays(y, d, x)
+    if x_array.shape[1] == 0:
+        raise ValueError("DML-IVQR requires at least one control column")
+    z_array = _validate_scalar_instrument(z, n=len(y_array))
+    return y_array, d_array, z_array, x_array
 
 
 @dataclass(frozen=True)
@@ -60,6 +179,18 @@ def _failed_result(
     alpha_grid_size: int | None = None,
     failed_alpha_count: int | None = None,
 ) -> EstimationResult:
+    if runtime_seconds < 0:
+        raise ValueError("runtime_seconds must be nonnegative")
+    if alpha_grid_size is not None and alpha_grid_size < 1:
+        raise ValueError("alpha_grid_size must be at least 1")
+    if failed_alpha_count is not None and failed_alpha_count < 0:
+        raise ValueError("failed_alpha_count must be nonnegative")
+    if (
+        alpha_grid_size is not None
+        and failed_alpha_count is not None
+        and failed_alpha_count > alpha_grid_size
+    ):
+        raise ValueError("failed_alpha_count cannot exceed alpha_grid_size")
     return EstimationResult(
         estimator="dml_ivqr",
         alpha_hat=None,
@@ -89,6 +220,9 @@ def make_folds(
     random_state: int | None = 123,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """Create shuffled K-fold train/test indices."""
+    n = _validate_positive_int("n", n)
+    k_folds = _validate_positive_int("k_folds", k_folds)
+    random_state = _validate_optional_random_state(random_state)
     validate_k_folds(k_folds, n)
 
     splitter = KFold(n_splits=k_folds, shuffle=True, random_state=random_state)
@@ -98,6 +232,8 @@ def make_folds(
     for train_idx, test_idx in folds:
         if np.intersect1d(train_idx, test_idx).size > 0:
             raise RuntimeError("train and test fold indices overlap")
+        if test_idx.size == 0:
+            raise RuntimeError("test fold indices must be nonempty")
         test_counts[test_idx] += 1
     if not np.all(test_counts == 1):
         raise RuntimeError("each observation must appear exactly once in test folds")
@@ -134,9 +270,9 @@ def fit_quantile_nuisance(
     """Fit penalized quantile nuisance for Y - D alpha on X."""
     validate_tau(tau)
     y_train, d_train, x_train = validate_data_arrays(y_train, d_train, x_train)
-
-    if penalty < 0:
-        raise ValueError("penalty must be nonnegative")
+    alpha_value = _validate_finite_alpha(alpha_value)
+    penalty = _validate_nonnegative_float("penalty", penalty)
+    solver = _validate_quantile_solver(solver)
 
     y_tilde_train = y_train - d_train * alpha_value
     try:
@@ -159,13 +295,12 @@ def fit_instrument_residualizer(
     ridge_alpha: float = 1.0,
 ) -> tuple[Any | None, bool, str]:
     """Fit Ridge residualizer for Z on X."""
-    z_train = validate_1d_array("z_train", z_train)
+    z_train = _validate_scalar_instrument(z_train)
     x_train = validate_2d_array("x_train", x_train)
 
     if len(z_train) != x_train.shape[0]:
         raise ValueError("z_train and x_train must have consistent row counts")
-    if ridge_alpha < 0:
-        raise ValueError("ridge_alpha must be nonnegative")
+    ridge_alpha = _validate_nonnegative_float("ridge_alpha", ridge_alpha)
 
     try:
         model = Ridge(alpha=ridge_alpha, fit_intercept=True)
@@ -193,7 +328,8 @@ def _build_dml_fold_cache(
     alpha grid. Outcome nuisance fits are still recomputed for each alpha
     because y - d*alpha depends on alpha.
     """
-    y, d, z, x = validate_data_arrays(y, d, x, z)
+    y, d, z, x = _validate_dml_data_arrays(y, d, z, x)
+    ridge_alpha = _validate_nonnegative_float("ridge_alpha", ridge_alpha)
     folds = make_folds(n=len(y), k_folds=k_folds, random_state=random_state)
 
     cache: list[DMLFoldCache] = []
@@ -242,6 +378,12 @@ def _evaluate_dml_ivqr_alpha_with_cache(
     if len(y) != len(d):
         raise ValueError("y and d must have consistent lengths")
     validate_tau(tau)
+    alpha_value = _validate_finite_alpha(alpha_value)
+    quantile_penalty = _validate_nonnegative_float(
+        "quantile_penalty", quantile_penalty
+    )
+    quantile_solver = _validate_quantile_solver(quantile_solver)
+    gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
 
     n = len(y)
     moment_contributions = np.empty(n, dtype=float)
@@ -284,8 +426,15 @@ def _evaluate_dml_ivqr_alpha_uncached(
     gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
     """Evaluate DML-IVQR alpha with the original uncached fold setup."""
-    y, d, z, x = validate_data_arrays(y, d, x, z)
+    y, d, z, x = _validate_dml_data_arrays(y, d, z, x)
     validate_tau(tau)
+    alpha_value = _validate_finite_alpha(alpha_value)
+    quantile_penalty = _validate_nonnegative_float(
+        "quantile_penalty", quantile_penalty
+    )
+    ridge_alpha = _validate_nonnegative_float("ridge_alpha", ridge_alpha)
+    quantile_solver = _validate_quantile_solver(quantile_solver)
+    gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
 
     try:
         fold_cache = _build_dml_fold_cache(
@@ -328,6 +477,16 @@ def evaluate_dml_ivqr_alpha(
     use_cache: bool = True,
 ) -> tuple[float, bool, str]:
     """Evaluate the weighted cross-fitted scalar DML-IVQR statistic."""
+    if not isinstance(use_cache, bool):
+        raise ValueError("use_cache must be a boolean")
+    fold_random_state = _validate_optional_random_state(fold_random_state)
+    alpha_value = _validate_finite_alpha(alpha_value)
+    quantile_penalty = _validate_nonnegative_float(
+        "quantile_penalty", quantile_penalty
+    )
+    ridge_alpha = _validate_nonnegative_float("ridge_alpha", ridge_alpha)
+    quantile_solver = _validate_quantile_solver(quantile_solver)
+    gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
     if not use_cache:
         return _evaluate_dml_ivqr_alpha_uncached(
             y=y,
@@ -392,9 +551,23 @@ def estimate_dml_ivqr(
     """
     start = perf_counter()
     validate_tau(tau)
-    y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
+    if not isinstance(use_cache, bool):
+        raise ValueError("use_cache must be a boolean")
+    fold_random_state = _validate_optional_random_state(fold_random_state)
+    y, d, z, x = _validate_dml_data_arrays(data.y, data.d, data.z, data.x)
+    quantile_penalty = _validate_nonnegative_float(
+        "quantile_penalty", quantile_penalty
+    )
+    ridge_alpha = _validate_nonnegative_float("ridge_alpha", ridge_alpha)
+    quantile_solver = _validate_quantile_solver(quantile_solver)
+    gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
 
     if alphas is None:
+        alpha_min, alpha_max, alpha_step = _validate_alpha_grid_bounds(
+            alpha_min,
+            alpha_max,
+            alpha_step,
+        )
         alphas = alpha_grid(alpha_min, alpha_max, alpha_step)
     else:
         alphas = validate_alpha_grid(alphas)
@@ -411,13 +584,21 @@ def estimate_dml_ivqr(
                 random_state=fold_random_state,
                 ridge_alpha=ridge_alpha,
             )
-        except RuntimeError:
-            fold_cache = None
+        except RuntimeError as exc:
+            return _failed_result(
+                data=data,
+                tau=tau,
+                message=f"Fold cache construction failed: {exc}",
+                runtime_seconds=perf_counter() - start,
+                alpha_grid_size=len(alphas),
+                failed_alpha_count=len(alphas),
+            )
     else:
         make_folds(n=len(y), k_folds=k_folds, random_state=fold_random_state)
 
     statistics = np.empty(len(alphas), dtype=float)
     converged_flags: list[bool] = []
+    failure_messages: list[str] = []
 
     for j, alpha_value in enumerate(alphas):
         try:
@@ -447,19 +628,28 @@ def estimate_dml_ivqr(
                     quantile_solver=quantile_solver,
                     gmm_ridge=gmm_ridge,
                 )
-        except Exception:  # noqa: BLE001 - failed grid points are recorded.
+        except Exception as exc:  # noqa: BLE001 - failed grid points are recorded.
             statistic, converged = np.inf, False
+            message = str(exc)
+        if not converged:
+            failure_messages.append(message)
         statistics[j] = statistic
         converged_flags.append(converged)
 
     statistics, num_failed = sanitize_grid_statistics(statistics, converged_flags)
     if num_failed == len(alphas):
+        first_failure = (
+            f"; first_failure={failure_messages[0][:200]}"
+            if failure_messages
+            else ""
+        )
         return _failed_result(
             data=data,
             tau=tau,
             message=(
-                "All alpha-grid evaluations failed; "
+                "All alpha grid points failed; "
                 f"failed_alpha_points={num_failed}/{len(alphas)}"
+                f"{first_failure}"
             ),
             runtime_seconds=perf_counter() - start,
             alpha_grid_size=len(alphas),
@@ -473,10 +663,15 @@ def estimate_dml_ivqr(
         statistics=statistics,
         critical_value=critical,
         alpha_true=data.alpha_true,
-        statistic_reference=min_statistic,
-        inversion_type="qlr",
+        statistic_reference=None,
+        inversion_type="absolute",
     )
 
+    first_failure = (
+        f"; first_failure={failure_messages[0][:200]}"
+        if failure_messages
+        else ""
+    )
     return EstimationResult(
         estimator="dml_ivqr",
         alpha_hat=alpha_hat,
@@ -484,7 +679,10 @@ def estimate_dml_ivqr(
         tau=tau,
         converged=True,
         failed=False,
-        message=f"ok; failed_alpha_points={num_failed}/{len(alphas)}",
+        message=(
+            f"ok; failed_alpha_points={num_failed}/{len(alphas)}"
+            f"{first_failure}"
+        ),
         objective_value=min_statistic,
         at_grid_boundary=at_boundary,
         alpha_grid_size=len(alphas),
@@ -498,3 +696,14 @@ def estimate_dml_ivqr(
         selected_controls=None,
         runtime_seconds=perf_counter() - start,
     )
+
+
+__all__ = [
+    "DMLFoldCache",
+    "make_folds",
+    "standardize_train_test",
+    "fit_quantile_nuisance",
+    "fit_instrument_residualizer",
+    "evaluate_dml_ivqr_alpha",
+    "estimate_dml_ivqr",
+]
