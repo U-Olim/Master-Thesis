@@ -1,8 +1,7 @@
-﻿"""Run the separate naive Full-Control IVQR benchmark.
+"""Run full-control IVQR benchmark scenarios.
 
-This script is intentionally independent from the main simulation script. It uses a
-limited benchmark design because full-control IVQR is slow and not appropriate as a
-main high-dimensional estimator.
+This separate, deliberately limited benchmark evaluates the naive full-control
+estimator. It is not part of the main high-dimensional estimator comparison.
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ from pathlib import Path
 import sys
 import time
 from typing import Any
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -39,7 +39,6 @@ from simulation.config import (  # noqa: E402
     FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
     FULL_CONTROL_BENCHMARK_DGPS,
     FULL_CONTROL_BENCHMARK_N_VALUES,
-    FULL_CONTROL_BENCHMARK_OUTPUT,
     FULL_CONTROL_BENCHMARK_PI_VALUES,
     FULL_CONTROL_BENCHMARK_P_VALUES,
     FULL_CONTROL_BENCHMARK_TAUS,
@@ -52,48 +51,252 @@ from simulation.runner import (  # noqa: E402
     quantreg_iteration_warning_filter,
 )
 
+try:
+    from statsmodels.tools.sm_exceptions import IterationLimitWarning
+except ImportError:  # pragma: no cover - statsmodels is a project dependency.
+    IterationLimitWarning = Warning
 
+
+DEFAULT_RESULTS_DIR = Path("results/raw")
+DEFAULT_FULL_CONTROL_OUTPUT = (
+    DEFAULT_RESULTS_DIR / "full_control_ivqr_results.csv"
+)
 ESTIMATOR_NAME = "full_control_ivqr"
 MAX_ERROR_MESSAGE_LENGTH = 500
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run separate Full-Control IVQR benchmark.")
-    parser.add_argument("--output", default=FULL_CONTROL_BENCHMARK_OUTPUT)
-    parser.add_argument("--reps", type=int, default=None)
+    parser = argparse.ArgumentParser(
+        description="Run the separate full-control IVQR benchmark."
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_FULL_CONTROL_OUTPUT,
+        help="Path to save raw full-control benchmark results.",
+    )
+    parser.add_argument("--reps", type=int, default=R_FULL_CONTROL_BENCHMARK)
     parser.add_argument("--batch-size", type=int, default=5)
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS)
     parser.add_argument("--base-seed", type=int, default=54321)
     parser.add_argument("--alpha-min", type=float, default=-1.0)
     parser.add_argument("--alpha-max", type=float, default=3.0)
-    parser.add_argument("--alpha-grid-size", type=int, default=None)
-    parser.add_argument("--quantreg-max-iter", type=int, default=DEFAULT_QUANTREG_MAX_ITER)
-    parser.add_argument("--show-quantreg-warnings", action="store_true")
+    parser.add_argument(
+        "--alpha-grid-size",
+        type=int,
+        default=FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
+    )
+    parser.add_argument(
+        "--quantreg-max-iter",
+        type=int,
+        default=DEFAULT_QUANTREG_MAX_ITER,
+    )
+    parser.add_argument(
+        "--show-quantreg-warnings",
+        action="store_true",
+        help="Show quantile-regression iteration warnings instead of suppressing them.",
+    )
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--rerun-failed",
+        action="store_true",
+        help="When resuming, rerun designs whose previous rows ended in failure.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--chunk-index", type=int, default=None)
     parser.add_argument("--num-chunks", type=int, default=None)
     parser.add_argument("--max-designs", type=int, default=None)
-    parser.add_argument("--manifest", default=None)
-    parser.add_argument("--dgps", nargs="+", default=list(FULL_CONTROL_BENCHMARK_DGPS))
-    parser.add_argument("--n-values", nargs="+", type=int, default=list(FULL_CONTROL_BENCHMARK_N_VALUES))
-    parser.add_argument("--p-values", nargs="+", type=int, default=list(FULL_CONTROL_BENCHMARK_P_VALUES))
-    parser.add_argument("--pi-values", nargs="+", type=float, default=list(FULL_CONTROL_BENCHMARK_PI_VALUES))
-    parser.add_argument("--taus", nargs="+", type=float, default=list(FULL_CONTROL_BENCHMARK_TAUS))
-    parser.add_argument("--summary-output", default="results/summary/full_control_ivqr_summary.csv")
-    parser.add_argument("--tables-dir", default="results/tables/full_control")
-    parser.add_argument("--figures-dir", default="results/figures/full_control")
+    parser.add_argument("--manifest", type=Path, default=None)
+    parser.add_argument(
+        "--dgps", nargs="+", default=list(FULL_CONTROL_BENCHMARK_DGPS)
+    )
+    parser.add_argument(
+        "--n-values",
+        nargs="+",
+        type=int,
+        default=list(FULL_CONTROL_BENCHMARK_N_VALUES),
+    )
+    parser.add_argument(
+        "--p-values",
+        nargs="+",
+        type=int,
+        default=list(FULL_CONTROL_BENCHMARK_P_VALUES),
+    )
+    parser.add_argument(
+        "--pi-values",
+        nargs="+",
+        type=float,
+        default=list(FULL_CONTROL_BENCHMARK_PI_VALUES),
+    )
+    parser.add_argument(
+        "--taus",
+        nargs="+",
+        type=float,
+        default=list(FULL_CONTROL_BENCHMARK_TAUS),
+    )
+    parser.add_argument(
+        "--summary-output",
+        type=Path,
+        default=Path("results/summary/full_control_ivqr_summary.csv"),
+    )
+    parser.add_argument(
+        "--tables-dir",
+        type=Path,
+        default=Path("results/tables/full_control"),
+    )
+    parser.add_argument(
+        "--figures-dir",
+        type=Path,
+        default=Path("results/figures/full_control"),
+    )
     return parser.parse_args()
 
 
-def _apply_defaults(args: argparse.Namespace) -> None:
-    if args.reps is None:
-        args.reps = R_FULL_CONTROL_BENCHMARK
-    if args.alpha_grid_size is None:
-        args.alpha_grid_size = FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE
+def _validate_args(args: argparse.Namespace) -> None:
+    if args.reps < 1:
+        raise ValueError("--reps must be at least 1")
+    if args.n_jobs < 1:
+        raise ValueError("--n-jobs must be at least 1")
+    if args.batch_size < 1:
+        raise ValueError("--batch-size must be at least 1")
+    if args.max_designs is not None and args.max_designs < 1:
+        raise ValueError("--max-designs must be at least 1")
+    validate_chunk_args(args.chunk_index, args.num_chunks)
+    if args.alpha_grid_size < 3:
+        raise ValueError("--alpha-grid-size must be at least 3")
+    if args.quantreg_max_iter < 1:
+        raise ValueError("--quantreg-max-iter must be at least 1")
+    if args.alpha_max <= args.alpha_min:
+        raise ValueError("--alpha-max must exceed --alpha-min")
 
 
-def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object]:
+def _validate_output_path(output_path: Path, *, resume: bool) -> None:
+    if output_path.exists() and not resume:
+        raise FileExistsError(
+            f"Output file already exists: {output_path}. "
+            "Use --resume to continue, pass --output to choose a new file, "
+            "or delete the existing file manually."
+        )
+
+
+def _configure_warnings(show_quantreg_warnings: bool) -> None:
+    if show_quantreg_warnings:
+        return
+    warnings.filterwarnings("ignore", category=IterationLimitWarning)
+    warnings.filterwarnings(
+        "ignore", message=r"Maximum number of iterations reached.*"
+    )
+
+
+def _count_rows(path: Path) -> int:
+    if not path.exists():
+        return 0
+    try:
+        return len(pd.read_csv(path))
+    except pd.errors.EmptyDataError:
+        return 0
+
+
+def _design_key(design: Design) -> tuple[object, ...]:
+    return (
+        design.dgp,
+        design.n,
+        design.p,
+        design.pi,
+        design.tau,
+        design.rep,
+        design.seed,
+    )
+
+
+def _row_design_key(row: pd.Series) -> tuple[object, ...]:
+    return (
+        row["dgp"],
+        int(row["n"]),
+        int(row["p"]),
+        float(row["pi"]),
+        float(row["tau"]),
+        int(row["rep"]),
+        int(row["seed"]),
+    )
+
+
+def _as_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes"}
+    return False
+
+
+def _successful_rows(existing: pd.DataFrame) -> pd.Series:
+    if "failed" in existing.columns:
+        return ~existing["failed"].map(_as_bool)
+    if "failure" in existing.columns:
+        return ~existing["failure"].map(_as_bool)
+    if "status" in existing.columns:
+        return existing["status"].astype(str).str.lower().isin({"ok", "success"})
+    return pd.Series(True, index=existing.index)
+
+
+def _completed_design_keys(
+    output_path: Path, *, rerun_failed: bool
+) -> set[tuple[object, ...]]:
+    if not output_path.exists():
+        return set()
+    try:
+        existing = pd.read_csv(output_path)
+    except pd.errors.EmptyDataError as exc:
+        raise ValueError("results CSV is empty or malformed") from exc
+
+    required_columns = set(DESIGN_KEY_COLUMNS + ["estimator"])
+    missing = sorted(required_columns - set(existing.columns))
+    if missing:
+        raise ValueError(
+            f"results CSV is missing required resume columns: {missing}"
+        )
+
+    existing = existing.loc[existing["estimator"].astype(str) == ESTIMATOR_NAME]
+    if rerun_failed:
+        existing = existing.loc[_successful_rows(existing)]
+    return {_row_design_key(row) for _, row in existing.iterrows()}
+
+
+def _make_reports(args: argparse.Namespace) -> None:
+    summary = aggregate_results_file(
+        args.output,
+        args.summary_output,
+        expected_replications=args.reps,
+    )
+    tables = write_tables(summary, args.tables_dir)
+    figures = write_figures(summary, args.figures_dir)
+    print(f"Summary: {args.summary_output}")
+    for name, path in tables.items():
+        print(f"Table ({name}): {path}")
+    for name, path in figures.items():
+        print(f"Figure ({name}): {path}")
+
+
+def _print_dry_run(
+    args: argparse.Namespace,
+    *,
+    number_of_designs: int,
+) -> None:
+    print("Mode: full-control IVQR benchmark")
+    print(f"Designs: {number_of_designs}")
+    print(f"Replications per design: {args.reps}")
+    print(f"Alpha grid size: {args.alpha_grid_size}")
+    print(f"Output: {args.output}")
+    print(f"Resume: {str(args.resume).lower()}")
+    print(f"Rerun failed: {str(args.rerun_failed).lower()}")
+    print("Reports: automatic after successful run")
+
+
+def _result_to_row(
+    design: Design, result: EstimationResult
+) -> dict[str, object]:
     bias = None
     absolute_error = None
     squared_error = None
@@ -117,7 +320,9 @@ def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object
         "squared_error": squared_error,
         "status": "failed" if result.failed else "ok",
         "error_type": "EstimatorFailure" if result.failed else None,
-        "error_message": result.message[:MAX_ERROR_MESSAGE_LENGTH] if result.failed else None,
+        "error_message": (
+            result.message[:MAX_ERROR_MESSAGE_LENGTH] if result.failed else None
+        ),
         "failed": result.failed,
         "converged": result.converged,
         "cr_lower": result.cr_lower,
@@ -134,7 +339,9 @@ def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object
     }
 
 
-def _failure_row(design: Design, alphas: np.ndarray, exc: Exception) -> dict[str, object]:
+def _failure_row(
+    design: Design, alphas: np.ndarray, exc: Exception
+) -> dict[str, object]:
     try:
         alpha_true = true_alpha(design.tau, design.dgp)
     except Exception:
@@ -202,12 +409,19 @@ def _run_batch(
 ) -> pd.DataFrame:
     if n_jobs == 1 or len(designs) <= 1:
         rows = [
-            _run_one(design, alphas, quantreg_max_iter, show_quantreg_warnings)
+            _run_one(
+                design,
+                alphas,
+                quantreg_max_iter,
+                show_quantreg_warnings,
+            )
             for design in designs
         ]
     else:
         rows = []
-        with ProcessPoolExecutor(max_workers=min(n_jobs, len(designs))) as executor:
+        with ProcessPoolExecutor(
+            max_workers=min(n_jobs, len(designs))
+        ) as executor:
             futures = {
                 executor.submit(
                     _run_one,
@@ -221,108 +435,55 @@ def _run_batch(
             for future in as_completed(futures):
                 try:
                     rows.append(future.result())
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - record worker failure.
                     rows.append(_failure_row(futures[future], alphas, exc))
-        rows.sort(key=lambda r: (r["dgp"], r["n"], r["p"], r["pi"], r["tau"], r["rep"], r["seed"]))
+        rows.sort(
+            key=lambda row: (
+                row["dgp"],
+                row["n"],
+                row["p"],
+                row["pi"],
+                row["tau"],
+                row["rep"],
+                row["seed"],
+            )
+        )
     return pd.DataFrame(rows, columns=RESULT_COLUMNS)
 
 
-def _write_manifest(path: str | Path | None, args: argparse.Namespace, designs: list[Design], alphas: np.ndarray) -> None:
+def _write_manifest(
+    path: Path | None,
+    args: argparse.Namespace,
+    designs: list[Design],
+    alphas: np.ndarray,
+) -> None:
     if path is None:
         return
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, Any] = {
         "timestamp": datetime.now(UTC).isoformat(),
         "parameters": vars(args),
         "designs_in_run": len(designs),
         "estimator": ESTIMATOR_NAME,
-        "alpha_grid": [float(v) for v in alphas],
+        "alpha_grid": [float(value) for value in alphas],
     }
-    p.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
-
-def _make_reports(args: argparse.Namespace) -> None:
-    summary = aggregate_results_file(args.output, args.summary_output, expected_replications=args.reps)
-    tables = write_tables(summary, Path(args.tables_dir))
-    figures = write_figures(summary, Path(args.figures_dir))
-    print(f"summary: {args.summary_output}")
-    print("tables:")
-    for name, path in tables.items():
-        print(f"  {name}: {path}")
-    print("figures:")
-    for name, path in figures.items():
-        print(f"  {name}: {path}")
-
-
-def _design_key(design: Design) -> tuple[object, ...]:
-    return (
-        design.dgp,
-        design.n,
-        design.p,
-        design.pi,
-        design.tau,
-        design.rep,
-        design.seed,
+    path.write_text(
+        json.dumps(payload, indent=2, default=str),
+        encoding="utf-8",
     )
-
-
-def _row_design_key(row: pd.Series) -> tuple[object, ...]:
-    return (
-        row["dgp"],
-        int(row["n"]),
-        int(row["p"]),
-        float(row["pi"]),
-        float(row["tau"]),
-        int(row["rep"]),
-        int(row["seed"]),
-    )
-
-
-def _filter_completed_designs(designs: list[Design], results_path: Path) -> list[Design]:
-    if not results_path.exists():
-        return designs
-
-    required_columns = DESIGN_KEY_COLUMNS + ["estimator"]
-    try:
-        existing = pd.read_csv(results_path, usecols=required_columns)
-    except pd.errors.EmptyDataError as exc:
-        raise ValueError("results CSV is empty or malformed") from exc
-    except ValueError as exc:
-        raise ValueError("results CSV is missing required resume columns") from exc
-
-    completed = {
-        _row_design_key(row)
-        for _, row in existing.iterrows()
-        if str(row["estimator"]) == ESTIMATOR_NAME
-    }
-    return [design for design in designs if _design_key(design) not in completed]
-
-
-def _validate_args(args: argparse.Namespace) -> None:
-    if args.reps < 1:
-        raise ValueError("--reps must be at least 1")
-    if args.batch_size < 1:
-        raise ValueError("--batch-size must be at least 1")
-    if args.n_jobs < 1:
-        raise ValueError("--n-jobs must be at least 1")
-    if args.alpha_grid_size < 3:
-        raise ValueError("--alpha-grid-size must be at least 3")
-    if args.alpha_max <= args.alpha_min:
-        raise ValueError("--alpha-max must exceed --alpha-min")
-    validate_chunk_args(args.chunk_index, args.num_chunks)
-    if args.max_designs is not None and args.max_designs < 1:
-        raise ValueError("--max-designs must be at least 1")
 
 
 def main() -> None:
     args = _parse_args()
-    _apply_defaults(args)
     _validate_args(args)
-    alphas = np.linspace(args.alpha_min, args.alpha_max, args.alpha_grid_size)
-    output_path = Path(args.output)
+    _configure_warnings(args.show_quantreg_warnings)
 
-    designs = make_simulation_grid(
+    alphas = np.linspace(
+        args.alpha_min,
+        args.alpha_max,
+        args.alpha_grid_size,
+    )
+    all_designs = make_simulation_grid(
         dgps=tuple(args.dgps),
         n_values=tuple(args.n_values),
         p_values=tuple(args.p_values),
@@ -331,39 +492,48 @@ def main() -> None:
         reps=args.reps,
         base_seed=args.base_seed,
     )
-    total_designs = len(designs)
-    pending_designs = _filter_completed_designs(designs, output_path) if args.resume else designs
-    designs = select_design_chunk(pending_designs, args.chunk_index, args.num_chunks)
+    designs = select_design_chunk(
+        all_designs,
+        args.chunk_index,
+        args.num_chunks,
+    )
     if args.max_designs is not None:
         designs = designs[: args.max_designs]
 
-    print("Full-Control IVQR benchmark plan")
-    print(f"total designs: {total_designs}")
-    print(f"pending designs after resume: {len(pending_designs)}")
-    print(f"chunk: {args.chunk_index}/{args.num_chunks}" if args.chunk_index is not None else "chunk: none")
-    print(f"designs in this run: {len(designs)}")
-    print(f"expected rows: {len(designs)}")
-    print(f"dry_run: {args.dry_run}")
-    print(f"replications per scenario: {args.reps}")
-    print(f"output path: {output_path}")
-    print(f"alpha grid: size={len(alphas)}, min={float(alphas.min())}, max={float(alphas.max())}")
-    print(f"Parallel workers: {args.n_jobs}")
-    print(f"QuantReg max iterations: {args.quantreg_max_iter}")
-    print(f"Show QuantReg warnings: {args.show_quantreg_warnings}")
-    print(f"resume: {args.resume}")
-    print("This is a separate naive benchmark, not part of the main estimator comparison.")
-    _write_manifest(args.manifest, args, designs, alphas)
     if args.dry_run:
-        print("Dry run requested; no result rows written.")
+        scenario_count = len(
+            {
+                (design.dgp, design.n, design.p, design.pi, design.tau)
+                for design in designs
+            }
+        )
+        _print_dry_run(args, number_of_designs=scenario_count)
         return
 
-    if output_path.exists() and not args.resume:
-        raise FileExistsError(
-            f"{output_path} already exists. Use --resume to continue from existing "
-            "results or delete the file manually before starting a fresh run."
-        )
+    output_path = args.output
+    _validate_output_path(output_path, resume=args.resume)
+    if args.rerun_failed and not args.resume:
+        print("--rerun-failed has no effect without --resume.")
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if args.resume:
+        completed_keys = _completed_design_keys(
+            output_path,
+            rerun_failed=args.rerun_failed,
+        )
+        all_designs = [
+            design
+            for design in all_designs
+            if _design_key(design) not in completed_keys
+        ]
+    designs = select_design_chunk(
+        all_designs,
+        args.chunk_index,
+        args.num_chunks,
+    )
+    if args.max_designs is not None:
+        designs = designs[: args.max_designs]
+
+    _write_manifest(args.manifest, args, designs, alphas)
 
     start = time.perf_counter()
     completed = 0
@@ -376,12 +546,25 @@ def main() -> None:
             args.n_jobs,
             args.show_quantreg_warnings,
         )
-        batch_df.to_csv(output_path, mode="a", header=not output_path.exists(), index=False)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        batch_df.to_csv(
+            output_path,
+            mode="a",
+            header=not output_path.exists(),
+            index=False,
+        )
         completed += len(batch)
-        print(f"completed {completed}/{len(designs)} designs, elapsed {time.perf_counter() - start:.2f} seconds")
+        elapsed = time.perf_counter() - start
+        print(
+            f"Completed {completed}/{len(designs)} designs "
+            f"in {elapsed:.2f} seconds"
+        )
 
-    print(f"final row count: {len(pd.read_csv(output_path))}")
     _make_reports(args)
+    print("Mode: full-control IVQR benchmark")
+    print(f"Completed designs: {completed}")
+    print(f"Output: {output_path}")
+    print(f"Final row count: {_count_rows(output_path)}")
 
 
 if __name__ == "__main__":

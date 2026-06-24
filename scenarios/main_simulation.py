@@ -1,8 +1,8 @@
-﻿"""Run the main IVQR Monte Carlo simulation.
+"""Run main IVQR simulation scenarios.
 
 Modes:
-- fast: same main design with R=10 for diagnostics.
-- full: same main design with R=500 for thesis results.
+- fast: main design with R=10 for diagnostics.
+- full: main design with R=500 for thesis results.
 
 Full-control IVQR is deliberately excluded. Run scenarios/full_control_ivqr.py
 for the separate naive benchmark.
@@ -34,10 +34,8 @@ from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_DML_K_FOLDS,
     DEFAULT_N_JOBS,
-    DEFAULT_OUTPUT,
     DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
-    FAST_OUTPUT,
     N_VALUES,
     P_VALUES,
     PI_VALUES,
@@ -48,8 +46,17 @@ from simulation.config import (  # noqa: E402
 from simulation.runner import VALID_ESTIMATORS, make_simulation_grid  # noqa: E402
 
 
+DEFAULT_RESULTS_DIR = Path("results/raw")
 MAIN_ESTIMATORS = ("oracle", "post_selection", "dml")
 VALID_MODES = ("fast", "full")
+
+
+def _default_output_for_mode(mode: str) -> Path:
+    if mode == "fast":
+        return DEFAULT_RESULTS_DIR / "fast_mode_results.csv"
+    if mode == "full":
+        return DEFAULT_RESULTS_DIR / "full_mode_results.csv"
+    raise ValueError(f"Unknown mode: {mode}")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -93,68 +100,105 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _apply_mode_defaults(args: argparse.Namespace) -> None:
-    if args.estimators is None:
-        args.estimators = list(MAIN_ESTIMATORS)
-    if args.dgps is None:
-        args.dgps = list(DGPS)
-    if args.n_values is None:
-        args.n_values = list(N_VALUES)
-    if args.p_values is None:
-        args.p_values = list(P_VALUES)
-    if args.pi_values is None:
-        args.pi_values = list(PI_VALUES)
-    if args.taus is None:
-        args.taus = list(TAUS)
-    if args.reps is None:
-        args.reps = R_FAST if args.mode == "fast" else R_MAIN
-    if args.alpha_grid_size is None:
-        args.alpha_grid_size = DEFAULT_ALPHA_GRID_SIZE
-    if args.output is None:
-        args.output = FAST_OUTPUT if args.mode == "fast" else DEFAULT_OUTPUT
+    args.estimators = list(MAIN_ESTIMATORS) if args.estimators is None else args.estimators
+    args.dgps = list(DGPS) if args.dgps is None else args.dgps
+    args.n_values = list(N_VALUES) if args.n_values is None else args.n_values
+    args.p_values = list(P_VALUES) if args.p_values is None else args.p_values
+    args.pi_values = list(PI_VALUES) if args.pi_values is None else args.pi_values
+    args.taus = list(TAUS) if args.taus is None else args.taus
+    args.reps = (R_FAST if args.mode == "fast" else R_MAIN) if args.reps is None else args.reps
+    args.alpha_grid_size = (
+        DEFAULT_ALPHA_GRID_SIZE
+        if args.alpha_grid_size is None
+        else args.alpha_grid_size
+    )
+    args.output = (
+        _default_output_for_mode(args.mode)
+        if args.output is None
+        else Path(args.output)
+    )
     if args.summary_output is None:
-        args.summary_output = "results/summary/main_simulation_summary.csv"
+        args.summary_output = Path("results/summary/main_simulation_summary.csv")
     if args.tables_dir is None:
-        args.tables_dir = "results/tables/main"
+        args.tables_dir = Path("results/tables/main")
     if args.figures_dir is None:
-        args.figures_dir = "results/figures/main"
+        args.figures_dir = Path("results/figures/main")
 
 
-def _print_plan(
-    *,
+def _validate_args(args: argparse.Namespace) -> None:
+    if args.reps < 1:
+        raise ValueError("--reps must be at least 1")
+    if args.n_jobs < 1:
+        raise ValueError("--n-jobs must be at least 1")
+    if args.batch_size < 1:
+        raise ValueError("--batch-size must be at least 1")
+    if args.max_designs is not None and args.max_designs < 1:
+        raise ValueError("--max-designs must be at least 1")
+    validate_chunk_args(args.chunk_index, args.num_chunks)
+    if args.alpha_grid_size < 3:
+        raise ValueError("--alpha-grid-size must be at least 3")
+    if args.dml_k_folds < 2:
+        raise ValueError("--dml-k-folds must be at least 2")
+    if args.quantreg_max_iter < 1:
+        raise ValueError("--quantreg-max-iter must be at least 1")
+    if args.alpha_max <= args.alpha_min:
+        raise ValueError("--alpha-max must exceed --alpha-min")
+    if set(args.estimators) - set(MAIN_ESTIMATORS):
+        raise ValueError("Main runner only allows oracle, post_selection, and dml.")
+
+
+def _validate_output_path(output_path: Path, *, resume: bool) -> None:
+    if output_path.exists() and not resume:
+        raise FileExistsError(
+            f"Output file already exists: {output_path}. "
+            "Use --resume to continue, pass --output to choose a new file, "
+            "or delete the existing file manually."
+        )
+
+
+def _count_rows(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    try:
+        return len(pd.read_csv(path, usecols=["estimator"]))
+    except (ValueError, pd.errors.EmptyDataError):
+        return None
+
+
+def _make_reports(args: argparse.Namespace) -> None:
+    summary = aggregate_results_file(
+        args.output,
+        args.summary_output,
+        expected_replications=args.reps,
+    )
+    tables = write_tables(summary, args.tables_dir)
+    figures = write_figures(summary, args.figures_dir)
+    print(f"Summary: {args.summary_output}")
+    for name, path in tables.items():
+        print(f"Table ({name}): {path}")
+    for name, path in figures.items():
+        print(f"Figure ({name}): {path}")
+
+
+def _print_dry_run(
     args: argparse.Namespace,
-    output_path: Path,
-    total_designs: int,
-    pending_designs: int,
-    designs_in_run: int,
-    estimators: tuple[str, ...],
-    alphas: np.ndarray,
+    *,
+    number_of_designs: int,
+    alpha_grid_size: int,
 ) -> None:
-    print("Main IVQR simulation plan")
-    print(f"mode: {args.mode}")
-    print(f"total designs: {total_designs}")
-    print(f"pending designs after resume: {pending_designs}")
-    print(f"chunk: {args.chunk_index}/{args.num_chunks}" if args.chunk_index is not None else "chunk: none")
-    print(f"designs in this run: {designs_in_run}")
-    print(f"expected rows: {designs_in_run * len(estimators)}")
-    print(f"dry_run: {args.dry_run}")
-    print(f"output path: {output_path}")
-    print(f"estimators: {','.join(estimators)}")
-    print(f"alpha grid: size={alphas.size}, min={float(alphas.min())}, max={float(alphas.max())}")
-    print(f"replications per scenario: {args.reps}")
-    print(f"batch size: {args.batch_size}")
-    print(f"Parallel workers: {args.n_jobs}")
-    print(f"DML folds: {args.dml_k_folds}")
-    print(f"QuantReg max iterations: {args.quantreg_max_iter}")
-    print(f"Show QuantReg warnings: {args.show_quantreg_warnings}")
-    print(f"resume: {args.resume}")
-    print(f"rerun_failed: {args.rerun_failed}")
-    print("Full-control IVQR is excluded. Use scenarios/full_control_ivqr.py separately.")
+    print(f"Mode: {args.mode}")
+    print(f"Designs: {number_of_designs}")
+    print(f"Replications per design: {args.reps}")
+    print(f"Alpha grid size: {alpha_grid_size}")
+    print(f"Output: {args.output}")
+    print(f"Resume: {str(args.resume).lower()}")
+    print("Reports: automatic after successful run")
 
 
 def _write_manifest(
     manifest_path: str | Path | None,
     args: argparse.Namespace,
-    output_path: Path,
+    *,
     total_designs: int,
     pending_designs: int,
     designs_in_run: int,
@@ -178,55 +222,9 @@ def _write_manifest(
             "max": float(alphas.max()),
             "values": [float(value) for value in alphas],
         },
-        "output_path": str(output_path),
+        "output_path": str(args.output),
     }
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
-
-def _count_rows(path: Path) -> int | None:
-    if not path.exists():
-        return None
-    try:
-        return len(pd.read_csv(path, usecols=["estimator"]))
-    except (ValueError, pd.errors.EmptyDataError):
-        return None
-
-
-def _make_reports(args: argparse.Namespace) -> None:
-    summary = aggregate_results_file(
-        args.output,
-        args.summary_output,
-        expected_replications=args.reps,
-    )
-    tables = write_tables(summary, Path(args.tables_dir))
-    figures = write_figures(summary, Path(args.figures_dir))
-    print(f"summary: {args.summary_output}")
-    print("tables:")
-    for name, path in tables.items():
-        print(f"  {name}: {path}")
-    print("figures:")
-    for name, path in figures.items():
-        print(f"  {name}: {path}")
-
-
-def _validate_args(args: argparse.Namespace) -> None:
-    if args.batch_size < 1:
-        raise ValueError("--batch-size must be at least 1")
-    if args.n_jobs < 1:
-        raise ValueError("--n-jobs must be at least 1")
-    if args.alpha_grid_size < 3:
-        raise ValueError("--alpha-grid-size must be at least 3")
-    if args.dml_k_folds < 2:
-        raise ValueError("--dml-k-folds must be at least 2")
-    if args.quantreg_max_iter < 1:
-        raise ValueError("--quantreg-max-iter must be at least 1")
-    if args.alpha_max <= args.alpha_min:
-        raise ValueError("--alpha-max must exceed --alpha-min")
-    if set(args.estimators) - set(MAIN_ESTIMATORS):
-        raise ValueError("Main runner only allows oracle, post_selection, and dml.")
-    validate_chunk_args(args.chunk_index, args.num_chunks)
-    if args.max_designs is not None and args.max_designs < 1:
-        raise ValueError("--max-designs must be at least 1")
+    path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 
 def main() -> None:
@@ -236,10 +234,8 @@ def main() -> None:
     if args.rerun_failed and not args.resume:
         print("--rerun-failed has no effect without --resume.")
 
-    output_path = Path(args.output)
     estimators = tuple(args.estimators)
     alphas = np.linspace(args.alpha_min, args.alpha_max, args.alpha_grid_size)
-
     designs = make_simulation_grid(
         dgps=tuple(args.dgps),
         n_values=tuple(args.n_values),
@@ -249,35 +245,57 @@ def main() -> None:
         reps=args.reps,
         base_seed=args.base_seed,
     )
-    total_designs = len(designs)
-    pending_designs = (
-        filter_completed_designs(designs, output_path, estimators=estimators, rerun_failed=args.rerun_failed)
-        if args.resume
-        else designs
-    )
-    designs_to_run = select_design_chunk(pending_designs, args.chunk_index, args.num_chunks)
+    designs_to_run = select_design_chunk(designs, args.chunk_index, args.num_chunks)
     if args.max_designs is not None:
         designs_to_run = designs_to_run[: args.max_designs]
 
-    _print_plan(
-        args=args,
-        output_path=output_path,
-        total_designs=total_designs,
+    if args.dry_run:
+        scenario_count = len(
+            {
+                (design.dgp, design.n, design.p, design.pi, design.tau)
+                for design in designs_to_run
+            }
+        )
+        _print_dry_run(
+            args,
+            number_of_designs=scenario_count,
+            alpha_grid_size=alphas.size,
+        )
+        return
+
+    output_path = Path(args.output)
+    _validate_output_path(output_path, resume=args.resume)
+    pending_designs = (
+        filter_completed_designs(
+            designs,
+            output_path,
+            estimators=estimators,
+            rerun_failed=args.rerun_failed,
+        )
+        if args.resume
+        else designs
+    )
+    designs_to_run = select_design_chunk(
+        pending_designs, args.chunk_index, args.num_chunks
+    )
+    if args.max_designs is not None:
+        designs_to_run = designs_to_run[: args.max_designs]
+
+    _write_manifest(
+        args.manifest,
+        args,
+        total_designs=len(designs),
         pending_designs=len(pending_designs),
         designs_in_run=len(designs_to_run),
         estimators=estimators,
         alphas=alphas,
     )
-    _write_manifest(args.manifest, args, output_path, total_designs, len(pending_designs), len(designs_to_run), estimators, alphas)
-    if args.dry_run:
-        print("Dry run requested; no result rows written.")
-        return
 
     start = time.perf_counter()
     completed = 0
     for batch_start in range(0, len(designs_to_run), args.batch_size):
         batch = designs_to_run[batch_start : batch_start + args.batch_size]
-        append = output_path.exists() if args.resume else completed > 0
+        append = args.resume or completed > 0
         run_simulation_batch(
             batch,
             alphas,
@@ -291,11 +309,21 @@ def main() -> None:
         )
         completed += len(batch)
         elapsed = time.perf_counter() - start
-        print(f"completed {completed}/{len(designs_to_run)} designs, elapsed {elapsed:.2f} seconds")
+        print(
+            f"Completed {completed}/{len(designs_to_run)} designs "
+            f"in {elapsed:.2f} seconds"
+        )
 
     final_rows = _count_rows(output_path)
-    print(f"final row count: {final_rows}" if final_rows is not None else "final row count unavailable")
     _make_reports(args)
+    print(f"Mode: {args.mode}")
+    print(f"Completed designs: {completed}")
+    print(f"Output: {output_path}")
+    print(
+        f"Final row count: {final_rows}"
+        if final_rows is not None
+        else "Final row count unavailable"
+    )
 
 
 if __name__ == "__main__":
