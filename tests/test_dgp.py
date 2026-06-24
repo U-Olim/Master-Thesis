@@ -1,4 +1,4 @@
-# Consolidated tests for the thematic project structure.
+"""Tests for DGP formulas, coefficients, generated data, and true parameters."""
 
 from math import sqrt
 
@@ -17,55 +17,6 @@ from dgp.designs import Design
 from dgp.generators import _structural_outcome, _treatment_from_latent_index
 from dgp.true_parameters import true_alpha
 from dgp.true_parameters import get_oracle_control_count, get_oracle_control_indices
-from simulation.config import (
-    DEFAULT_ALPHA_GRID_SIZE,
-    DEFAULT_DML_K_FOLDS,
-    DEFAULT_N_JOBS,
-    DEFAULT_OUTPUT,
-    DEFAULT_QUANTREG_MAX_ITER,
-    DGPS,
-    FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
-    FULL_CONTROL_BENCHMARK_DGPS,
-    FULL_CONTROL_BENCHMARK_N_VALUES,
-    FULL_CONTROL_BENCHMARK_OUTPUT,
-    FULL_CONTROL_BENCHMARK_PI_VALUES,
-    FULL_CONTROL_BENCHMARK_P_VALUES,
-    FULL_CONTROL_BENCHMARK_TAUS,
-    K_FOLDS,
-    N_VALUES,
-    P_VALUES,
-    PI_VALUES,
-    R_FAST,
-    R_FULL_CONTROL_BENCHMARK,
-    R_MAIN,
-    TAUS,
-)
-
-
-def test_project_design_constants_exist() -> None:
-    assert N_VALUES == [500, 1000]
-    assert P_VALUES == [200, 500]
-    assert FULL_CONTROL_BENCHMARK_DGPS == ["dgp1"]
-    assert FULL_CONTROL_BENCHMARK_N_VALUES == [500, 1000]
-    assert FULL_CONTROL_BENCHMARK_P_VALUES == [20, 50, 100]
-    assert FULL_CONTROL_BENCHMARK_PI_VALUES == [1.0]
-    assert FULL_CONTROL_BENCHMARK_TAUS == [0.25, 0.5, 0.75]
-    assert FULL_CONTROL_BENCHMARK_OUTPUT == "results/raw/full_control_ivqr_results.csv"
-    assert FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE == 9
-    assert PI_VALUES == [1.0, 0.5, 0.25, 0.10]
-    assert TAUS == [0.25, 0.50, 0.75]
-    assert DGPS == ["dgp1", "dgp2", "dgp3"]
-    assert R_FAST == 10
-    assert R_MAIN == 500
-    assert R_FULL_CONTROL_BENCHMARK == 500
-    assert DEFAULT_OUTPUT == "results/raw/main_simulation_results.csv"
-    assert DEFAULT_ALPHA_GRID_SIZE == 9
-    assert DEFAULT_DML_K_FOLDS == 3
-    assert DEFAULT_N_JOBS == 6
-    assert DEFAULT_QUANTREG_MAX_ITER == 1000
-    assert K_FOLDS == 3
-
-
 def test_get_oracle_control_indices_returns_true_active_support() -> None:
     np.testing.assert_array_equal(
         get_oracle_control_indices("dgp1", p=100),

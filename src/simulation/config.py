@@ -16,11 +16,14 @@ DGPS = ["dgp1", "dgp2", "dgp3"]
 R_FAST = 10
 R_MAIN = 500
 R_FULL_CONTROL_BENCHMARK = 500
-FAST_OUTPUT = "results/raw/main_simulation_results.csv"
-DEFAULT_OUTPUT = "results/raw/main_simulation_results.csv"
+FAST_OUTPUT = "results/raw/fast_mode_results.csv"
+FULL_OUTPUT = "results/raw/full_mode_results.csv"
+DEFAULT_OUTPUT = FULL_OUTPUT
 DEFAULT_ALPHA_GRID_SIZE = 9
 DEFAULT_DML_K_FOLDS = 3
 DEFAULT_N_JOBS = 6
+DEFAULT_BATCH_SIZE = 10
+DEFAULT_CHUNK_COUNT = 1
 DEFAULT_QUANTREG_MAX_ITER = 1000
 K_FOLDS = DEFAULT_DML_K_FOLDS
 

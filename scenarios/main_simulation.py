@@ -32,10 +32,13 @@ from simulation.batching import filter_completed_designs, run_simulation_batch  
 from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa: E402
 from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_GRID_SIZE,
+    DEFAULT_BATCH_SIZE,
     DEFAULT_DML_K_FOLDS,
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
+    FAST_OUTPUT,
+    FULL_OUTPUT,
     N_VALUES,
     P_VALUES,
     PI_VALUES,
@@ -46,16 +49,15 @@ from simulation.config import (  # noqa: E402
 from simulation.runner import VALID_ESTIMATORS, make_simulation_grid  # noqa: E402
 
 
-DEFAULT_RESULTS_DIR = Path("results/raw")
 MAIN_ESTIMATORS = ("oracle", "post_selection", "dml")
 VALID_MODES = ("fast", "full")
 
 
 def _default_output_for_mode(mode: str) -> Path:
     if mode == "fast":
-        return DEFAULT_RESULTS_DIR / "fast_mode_results.csv"
+        return Path(FAST_OUTPUT)
     if mode == "full":
-        return DEFAULT_RESULTS_DIR / "full_mode_results.csv"
+        return Path(FULL_OUTPUT)
     raise ValueError(f"Unknown mode: {mode}")
 
 
@@ -71,7 +73,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", default=None)
     parser.add_argument("--reps", type=int, default=None)
-    parser.add_argument("--batch-size", type=int, default=10)
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS)
     parser.add_argument("--base-seed", type=int, default=12345)
     parser.add_argument("--alpha-min", type=float, default=-1.0)
