@@ -1,4 +1,4 @@
-# Consolidated tests for the thematic project structure.
+"""Tests for the CH inverse-IVQR estimator."""
 
 import numpy as np
 import pytest
@@ -8,92 +8,7 @@ from statsmodels.tools.sm_exceptions import IterationLimitWarning
 from dgp import generate_data
 from dgp.designs import Design
 from estimators import ch_inverse_ivqr
-from estimators.base import EstimationResult
-from estimators.dml_ivqr import (
-    _build_dml_fold_cache,
-    _evaluate_dml_ivqr_alpha_uncached,
-    estimate_dml_ivqr,
-    evaluate_dml_ivqr_alpha,
-    fit_instrument_residualizer,
-    fit_quantile_nuisance,
-    make_folds,
-    standardize_train_test,
-)
 from estimators.ch_inverse_ivqr import add_intercept
-from estimators.full_control_ivqr import estimate_full_control_ivqr
-from estimators.oracle_ivqr import estimate_oracle_ivqr
-from estimators.post_selection_ivqr import (
-    estimate_post_selection_ivqr,
-    evaluate_post_selection_alpha,
-    select_controls_lasso,
-)
-
-
-def require_float(value: float | None, name: str = "value") -> float:
-    assert value is not None, f"{name} should not be None"
-    return value
-
-
-def require_array(value: np.ndarray | None, name: str = "array") -> np.ndarray:
-    assert value is not None, f"{name} should not be None"
-    return value
-
-
-def test_estimation_result_can_be_instantiated() -> None:
-    result = EstimationResult(
-        estimator="full_control_ivqr",
-        alpha_hat=None,
-        alpha_true=1.0,
-        tau=0.5,
-        converged=False,
-        failed=True,
-        message="not implemented",
-        objective_value=None,
-        at_grid_boundary=False,
-        alpha_grid_size=None,
-        failed_alpha_count=None,
-        cr_lower=None,
-        cr_upper=None,
-        cr_length=None,
-        cr_covers_true=None,
-        cr_empty=True,
-        cr_disconnected=None,
-        selected_controls=None,
-        runtime_seconds=0.0,
-    )
-
-    assert result.estimator == "full_control_ivqr"
-    assert result.failed is True
-    assert result.cr_empty is True
-    assert result.cr_disconnected is None
-
-
-def test_empty_confidence_region_is_separate_from_estimator_failure() -> None:
-    result = EstimationResult(
-        estimator="dml_ivqr",
-        alpha_hat=1.0,
-        alpha_true=1.0,
-        tau=0.5,
-        converged=True,
-        failed=False,
-        message="ok",
-        objective_value=10.0,
-        at_grid_boundary=False,
-        alpha_grid_size=5,
-        failed_alpha_count=0,
-        cr_lower=None,
-        cr_upper=None,
-        cr_length=None,
-        cr_covers_true=False,
-        cr_empty=True,
-        cr_disconnected=False,
-        selected_controls=None,
-        runtime_seconds=0.0,
-    )
-
-    assert result.failed is False
-    assert result.converged is True
-    assert result.cr_empty is True
 
 
 def test_add_intercept_prepends_ones() -> None:
@@ -180,7 +95,8 @@ def test_failed_ch_ivqr_result_rejects_invalid_diagnostics(
 def test_evaluate_full_control_ivqr_alpha_returns_finite_statistic() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
-    alpha_true = require_float(data.alpha_true, "alpha_true")
+    alpha_true = data.alpha_true
+    assert alpha_true is not None, "alpha_true should not be None"
 
     evaluation = ch_inverse_ivqr.evaluate_alpha_ch_ivqr(
         y=data.y,

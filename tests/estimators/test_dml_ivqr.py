@@ -1,14 +1,10 @@
-# Consolidated tests for the thematic project structure.
+"""Tests for the DML-IVQR estimator."""
 
 import numpy as np
 import pytest
-import warnings
-from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp import generate_data
 from dgp.designs import Design
-from estimators import ch_inverse_ivqr
-from estimators.base import EstimationResult
 from estimators.dml_ivqr import (
     _build_dml_fold_cache,
     _evaluate_dml_ivqr_alpha_uncached,
@@ -19,24 +15,6 @@ from estimators.dml_ivqr import (
     make_folds,
     standardize_train_test,
 )
-from estimators.ch_inverse_ivqr import add_intercept
-from estimators.full_control_ivqr import estimate_full_control_ivqr
-from estimators.oracle_ivqr import estimate_oracle_ivqr
-from estimators.post_selection_ivqr import (
-    estimate_post_selection_ivqr,
-    evaluate_post_selection_alpha,
-    select_controls_lasso,
-)
-
-
-def require_float(value: float | None, name: str = "value") -> float:
-    assert value is not None, f"{name} should not be None"
-    return value
-
-
-def require_array(value: np.ndarray | None, name: str = "array") -> np.ndarray:
-    assert value is not None, f"{name} should not be None"
-    return value
 
 
 def test_make_folds_covers_each_observation_once() -> None:
@@ -62,14 +40,16 @@ def test_standardize_train_test_uses_training_moments() -> None:
     assert np.allclose(x_train_scaled.mean(axis=0), 0.0)
     assert np.allclose(x_train_scaled.std(axis=0), 1.0)
     assert x_test_scaled.shape == x_test.shape
-    scaler_mean = require_array(scaler.mean_, "scaler.mean_")
+    scaler_mean = scaler.mean_
+    assert scaler_mean is not None, "scaler.mean_ should not be None"
     np.testing.assert_allclose(scaler_mean, x_train.mean(axis=0))
     assert not np.allclose(scaler_mean, np.vstack([x_train, x_test]).mean(axis=0))
 
 
 def test_fit_quantile_nuisance_returns_fitted_model() -> None:
     data = generate_data(Design("dgp1", n=100, p=10, pi=1.0, tau=0.5, rep=0, seed=123))
-    alpha_true = require_float(data.alpha_true, "alpha_true")
+    alpha_true = data.alpha_true
+    assert alpha_true is not None, "alpha_true should not be None"
 
     model, converged, message = fit_quantile_nuisance(
         data.y,
@@ -110,7 +90,8 @@ def test_fit_instrument_residualizer_returns_fitted_model() -> None:
 
 def test_evaluate_dml_ivqr_alpha_returns_finite_statistic() -> None:
     data = generate_data(Design("dgp1", n=100, p=10, pi=1.0, tau=0.5, rep=0, seed=123))
-    alpha_true = require_float(data.alpha_true, "alpha_true")
+    alpha_true = data.alpha_true
+    assert alpha_true is not None, "alpha_true should not be None"
 
     statistic, converged, message = evaluate_dml_ivqr_alpha(
         data.y,

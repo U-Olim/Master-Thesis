@@ -1,42 +1,14 @@
-# Consolidated tests for the thematic project structure.
+"""Tests for the full-control IVQR estimator."""
 
 import numpy as np
 import pytest
 import warnings
-from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp import generate_data
 from dgp.designs import Design
 from estimators import ch_inverse_ivqr
 from estimators.base import EstimationResult
-from estimators.dml_ivqr import (
-    _build_dml_fold_cache,
-    _evaluate_dml_ivqr_alpha_uncached,
-    estimate_dml_ivqr,
-    evaluate_dml_ivqr_alpha,
-    fit_instrument_residualizer,
-    fit_quantile_nuisance,
-    make_folds,
-    standardize_train_test,
-)
-from estimators.ch_inverse_ivqr import add_intercept
 from estimators.full_control_ivqr import estimate_full_control_ivqr
-from estimators.oracle_ivqr import estimate_oracle_ivqr
-from estimators.post_selection_ivqr import (
-    estimate_post_selection_ivqr,
-    evaluate_post_selection_alpha,
-    select_controls_lasso,
-)
-
-
-def require_float(value: float | None, name: str = "value") -> float:
-    assert value is not None, f"{name} should not be None"
-    return value
-
-
-def require_array(value: np.ndarray | None, name: str = "array") -> np.ndarray:
-    assert value is not None, f"{name} should not be None"
-    return value
 
 
 def test_estimate_full_control_ivqr_returns_estimation_result() -> None:
@@ -298,7 +270,8 @@ def test_estimate_full_control_ivqr_passes_max_iter_to_quantreg_fit(
 ) -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
-    alpha_true = require_float(data.alpha_true, "alpha_true")
+    alpha_true = data.alpha_true
+    assert alpha_true is not None, "alpha_true should not be None"
     captured: dict[str, int] = {}
     original = ch_inverse_ivqr.evaluate_alpha_ch_ivqr
 
@@ -327,7 +300,8 @@ def test_estimate_full_control_ivqr_passes_max_iter_to_quantreg_fit(
 def test_estimate_full_control_ivqr_feasible_high_pn_emits_no_pn_warning() -> None:
     design = Design("dgp1", n=30, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
-    alpha_true = require_float(data.alpha_true, "alpha_true")
+    alpha_true = data.alpha_true
+    assert alpha_true is not None, "alpha_true should not be None"
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

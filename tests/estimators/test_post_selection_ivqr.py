@@ -1,42 +1,16 @@
-# Consolidated tests for the thematic project structure.
+"""Tests for the post-selection IVQR estimator."""
 
 import numpy as np
 import pytest
-import warnings
-from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp import generate_data
 from dgp.designs import Design
 from estimators import ch_inverse_ivqr
-from estimators.base import EstimationResult
-from estimators.dml_ivqr import (
-    _build_dml_fold_cache,
-    _evaluate_dml_ivqr_alpha_uncached,
-    estimate_dml_ivqr,
-    evaluate_dml_ivqr_alpha,
-    fit_instrument_residualizer,
-    fit_quantile_nuisance,
-    make_folds,
-    standardize_train_test,
-)
-from estimators.ch_inverse_ivqr import add_intercept
-from estimators.full_control_ivqr import estimate_full_control_ivqr
-from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import (
     estimate_post_selection_ivqr,
     evaluate_post_selection_alpha,
     select_controls_lasso,
 )
-
-
-def require_float(value: float | None, name: str = "value") -> float:
-    assert value is not None, f"{name} should not be None"
-    return value
-
-
-def require_array(value: np.ndarray | None, name: str = "array") -> np.ndarray:
-    assert value is not None, f"{name} should not be None"
-    return value
 
 
 def test_select_controls_lasso_returns_valid_indices() -> None:
@@ -126,7 +100,8 @@ def test_select_controls_lasso_handles_zero_control_matrix() -> None:
 def test_evaluate_post_selection_alpha_returns_finite_statistic() -> None:
     data = generate_data(Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
     x_selected = data.x[:, :3]
-    alpha_true = require_float(data.alpha_true, "alpha_true")
+    alpha_true = data.alpha_true
+    assert alpha_true is not None, "alpha_true should not be None"
 
     statistic, converged, message = evaluate_post_selection_alpha(
         data.y,

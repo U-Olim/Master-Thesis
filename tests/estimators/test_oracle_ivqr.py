@@ -1,42 +1,13 @@
-# Consolidated tests for the thematic project structure.
+"""Tests for the oracle IVQR estimator."""
 
 import numpy as np
 import pytest
-import warnings
-from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp import generate_data
 from dgp.designs import Design
-from estimators import ch_inverse_ivqr
 from estimators.base import EstimationResult
-from estimators.dml_ivqr import (
-    _build_dml_fold_cache,
-    _evaluate_dml_ivqr_alpha_uncached,
-    estimate_dml_ivqr,
-    evaluate_dml_ivqr_alpha,
-    fit_instrument_residualizer,
-    fit_quantile_nuisance,
-    make_folds,
-    standardize_train_test,
-)
-from estimators.ch_inverse_ivqr import add_intercept
 from estimators.full_control_ivqr import estimate_full_control_ivqr
 from estimators.oracle_ivqr import estimate_oracle_ivqr
-from estimators.post_selection_ivqr import (
-    estimate_post_selection_ivqr,
-    evaluate_post_selection_alpha,
-    select_controls_lasso,
-)
-
-
-def require_float(value: float | None, name: str = "value") -> float:
-    assert value is not None, f"{name} should not be None"
-    return value
-
-
-def require_array(value: np.ndarray | None, name: str = "array") -> np.ndarray:
-    assert value is not None, f"{name} should not be None"
-    return value
 
 
 def test_estimate_oracle_ivqr_is_not_full_control_alias() -> None:
