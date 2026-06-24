@@ -2,36 +2,42 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
+from types import MappingProxyType
 import re
 
 import pandas as pd
 
 
-TABLE_GROUP_COLUMNS = ["dgp", "n", "p", "pi", "tau"]
-ESTIMATOR_COLUMN = "estimator"
-ESTIMATOR_ORDER = [
+TABLE_GROUP_COLUMNS: tuple[str, ...] = ("dgp", "n", "p", "pi", "tau")
+ESTIMATOR_COLUMN: str = "estimator"
+ESTIMATOR_ORDER: tuple[str, ...] = (
     "oracle",
     "oracle_ivqr",
     "post_selection_ivqr",
     "dml_ivqr",
     "full_control_ivqr",
-]
-ESTIMATOR_LABELS = {
-    "oracle_ivqr": "Oracle IVQR",
-    "oracle": "Oracle IVQR",
-    "post_selection_ivqr": "Post-selection IVQR",
-    "dml_ivqr": "DML-IVQR",
-    "full_control_ivqr": "Full-control IVQR",
-}
-ESTIMATOR_COLUMN_NAMES = {
-    "oracle": "oracle",
-    "oracle_ivqr": "oracle_ivqr",
-    "post_selection_ivqr": "post_selection",
-    "dml_ivqr": "dml",
-    "full_control_ivqr": "full_control",
-}
-CORE_METRICS = [
+)
+ESTIMATOR_LABELS = MappingProxyType(
+    {
+        "oracle_ivqr": "Oracle IVQR",
+        "oracle": "Oracle IVQR",
+        "post_selection_ivqr": "Post-selection IVQR",
+        "dml_ivqr": "DML-IVQR",
+        "full_control_ivqr": "Full-control IVQR",
+    }
+)
+ESTIMATOR_COLUMN_NAMES = MappingProxyType(
+    {
+        "oracle": "oracle",
+        "oracle_ivqr": "oracle_ivqr",
+        "post_selection_ivqr": "post_selection",
+        "dml_ivqr": "dml",
+        "full_control_ivqr": "full_control",
+    }
+)
+CORE_METRICS: tuple[str, ...] = (
     "bias",
     "median_bias",
     "rmse",
@@ -43,8 +49,8 @@ CORE_METRICS = [
     "cr_empty_rate",
     "cr_disconnected_rate",
     "mean_runtime_seconds",
-]
-DIAGNOSTIC_COLUMNS = [
+)
+DIAGNOSTIC_COLUMNS: tuple[str, ...] = (
     "replications",
     "valid_estimates",
     "expected_replications",
@@ -59,16 +65,36 @@ DIAGNOSTIC_COLUMNS = [
     "mean_failed_alpha_count",
     "mean_selected_controls",
     "mean_runtime_seconds",
+)
+WIDE_TABLE_METRICS = MappingProxyType(
+    {
+        "bias": "bias_wide.csv",
+        "rmse": "rmse_wide.csv",
+        "mae": "mae_wide.csv",
+        "coverage": "coverage_wide.csv",
+        "avg_cr_length": "cr_length_wide.csv",
+        "mean_runtime_seconds": "runtime_wide.csv",
+        "failure_rate": "failure_rate_wide.csv",
+    }
+)
+
+__all__ = [
+    "CORE_METRICS",
+    "DIAGNOSTIC_COLUMNS",
+    "ESTIMATOR_COLUMN",
+    "ESTIMATOR_COLUMN_NAMES",
+    "ESTIMATOR_LABELS",
+    "ESTIMATOR_ORDER",
+    "TABLE_GROUP_COLUMNS",
+    "WIDE_TABLE_METRICS",
+    "add_estimator_labels",
+    "filter_summary",
+    "load_summary",
+    "make_comparison_table",
+    "make_diagnostic_table",
+    "make_wide_metric_table",
+    "write_tables",
 ]
-WIDE_TABLE_METRICS = {
-    "bias": "bias_wide.csv",
-    "rmse": "rmse_wide.csv",
-    "mae": "mae_wide.csv",
-    "coverage": "coverage_wide.csv",
-    "avg_cr_length": "cr_length_wide.csv",
-    "mean_runtime_seconds": "runtime_wide.csv",
-    "failure_rate": "failure_rate_wide.csv",
-}
 
 
 def _safe_column_name(value: object) -> str:
@@ -104,28 +130,70 @@ def _assert_unique_columns(df: pd.DataFrame) -> None:
 
 
 def _validate_summary_columns(summary: pd.DataFrame) -> None:
-    required = set(TABLE_GROUP_COLUMNS + [ESTIMATOR_COLUMN])
+    if not isinstance(summary, pd.DataFrame):
+        raise TypeError("summary must be a pandas DataFrame")
+    if summary.columns.duplicated().any():
+        duplicated = sorted(set(summary.columns[summary.columns.duplicated()].astype(str)))
+        raise ValueError(f"summary has duplicate columns: {duplicated}")
+    if summary.empty:
+        raise ValueError("summary must not be empty")
+
+    required = set(TABLE_GROUP_COLUMNS + (ESTIMATOR_COLUMN,))
     missing = sorted(required - set(summary.columns))
     if missing:
         raise ValueError(f"summary is missing required columns: {missing}")
 
 
 def _known_metric_columns(summary: pd.DataFrame) -> list[str]:
-    known = set(CORE_METRICS + DIAGNOSTIC_COLUMNS + ["avg_cr_length"])
+    known = set(CORE_METRICS + DIAGNOSTIC_COLUMNS + ("avg_cr_length",))
     return [column for column in summary.columns if column in known]
 
 
-def _validate_metrics(summary: pd.DataFrame, metrics: list[str]) -> None:
+def _validate_metrics(
+    summary: pd.DataFrame,
+    metrics: Sequence[str],
+) -> list[str]:
+    if isinstance(metrics, str):
+        raise ValueError("metrics must be a sequence of metric names")
+    metrics = list(metrics)
+    if not metrics:
+        raise ValueError("at least one metric column is required")
+    if any(not isinstance(metric, str) or not metric for metric in metrics):
+        raise ValueError("metrics must contain nonempty strings")
+    if len(set(metrics)) != len(metrics):
+        raise ValueError("metrics must not contain duplicates")
     missing = [metric for metric in metrics if metric not in summary.columns]
     if missing:
         raise ValueError(f"summary is missing requested metric columns: {missing}")
+    return metrics
+
+
+def _validate_round_digits(round_digits: int | None) -> int | None:
+    if round_digits is None:
+        return None
+    if not isinstance(round_digits, int) or isinstance(round_digits, bool):
+        raise ValueError("round_digits must be an integer or None")
+    if round_digits < 0:
+        raise ValueError("round_digits must be nonnegative")
+    return round_digits
 
 
 def _round_numeric(
-    df: pd.DataFrame, columns: list[str], round_digits: int | None
+    df: pd.DataFrame,
+    columns: Sequence[str],
+    round_digits: int | None,
 ) -> pd.DataFrame:
+    round_digits = _validate_round_digits(round_digits)
+    for column in columns:
+        if column in df.columns and isinstance(df[column], pd.DataFrame):
+            raise ValueError(
+                f"Column {column!r} is duplicated in table; "
+                "fix wide-table column construction."
+            )
+    _assert_unique_columns(df)
     if round_digits is None:
-        return df
+        return df.copy()
+
     rounded = df.copy()
     for column in columns:
         if column not in rounded.columns:
@@ -142,6 +210,27 @@ def _round_numeric(
     return rounded
 
 
+def _validate_index_columns(
+    summary: pd.DataFrame,
+    index_columns: Sequence[str] | None,
+) -> list[str]:
+    if index_columns is None:
+        return list(TABLE_GROUP_COLUMNS)
+    if isinstance(index_columns, str):
+        raise ValueError("index_columns must be a sequence of column names")
+    index_columns = list(index_columns)
+    if not index_columns:
+        raise ValueError("index_columns must not be empty")
+    if any(not isinstance(column, str) or not column for column in index_columns):
+        raise ValueError("index_columns must contain nonempty strings")
+    if len(set(index_columns)) != len(index_columns):
+        raise ValueError("index_columns must not contain duplicates")
+    missing = [column for column in index_columns if column not in summary.columns]
+    if missing:
+        raise ValueError(f"summary is missing requested index columns: {missing}")
+    return index_columns
+
+
 def load_summary(path: str | Path) -> pd.DataFrame:
     """Load an aggregated summary CSV and validate table-generation columns."""
     summary_path = Path(path)
@@ -150,36 +239,36 @@ def load_summary(path: str | Path) -> pd.DataFrame:
 
     summary = pd.read_csv(summary_path)
     _validate_summary_columns(summary)
-    if not _known_metric_columns(summary):
+    metric_columns = _known_metric_columns(summary)
+    if not metric_columns:
         raise ValueError("summary must contain at least one metric column")
+    if not any(
+        pd.to_numeric(summary[column], errors="coerce").notna().any()
+        for column in metric_columns
+    ):
+        raise ValueError("summary metric columns must contain at least one numeric value")
     return summary
 
 
 def add_estimator_labels(df: pd.DataFrame) -> pd.DataFrame:
     """Add display labels and sort by scenario plus canonical estimator order."""
+    _validate_summary_columns(df)
     labeled = df.copy()
-    _validate_summary_columns(labeled)
-    labeled["estimator_label"] = (
-        labeled[ESTIMATOR_COLUMN]
-        .map(ESTIMATOR_LABELS)
-        .fillna(labeled[ESTIMATOR_COLUMN])
-    )
-
     estimators = labeled[ESTIMATOR_COLUMN].astype(str)
+    labeled["estimator_label"] = estimators.map(ESTIMATOR_LABELS).fillna(estimators)
+
     unknown = sorted(
-        estimator
-        for estimator in estimators.unique()
-        if estimator not in ESTIMATOR_ORDER
+        estimator for estimator in estimators.unique() if estimator not in ESTIMATOR_ORDER
     )
-    categories = ESTIMATOR_ORDER + unknown
+    categories = list(ESTIMATOR_ORDER) + unknown
     labeled[ESTIMATOR_COLUMN] = pd.Categorical(
         estimators,
         categories=categories,
         ordered=True,
     )
-    return labeled.sort_values(TABLE_GROUP_COLUMNS + [ESTIMATOR_COLUMN]).reset_index(
-        drop=True
-    )
+    return labeled.sort_values(
+        list(TABLE_GROUP_COLUMNS) + [ESTIMATOR_COLUMN]
+    ).reset_index(drop=True)
 
 
 def filter_summary(
@@ -193,14 +282,22 @@ def filter_summary(
 ) -> pd.DataFrame:
     """Filter an aggregated summary by scenario values and estimator names."""
     _validate_summary_columns(summary)
+    if estimators is not None:
+        if isinstance(estimators, str):
+            raise ValueError("estimators must be a sequence of estimator names")
+        estimators = tuple(estimators)
+        if not estimators:
+            raise ValueError("estimators must not be empty")
+        if any(
+            not isinstance(estimator, str) or not estimator
+            for estimator in estimators
+        ):
+            raise ValueError("estimators must contain nonempty strings")
+        if len(set(estimators)) != len(estimators):
+            raise ValueError("estimators must not contain duplicates")
+
     filtered = summary.copy()
-    filters = {
-        "dgp": dgp,
-        "n": n,
-        "p": p,
-        "pi": pi,
-        "tau": tau,
-    }
+    filters = {"dgp": dgp, "n": n, "p": p, "pi": pi, "tau": tau}
     for column, value in filters.items():
         if value is not None:
             filtered = filtered.loc[filtered[column] == value]
@@ -212,57 +309,78 @@ def filter_summary(
 def make_wide_metric_table(
     summary: pd.DataFrame,
     metric: str,
-    index_columns: list[str] | None = None,
+    index_columns: Sequence[str] | None = None,
     round_digits: int | None = 4,
 ) -> pd.DataFrame:
     """Create a wide scenario-by-estimator table for one metric."""
     _validate_summary_columns(summary)
+    if not isinstance(metric, str) or not metric:
+        raise ValueError("metric must be a nonempty string")
     if metric not in summary.columns:
         raise ValueError(f"metric column not found in summary: {metric}")
+    _validate_metrics(summary, [metric])
+    index_columns = _validate_index_columns(summary, index_columns)
+    round_digits = _validate_round_digits(round_digits)
 
-    index_columns = TABLE_GROUP_COLUMNS if index_columns is None else index_columns
-    duplicate_columns = index_columns + [ESTIMATOR_COLUMN]
-    duplicates = summary.duplicated(duplicate_columns, keep=False)
+    duplicates = summary.duplicated(index_columns + [ESTIMATOR_COLUMN], keep=False)
     if duplicates.any():
         raise ValueError("duplicate scenario-estimator rows cannot be pivoted")
 
     labeled = add_estimator_labels(summary)
-    wide = labeled.pivot(index=index_columns, columns=ESTIMATOR_COLUMN, values=metric)
+    labeled[metric] = pd.to_numeric(labeled[metric], errors="coerce")
+    if labeled[metric].notna().sum() == 0:
+        raise ValueError(f"metric column {metric!r} has no numeric values")
+    wide = labeled.pivot(
+        index=index_columns,
+        columns=ESTIMATOR_COLUMN,
+        values=metric,
+    )
     wide.columns = _flatten_columns(wide.columns)
 
     existing_ordered = [
         estimator for estimator in ESTIMATOR_ORDER if estimator in wide.columns
     ]
-    remaining = [estimator for estimator in wide.columns if estimator not in existing_ordered]
+    remaining = sorted(
+        str(estimator)
+        for estimator in wide.columns
+        if estimator not in set(existing_ordered)
+    )
     wide = wide[existing_ordered + remaining]
     wide = wide.rename(
         columns={
             estimator: _wide_metric_column_name(estimator, metric)
             for estimator in wide.columns
         }
-    )
-    wide = wide.reset_index()
+    ).reset_index()
 
     metric_columns = [column for column in wide.columns if column not in index_columns]
-    assert not wide.columns.duplicated().any()
     _assert_unique_columns(wide)
     return _round_numeric(wide, metric_columns, round_digits)
 
 
 def make_comparison_table(
     summary: pd.DataFrame,
-    metrics: list[str] | None = None,
+    metrics: Sequence[str] | None = None,
     round_digits: int | None = 4,
 ) -> pd.DataFrame:
     """Create a long-format master result table with core metrics."""
     _validate_summary_columns(summary)
-    metrics = CORE_METRICS if metrics is None else metrics
-    _validate_metrics(summary, metrics)
+    selected_metrics = list(CORE_METRICS) if metrics is None else metrics
+    selected_metrics = _validate_metrics(summary, selected_metrics)
+    round_digits = _validate_round_digits(round_digits)
 
     table = add_estimator_labels(summary)
-    columns = TABLE_GROUP_COLUMNS + [ESTIMATOR_COLUMN, "estimator_label"] + metrics
+    columns = (
+        list(TABLE_GROUP_COLUMNS)
+        + [ESTIMATOR_COLUMN, "estimator_label"]
+        + selected_metrics
+    )
     table = table[columns].copy()
-    return _round_numeric(table, metrics, round_digits)
+    for metric in selected_metrics:
+        table[metric] = pd.to_numeric(table[metric], errors="coerce")
+    if not any(table[metric].notna().any() for metric in selected_metrics):
+        raise ValueError("comparison metrics have no numeric values")
+    return _round_numeric(table, selected_metrics, round_digits)
 
 
 def make_diagnostic_table(
@@ -271,33 +389,43 @@ def make_diagnostic_table(
 ) -> pd.DataFrame:
     """Create a long-format diagnostic table for completion and failure checks."""
     _validate_summary_columns(summary)
+    round_digits = _validate_round_digits(round_digits)
     table = add_estimator_labels(summary)
     available_diagnostics = [
         column for column in DIAGNOSTIC_COLUMNS if column in table.columns
     ]
     columns = (
-        TABLE_GROUP_COLUMNS
+        list(TABLE_GROUP_COLUMNS)
         + [ESTIMATOR_COLUMN, "estimator_label"]
         + available_diagnostics
     )
     table = table[columns].copy()
+    for diagnostic in available_diagnostics:
+        table[diagnostic] = pd.to_numeric(table[diagnostic], errors="coerce")
     return _round_numeric(table, available_diagnostics, round_digits)
 
 
 def write_tables(
     summary: pd.DataFrame,
     output_dir: str | Path,
-    round_digits: int = 4,
+    round_digits: int | None = 4,
 ) -> dict[str, Path]:
     """Write standard thesis-ready CSV tables and return their paths."""
+    _validate_summary_columns(summary)
+    round_digits = _validate_round_digits(round_digits)
     output_path = Path(output_dir)
+    if output_path.exists() and not output_path.is_dir():
+        raise ValueError("output_dir must be a directory path")
     output_path.mkdir(parents=True, exist_ok=True)
 
-    written: dict[str, Path] = {}
-    comparison_path = output_path / "comparison_table.csv"
     comparison_metrics = [
         metric for metric in CORE_METRICS if metric in summary.columns
     ]
+    if not comparison_metrics:
+        raise ValueError("summary does not contain any core metrics for comparison table")
+
+    written: dict[str, Path] = {}
+    comparison_path = output_path / "comparison_table.csv"
     make_comparison_table(
         summary,
         metrics=comparison_metrics,
@@ -307,7 +435,8 @@ def write_tables(
 
     diagnostic_path = output_path / "diagnostic_table.csv"
     make_diagnostic_table(summary, round_digits=round_digits).to_csv(
-        diagnostic_path, index=False
+        diagnostic_path,
+        index=False,
     )
     written["diagnostic"] = diagnostic_path
 
@@ -319,5 +448,4 @@ def write_tables(
         table.to_csv(path, index=False)
         key = filename.removesuffix("_wide.csv").removesuffix(".csv")
         written[key] = path
-
     return written

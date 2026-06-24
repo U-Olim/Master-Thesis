@@ -2,19 +2,31 @@
 
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 
+import reporting.summaries as summaries_module
+from reporting.figures import (
+    DEFAULT_FIGURE_METRICS,
+    make_metric_figure,
+    write_figures,
+)
 from reporting.summaries import (
     GROUP_COLUMNS,
+    RAW_UNIQUE_COLUMNS,
     SUMMARY_METRIC_COLUMNS,
     aggregate_results,
     aggregate_results_file,
     incomplete_groups,
     load_raw_results,
+    save_summary,
+    validate_no_duplicate_raw_rows,
 )
 from reporting.tables import (
     ESTIMATOR_LABELS,
+    TABLE_GROUP_COLUMNS,
+    WIDE_TABLE_METRICS,
     _round_numeric,
     add_estimator_labels,
     filter_summary,
@@ -143,7 +155,7 @@ def test_aggregate_results_returns_one_row_per_group() -> None:
 def test_aggregate_results_preserves_group_columns() -> None:
     summary = aggregate_results(_raw_results(), expected_replications=2)
 
-    assert GROUP_COLUMNS == ["dgp", "n", "p", "pi", "tau", "estimator"]
+    assert GROUP_COLUMNS == ("dgp", "n", "p", "pi", "tau", "estimator")
     assert all(column in summary.columns for column in GROUP_COLUMNS)
     assert all(column in summary.columns for column in SUMMARY_METRIC_COLUMNS)
 
@@ -328,6 +340,160 @@ def test_incomplete_groups_returns_empty_if_column_missing() -> None:
     summary = aggregate_results(_raw_results()).drop(columns=["completion_rate"])
 
     assert incomplete_groups(summary).empty
+
+
+def test_summary_constants_and_public_api_are_immutable_and_complete() -> None:
+    assert isinstance(GROUP_COLUMNS, tuple)
+    assert isinstance(RAW_UNIQUE_COLUMNS, tuple)
+    assert isinstance(SUMMARY_METRIC_COLUMNS, tuple)
+    for name in summaries_module.__all__:
+        assert hasattr(summaries_module, name)
+    assert all(not name.startswith("_") for name in summaries_module.__all__)
+
+
+def test_load_raw_results_rejects_directory_path(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="must be a file"):
+        load_raw_results(tmp_path)
+
+
+def test_load_raw_results_missing_metric_column_raises(tmp_path: Path) -> None:
+    path = tmp_path / "raw.csv"
+    _raw_results().drop(columns=["alpha_hat"]).to_csv(path, index=False)
+
+    with pytest.raises(ValueError, match="missing required columns"):
+        load_raw_results(path)
+
+
+def test_validate_no_duplicate_raw_rows_validates_direct_input() -> None:
+    with pytest.raises(TypeError):
+        validate_no_duplicate_raw_rows([])  # type: ignore[arg-type]
+
+    duplicate_columns = pd.concat(
+        [_raw_results(), _raw_results()[["alpha_hat"]]],
+        axis=1,
+    )
+    with pytest.raises(ValueError, match="duplicate columns"):
+        validate_no_duplicate_raw_rows(duplicate_columns)
+
+
+@pytest.mark.parametrize("expected_replications", [0, True, 1.5])
+def test_aggregate_results_rejects_invalid_expected_replications(
+    expected_replications,
+) -> None:
+    with pytest.raises(ValueError):
+        aggregate_results(
+            _raw_results(),
+            expected_replications=expected_replications,
+        )
+
+
+def test_aggregate_results_allows_completion_rate_above_one() -> None:
+    summary = aggregate_results(_raw_results(), expected_replications=1)
+
+    assert summary["completion_rate"].tolist() == [2.0, 2.0]
+
+
+def test_aggregate_results_empty_input_preserves_summary_schema() -> None:
+    summary = aggregate_results(_raw_results().iloc[0:0])
+    expected_columns = list(GROUP_COLUMNS + SUMMARY_METRIC_COLUMNS) + [
+        "expected_replications",
+        "observed_replications",
+        "completion_rate",
+    ]
+
+    assert summary.empty
+    assert summary.columns.tolist() == expected_columns
+
+
+@pytest.mark.parametrize(
+    ("rep", "message"),
+    [
+        ("bad", "numeric"),
+        (-1, "nonnegative"),
+        (0.5, "integer-valued"),
+    ],
+)
+def test_aggregate_results_rejects_malformed_rep_values(
+    rep,
+    message: str,
+) -> None:
+    raw = _raw_results().copy()
+    raw["rep"] = raw["rep"].astype(object)
+    raw.loc[raw.index[0], "rep"] = rep
+
+    with pytest.raises(ValueError, match=message):
+        aggregate_results(raw)
+
+
+def test_aggregate_results_ignores_missing_rep_values() -> None:
+    raw = _raw_results().copy()
+    raw.loc[raw.index[0], "rep"] = None
+
+    summary = aggregate_results(raw)
+
+    assert _row(summary, "dml_ivqr")["observed_replications"] == 1
+
+
+def test_aggregate_results_duplicate_rep_ids_count_once() -> None:
+    raw = _raw_results().copy()
+    raw.loc[raw["estimator"] == "dml_ivqr", "rep"] = 0
+
+    summary = aggregate_results(raw)
+
+    assert _row(summary, "dml_ivqr")["observed_replications"] == 1
+
+
+def test_save_summary_validates_input_and_paths(tmp_path: Path) -> None:
+    with pytest.raises(TypeError):
+        save_summary([], tmp_path / "summary.csv")  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="must be a file path"):
+        save_summary(pd.DataFrame(), tmp_path)
+
+    parent_file = tmp_path / "parent"
+    parent_file.write_text("file", encoding="utf-8")
+    with pytest.raises(ValueError, match="parent must be a directory"):
+        save_summary(pd.DataFrame(), parent_file / "summary.csv")
+
+
+def test_save_summary_creates_nested_directory_and_round_trips(tmp_path: Path) -> None:
+    summary = aggregate_results(_raw_results(), expected_replications=2)
+    path = tmp_path / "nested" / "summary.csv"
+
+    save_summary(summary, path)
+
+    pd.testing.assert_frame_equal(
+        pd.read_csv(path),
+        summary,
+        check_dtype=False,
+    )
+
+
+def test_aggregate_results_file_propagates_validation_errors(tmp_path: Path) -> None:
+    input_path = tmp_path / "raw.csv"
+    _raw_results().to_csv(input_path, index=False)
+
+    with pytest.raises(ValueError):
+        aggregate_results_file(input_path, expected_replications=0)
+
+    output_directory = tmp_path / "output"
+    output_directory.mkdir()
+    with pytest.raises(ValueError, match="must be a file path"):
+        aggregate_results_file(input_path, output_directory)
+
+
+def test_incomplete_groups_validates_input_and_ignores_nonnumeric() -> None:
+    with pytest.raises(TypeError):
+        incomplete_groups([])  # type: ignore[arg-type]
+
+    duplicate_columns = pd.DataFrame([[0.5, 0.6]], columns=["completion_rate"] * 2)
+    with pytest.raises(ValueError, match="duplicate columns"):
+        incomplete_groups(duplicate_columns)
+
+    summary = pd.DataFrame({"completion_rate": ["bad", None, 0.5, 1.5]})
+    incomplete = incomplete_groups(summary)
+
+    assert incomplete.index.tolist() == [2]
 
 
 def test_aggregate_results_validates_metric_columns() -> None:
@@ -607,3 +773,337 @@ def test_load_summary_requires_at_least_one_metric_column(tmp_path: Path) -> Non
 
     with pytest.raises(ValueError, match="at least one metric"):
         load_summary(path)
+
+
+def test_table_constants_are_immutable() -> None:
+    assert isinstance(TABLE_GROUP_COLUMNS, tuple)
+    with pytest.raises(TypeError):
+        ESTIMATOR_LABELS["new"] = "New"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        WIDE_TABLE_METRICS["new"] = "new.csv"  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        [],
+        pd.DataFrame(columns=["dgp", "n", "p", "pi", "tau", "estimator"]),
+    ],
+)
+def test_table_builders_reject_invalid_summary(summary) -> None:
+    expected = TypeError if not isinstance(summary, pd.DataFrame) else ValueError
+    with pytest.raises(expected):
+        make_comparison_table(summary, metrics=["rmse"])
+
+
+def test_table_builders_reject_duplicate_summary_columns() -> None:
+    summary = pd.concat([_summary(), _summary()[["rmse"]]], axis=1)
+
+    with pytest.raises(ValueError, match="duplicate columns"):
+        make_comparison_table(summary, metrics=["rmse"])
+
+
+@pytest.mark.parametrize(
+    "metrics",
+    ["rmse", [], ["rmse", "rmse"], [""], ["not_a_metric"]],
+)
+def test_make_comparison_table_validates_metrics(metrics) -> None:
+    with pytest.raises(ValueError):
+        make_comparison_table(_summary(), metrics=metrics)
+
+
+@pytest.mark.parametrize("round_digits", [True, -1, 1.5])
+def test_table_builders_validate_round_digits(round_digits) -> None:
+    with pytest.raises(ValueError):
+        make_comparison_table(
+            _summary(),
+            metrics=["rmse"],
+            round_digits=round_digits,
+        )
+
+
+def test_round_numeric_none_returns_unrounded_copy() -> None:
+    table = pd.DataFrame({"rmse": [0.123456]})
+
+    result = _round_numeric(table, ["rmse"], round_digits=None)
+
+    assert result is not table
+    assert result.iloc[0]["rmse"] == pytest.approx(0.123456)
+
+
+@pytest.mark.parametrize(
+    "estimators",
+    ["dml_ivqr", (), ("dml_ivqr", "dml_ivqr"), (1,)],
+)
+def test_filter_summary_rejects_invalid_estimator_filters(estimators) -> None:
+    with pytest.raises(ValueError):
+        filter_summary(_summary(), estimators=estimators)
+
+
+@pytest.mark.parametrize(
+    "index_columns",
+    ["dgp", [], ["dgp", "dgp"], ["missing"]],
+)
+def test_make_wide_metric_table_validates_index_columns(index_columns) -> None:
+    with pytest.raises(ValueError):
+        make_wide_metric_table(
+            _summary(),
+            "rmse",
+            index_columns=index_columns,
+        )
+
+
+def test_make_wide_metric_table_accepts_custom_index_columns() -> None:
+    wide = make_wide_metric_table(
+        _summary(),
+        "rmse",
+        index_columns=["dgp", "n", "p", "pi", "tau"],
+    )
+
+    assert "dml_rmse" in wide.columns
+
+
+def test_make_wide_metric_table_rejects_all_nonnumeric_metric() -> None:
+    summary = _summary()
+    summary["rmse"] = "invalid"
+
+    with pytest.raises(ValueError, match="has no numeric values"):
+        make_wide_metric_table(summary, "rmse")
+
+
+def test_make_wide_metric_table_keeps_partial_nonnumeric_as_nan() -> None:
+    summary = _summary()
+    summary["rmse"] = summary["rmse"].astype(object)
+    summary.loc[summary.index[0], "rmse"] = "invalid"
+
+    wide = make_wide_metric_table(summary, "rmse", round_digits=None)
+
+    assert wide["dml_rmse"].isna().any()
+
+
+def test_make_comparison_table_rejects_all_nonnumeric_metrics() -> None:
+    summary = _summary()
+    summary["rmse"] = "invalid"
+
+    with pytest.raises(ValueError, match="no numeric values"):
+        make_comparison_table(summary, metrics=["rmse"])
+
+
+def test_make_diagnostic_table_without_diagnostics_returns_identifiers() -> None:
+    summary = _summary()[
+        ["dgp", "n", "p", "pi", "tau", "estimator", "rmse"]
+    ]
+
+    table = make_diagnostic_table(summary)
+
+    assert table.columns.tolist() == [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "estimator",
+        "estimator_label",
+    ]
+
+
+def test_load_summary_rejects_nonnumeric_metrics(tmp_path: Path) -> None:
+    path = tmp_path / "bad.csv"
+    summary = _summary()[
+        ["dgp", "n", "p", "pi", "tau", "estimator", "rmse"]
+    ].copy()
+    summary["rmse"] = "invalid"
+    summary.to_csv(path, index=False)
+
+    with pytest.raises(ValueError, match="must contain at least one numeric value"):
+        load_summary(path)
+
+
+def test_write_tables_rejects_existing_file_output_dir(tmp_path: Path) -> None:
+    output = tmp_path / "tables"
+    output.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must be a directory path"):
+        write_tables(_summary(), output)
+
+
+def test_write_tables_rejects_summary_without_core_metrics(tmp_path: Path) -> None:
+    summary = _summary()[
+        ["dgp", "n", "p", "pi", "tau", "estimator", "replications"]
+    ]
+
+    with pytest.raises(ValueError, match="does not contain any core metrics"):
+        write_tables(summary, tmp_path)
+
+
+def test_unknown_estimators_sort_alphabetically_after_known() -> None:
+    base = _summary().iloc[[0]]
+    summary = pd.concat(
+        [
+            base,
+            base.assign(estimator="z_estimator"),
+            base.assign(estimator="a_estimator"),
+        ],
+        ignore_index=True,
+    )
+
+    labeled = add_estimator_labels(summary)
+
+    assert labeled["estimator"].astype(str).tolist() == [
+        "dml_ivqr",
+        "a_estimator",
+        "z_estimator",
+    ]
+
+
+def test_make_metric_figure_writes_png(tmp_path: Path) -> None:
+    path = make_metric_figure(_summary(), "rmse", tmp_path / "rmse.png", title="RMSE")
+
+    assert path.exists()
+    assert path.stat().st_size > 0
+
+
+def test_make_metric_figure_creates_parent_directory(tmp_path: Path) -> None:
+    path = make_metric_figure(
+        _summary(),
+        "coverage",
+        tmp_path / "nested" / "coverage.png",
+    )
+
+    assert path.exists()
+
+
+def test_make_metric_figure_does_not_mutate_summary(tmp_path: Path) -> None:
+    summary = _summary()
+    original = summary.copy(deep=True)
+
+    make_metric_figure(summary, "rmse", tmp_path / "rmse.png")
+
+    pd.testing.assert_frame_equal(summary, original)
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        [],
+        pd.DataFrame(),
+        pd.DataFrame({"dgp": ["dgp1"]}),
+    ],
+)
+def test_make_metric_figure_rejects_invalid_summary(
+    summary,
+    tmp_path: Path,
+) -> None:
+    expected = TypeError if not isinstance(summary, pd.DataFrame) else ValueError
+    with pytest.raises(expected):
+        make_metric_figure(summary, "rmse", tmp_path / "rmse.png")
+
+
+def test_make_metric_figure_rejects_duplicate_columns(tmp_path: Path) -> None:
+    summary = pd.concat([_summary(), _summary()[["rmse"]]], axis=1)
+
+    with pytest.raises(ValueError, match="duplicate columns"):
+        make_metric_figure(summary, "rmse", tmp_path / "rmse.png")
+
+
+def test_make_metric_figure_rejects_nonnumeric_metric(tmp_path: Path) -> None:
+    summary = _summary()
+    summary["rmse"] = "invalid"
+
+    with pytest.raises(ValueError, match="has no numeric values"):
+        make_metric_figure(summary, "rmse", tmp_path / "rmse.png")
+
+
+@pytest.mark.parametrize("metric", ["", "not_a_metric"])
+def test_make_metric_figure_rejects_invalid_metric(
+    metric: str,
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError):
+        make_metric_figure(_summary(), metric, tmp_path / "metric.png")
+
+
+def test_write_figures_writes_default_available_metrics(tmp_path: Path) -> None:
+    written = write_figures(_summary(), tmp_path)
+
+    assert {
+        "bias",
+        "rmse",
+        "coverage",
+        "avg_cr_length",
+        "failure_rate",
+    }.issubset(written)
+    assert all(path.exists() for path in written.values())
+
+
+def test_write_figures_skips_missing_metrics(tmp_path: Path) -> None:
+    summary = _summary().drop(columns=["failure_rate"])
+
+    written = write_figures(summary, tmp_path)
+
+    assert "failure_rate" not in written
+
+
+def test_write_figures_accepts_custom_specs(tmp_path: Path) -> None:
+    written = write_figures(
+        _summary(),
+        tmp_path,
+        metrics={
+            "rmse": "Root mean squared error",
+            "coverage": ("custom_coverage.png", "Coverage"),
+        },
+    )
+
+    assert written["rmse"].name == "fig_rmse.png"
+    assert written["coverage"].name == "custom_coverage.png"
+    assert all(path.exists() for path in written.values())
+
+
+@pytest.mark.parametrize(
+    "metrics",
+    [
+        [],
+        {},
+        {"rmse": ("only_one",)},
+        {"rmse": ""},
+        {"": "RMSE"},
+    ],
+)
+def test_write_figures_rejects_invalid_metric_specs(metrics, tmp_path: Path) -> None:
+    expected = TypeError if isinstance(metrics, list) else ValueError
+    with pytest.raises(expected):
+        write_figures(_summary(), tmp_path, metrics=metrics)
+
+
+def test_make_metric_figure_closes_figure(tmp_path: Path) -> None:
+    before = set(plt.get_fignums())
+
+    make_metric_figure(_summary(), "rmse", tmp_path / "rmse.png")
+
+    assert set(plt.get_fignums()) == before
+
+
+def test_make_metric_figure_preserves_unknown_estimator_label(tmp_path: Path) -> None:
+    summary = pd.concat(
+        [
+            _summary(),
+            pd.DataFrame(
+                [
+                    {
+                        **_summary().iloc[0].to_dict(),
+                        "estimator": "custom_ivqr",
+                    }
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+
+    path = make_metric_figure(summary, "rmse", tmp_path / "custom.png")
+
+    assert path.exists()
+
+
+def test_default_figure_metrics_is_immutable() -> None:
+    with pytest.raises(TypeError):
+        DEFAULT_FIGURE_METRICS["new"] = "New"  # type: ignore[index]

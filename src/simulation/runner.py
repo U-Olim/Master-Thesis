@@ -105,6 +105,14 @@ def _validate_positive_int(name: str, value: int) -> int:
     return value
 
 
+def _validate_nonnegative_int(name: str, value: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if value < 0:
+        raise ValueError(f"{name} must be nonnegative")
+    return value
+
+
 def _validate_nonnegative_float(name: str, value: float) -> float:
     if isinstance(value, bool):
         raise ValueError(f"{name} must be finite and nonnegative")
@@ -346,8 +354,7 @@ def make_simulation_grid(
     reps = _validate_positive_int("reps", reps)
     if reps >= 1000:
         raise ValueError("reps must be less than 1000 under the deterministic seed schedule")
-    if not isinstance(base_seed, int) or isinstance(base_seed, bool):
-        raise ValueError("base_seed must be an integer")
+    base_seed = _validate_nonnegative_int("base_seed", base_seed)
     n_values = tuple(_validate_positive_int("n", n) for n in n_values)
     p_values = tuple(_validate_positive_int("p", p) for p in p_values)
     pi_values = tuple(_validate_nonnegative_float("pi", pi) for pi in pi_values)
@@ -511,8 +518,7 @@ def run_small_simulation(
     pi = _validate_nonnegative_float("pi", pi)
     tau = _validate_probability_quantile("tau", tau)
     reps = _validate_positive_int("reps", reps)
-    if not isinstance(base_seed, int) or isinstance(base_seed, bool):
-        raise ValueError("base_seed must be an integer")
+    base_seed = _validate_nonnegative_int("base_seed", base_seed)
     alpha_grid_size = _validate_positive_int("alpha_grid_size", alpha_grid_size)
     if alpha_grid_size < 3:
         raise ValueError("alpha_grid_size must be at least 3")

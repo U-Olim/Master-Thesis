@@ -331,6 +331,46 @@ def test_make_simulation_grid_accepts_500_reps_with_existing_seed_schedule() -> 
     assert designs[-1].seed == 622
 
 
+def test_make_simulation_grid_rejects_negative_base_seed() -> None:
+    with pytest.raises(ValueError, match="base_seed must be nonnegative"):
+        make_simulation_grid(
+            dgps=("dgp1",),
+            n_values=(100,),
+            p_values=(10,),
+            pi_values=(1.0,),
+            taus=(0.5,),
+            reps=1,
+            base_seed=-1,
+        )
+
+
+def test_run_small_simulation_rejects_negative_base_seed() -> None:
+    with pytest.raises(ValueError, match="base_seed must be nonnegative"):
+        run_small_simulation(
+            dgp="dgp1",
+            n=80,
+            p=5,
+            tau=0.5,
+            reps=1,
+            base_seed=-1,
+            alphas=np.linspace(0.0, 2.0, 3),
+        )
+
+
+def test_make_simulation_grid_preserves_valid_seed_schedule() -> None:
+    designs = make_simulation_grid(
+        dgps=("dgp1",),
+        n_values=(100,),
+        p_values=(10,),
+        pi_values=(1.0,),
+        taus=(0.5,),
+        reps=2,
+        base_seed=123,
+    )
+
+    assert [design.seed for design in designs] == [123, 124]
+
+
 @pytest.mark.parametrize(
     "alphas",
     [
