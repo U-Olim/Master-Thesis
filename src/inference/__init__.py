@@ -1,4 +1,4 @@
-"""Inference, moment, and metric helpers."""
+"""Public inference helpers for alpha grids and confidence-region inversion."""
 
 from .alpha_grid import alpha_grid
 from .confidence_regions import (

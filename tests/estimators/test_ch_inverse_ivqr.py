@@ -1,0 +1,297 @@
+# Consolidated tests for the thematic project structure.
+
+import numpy as np
+import pytest
+import warnings
+from statsmodels.tools.sm_exceptions import IterationLimitWarning
+
+from dgp import generate_data
+from dgp.designs import Design
+from estimators import ch_inverse_ivqr
+from estimators.base import EstimationResult
+from estimators.dml_ivqr import (
+    _build_dml_fold_cache,
+    _evaluate_dml_ivqr_alpha_uncached,
+    estimate_dml_ivqr,
+    evaluate_dml_ivqr_alpha,
+    fit_instrument_residualizer,
+    fit_quantile_nuisance,
+    make_folds,
+    standardize_train_test,
+)
+from estimators.ch_inverse_ivqr import add_intercept
+from estimators.full_control_ivqr import estimate_full_control_ivqr
+from estimators.oracle_ivqr import estimate_oracle_ivqr
+from estimators.post_selection_ivqr import (
+    estimate_post_selection_ivqr,
+    evaluate_post_selection_alpha,
+    select_controls_lasso,
+)
+
+
+def require_float(value: float | None, name: str = "value") -> float:
+    assert value is not None, f"{name} should not be None"
+    return value
+
+
+def require_array(value: np.ndarray | None, name: str = "array") -> np.ndarray:
+    assert value is not None, f"{name} should not be None"
+    return value
+
+
+def test_estimation_result_can_be_instantiated() -> None:
+    result = EstimationResult(
+        estimator="full_control_ivqr",
+        alpha_hat=None,
+        alpha_true=1.0,
+        tau=0.5,
+        converged=False,
+        failed=True,
+        message="not implemented",
+        objective_value=None,
+        at_grid_boundary=False,
+        alpha_grid_size=None,
+        failed_alpha_count=None,
+        cr_lower=None,
+        cr_upper=None,
+        cr_length=None,
+        cr_covers_true=None,
+        cr_empty=True,
+        cr_disconnected=None,
+        selected_controls=None,
+        runtime_seconds=0.0,
+    )
+
+    assert result.estimator == "full_control_ivqr"
+    assert result.failed is True
+    assert result.cr_empty is True
+    assert result.cr_disconnected is None
+
+
+def test_empty_confidence_region_is_separate_from_estimator_failure() -> None:
+    result = EstimationResult(
+        estimator="dml_ivqr",
+        alpha_hat=1.0,
+        alpha_true=1.0,
+        tau=0.5,
+        converged=True,
+        failed=False,
+        message="ok",
+        objective_value=10.0,
+        at_grid_boundary=False,
+        alpha_grid_size=5,
+        failed_alpha_count=0,
+        cr_lower=None,
+        cr_upper=None,
+        cr_length=None,
+        cr_covers_true=False,
+        cr_empty=True,
+        cr_disconnected=False,
+        selected_controls=None,
+        runtime_seconds=0.0,
+    )
+
+    assert result.failed is False
+    assert result.converged is True
+    assert result.cr_empty is True
+
+
+def test_add_intercept_prepends_ones() -> None:
+    x = np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    x_design = add_intercept(x)
+
+    assert x_design.shape == (2, 3)
+    assert np.allclose(x_design[:, 0], 1.0)
+    assert np.allclose(x_design[:, 1:], x)
+
+
+def test_add_intercept_rejects_zero_rows() -> None:
+    with pytest.raises(ValueError, match="x must contain at least one row"):
+        add_intercept(np.empty((0, 2)))
+
+
+def test_as_2d_instruments_rejects_zero_rows() -> None:
+    with pytest.raises(ValueError, match="z must contain at least one row"):
+        ch_inverse_ivqr.as_2d_instruments(np.empty((0, 1)))
+
+
+def test_wald_statistic_uses_covariance_scaling_without_extra_n() -> None:
+    gamma_hat = np.array([2.0])
+    # cov_gamma estimates Var(gamma_hat), so its inverse already includes
+    # the CH sample-size scaling and no additional factor of n is applied.
+    cov_gamma = np.array([[4.0]])
+
+    assert ch_inverse_ivqr.wald_statistic(gamma_hat, cov_gamma) == pytest.approx(
+        1.0
+    )
+
+
+@pytest.mark.parametrize("alpha", [np.nan, np.inf, -np.inf])
+def test_evaluate_alpha_ch_ivqr_rejects_nonfinite_alpha(alpha: float) -> None:
+    with pytest.raises(ValueError, match="alpha must be finite"):
+        ch_inverse_ivqr.evaluate_alpha_ch_ivqr(
+            y=np.arange(6, dtype=float),
+            d=np.ones(6),
+            x_controls=np.ones((6, 2)),
+            z=np.arange(6, dtype=float),
+            alpha=alpha,
+            tau=0.5,
+        )
+
+
+@pytest.mark.parametrize(
+    ("diagnostics", "message"),
+    [
+        (
+            {"runtime_seconds": -1.0},
+            "runtime_seconds must be finite and nonnegative",
+        ),
+        ({"alpha_grid_size": 0}, "alpha_grid_size must be at least 1"),
+        ({"failed_alpha_count": -1}, "failed_alpha_count must be nonnegative"),
+        (
+            {"alpha_grid_size": 2, "failed_alpha_count": 3},
+            "failed_alpha_count must not exceed alpha_grid_size",
+        ),
+    ],
+)
+def test_failed_ch_ivqr_result_rejects_invalid_diagnostics(
+    diagnostics: dict[str, int | float],
+    message: str,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=20, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    arguments: dict[str, object] = {
+        "data": data,
+        "tau": 0.5,
+        "estimator": "test",
+        "message": "failed",
+        "runtime_seconds": 0.0,
+        "alpha_grid_size": 3,
+        "failed_alpha_count": 1,
+    }
+    arguments.update(diagnostics)
+
+    with pytest.raises(ValueError, match=message):
+        ch_inverse_ivqr.failed_ch_ivqr_result(**arguments)
+
+
+def test_evaluate_full_control_ivqr_alpha_returns_finite_statistic() -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    data = generate_data(design)
+    alpha_true = require_float(data.alpha_true, "alpha_true")
+
+    evaluation = ch_inverse_ivqr.evaluate_alpha_ch_ivqr(
+        y=data.y,
+        d=data.d,
+        x_controls=data.x,
+        z=data.z,
+        alpha=alpha_true,
+        tau=0.5,
+    )
+
+    assert evaluation.message == "ok"
+    assert evaluation.converged is True
+    assert evaluation.dim_z == 1
+    assert evaluation.gamma_hat.shape == (1,)
+    assert evaluation.cov_gamma.shape == (1, 1)
+    assert np.isfinite(evaluation.statistic)
+    assert evaluation.statistic >= 0.0
+
+
+def test_ch_ivqr_design_includes_controls_and_excluded_instruments() -> None:
+    x_controls = np.ones((8, 5))
+    z = np.arange(8, dtype=float)
+
+    design, z_block = ch_inverse_ivqr.ch_ivqr_design(x_controls, z)
+
+    assert design.shape == (8, 7)
+    assert z_block == slice(6, 7)
+    assert np.allclose(design[:, 0], 1.0)
+    assert np.allclose(design[:, 1:6], x_controls)
+    assert np.allclose(design[:, 6], z)
+
+
+def test_ch_ivqr_evaluator_extracts_gamma_after_controls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, tuple[int, int]] = {}
+
+    class FakeQuantReg:
+        def __init__(self, y_alpha, design):
+            captured["design_shape"] = design.shape
+
+        def fit(self, q, max_iter):
+            class Result:
+                params = np.array([0.0, 10.0, 20.0, 2.0])
+
+                @staticmethod
+                def cov_params():
+                    return np.diag([1.0, 1.0, 1.0, 4.0])
+
+            return Result()
+
+    monkeypatch.setattr(ch_inverse_ivqr, "QuantReg", FakeQuantReg)
+
+    evaluation = ch_inverse_ivqr.evaluate_alpha_ch_ivqr(
+        y=np.arange(6, dtype=float),
+        d=np.ones(6),
+        x_controls=np.ones((6, 2)),
+        z=np.arange(6, dtype=float),
+        alpha=1.0,
+        tau=0.5,
+        max_iter=100,
+    )
+
+    assert captured["design_shape"] == (6, 4)
+    assert evaluation.dim_z == 1
+    assert evaluation.gamma_hat.tolist() == [2.0]
+    assert evaluation.statistic == pytest.approx(1.0)
+
+
+def test_ch_ivqr_evaluator_marks_iteration_limit_as_nonconverged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class IterationLimitedQuantReg:
+        def __init__(self, y_alpha, design):
+            self.design = design
+
+        def fit(self, q, max_iter):
+            warnings.warn(
+                "Maximum number of iterations reached",
+                IterationLimitWarning,
+            )
+
+            class Result:
+                params = np.zeros(4)
+
+                @staticmethod
+                def cov_params():
+                    return np.eye(4)
+
+            return Result()
+
+    monkeypatch.setattr(
+        ch_inverse_ivqr,
+        "QuantReg",
+        IterationLimitedQuantReg,
+    )
+
+    evaluation = ch_inverse_ivqr.evaluate_alpha_ch_ivqr(
+        y=np.arange(6, dtype=float),
+        d=np.ones(6),
+        x_controls=np.ones((6, 2)),
+        z=np.arange(6, dtype=float),
+        alpha=1.0,
+        tau=0.5,
+        max_iter=10,
+    )
+
+    assert evaluation.converged is False
+    assert evaluation.statistic == np.inf
+    assert np.all(np.isnan(evaluation.gamma_hat))
+    assert np.all(np.isnan(evaluation.cov_gamma))
+    assert evaluation.message == "QuantReg reached iteration limit"
+
+
