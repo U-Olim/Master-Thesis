@@ -1,5 +1,6 @@
 """Tests for simulation configuration and CLI defaults."""
 
+from pathlib import Path
 import warnings
 
 import pytest
@@ -14,31 +15,12 @@ from simulation.runner import (
     run_small_simulation,
 )
 from simulation.config import DEFAULT_N_JOBS
+from tests.helpers import load_full_control_cli, load_main_simulation_cli
 
-import importlib.util
-from pathlib import Path
-import sys
-
-FULL_SIMULATION_SCRIPT = Path(__file__).resolve().parents[2] / "scenarios" / "main_simulation.py"
-spec = importlib.util.spec_from_file_location("full_simulation_cli", FULL_SIMULATION_SCRIPT)
-if spec is None or spec.loader is None:
-    raise ImportError(f"Could not load {FULL_SIMULATION_SCRIPT}")
-full_simulation_cli = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = full_simulation_cli
-spec.loader.exec_module(full_simulation_cli)
+full_simulation_cli = load_main_simulation_cli()
 full_simulation_main = full_simulation_cli.main
 
-FULL_CONTROL_SCRIPT = (
-    Path(__file__).resolve().parents[2] / "scenarios" / "full_control_ivqr.py"
-)
-full_control_spec = importlib.util.spec_from_file_location(
-    "full_control_cli", FULL_CONTROL_SCRIPT
-)
-if full_control_spec is None or full_control_spec.loader is None:
-    raise ImportError(f"Could not load {FULL_CONTROL_SCRIPT}")
-full_control_cli = importlib.util.module_from_spec(full_control_spec)
-sys.modules[full_control_spec.name] = full_control_cli
-full_control_spec.loader.exec_module(full_control_cli)
+full_control_cli = load_full_control_cli()
 full_control_main = full_control_cli.main
 
 

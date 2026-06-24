@@ -15,64 +15,17 @@ from simulation.batching import (
 )
 from simulation.chunking import select_design_chunk
 from simulation.runner import run_small_simulation
+from tests.helpers import (
+    SIMULATION_RESULT_REQUIRED_KEYS,
+    load_full_control_cli,
+    load_main_simulation_cli,
+)
 
 
-REQUIRED_KEYS = {
-    "dgp",
-    "n",
-    "p",
-    "pi",
-    "tau",
-    "rep",
-    "seed",
-    "estimator",
-    "alpha_hat",
-    "alpha_true",
-    "bias",
-    "absolute_error",
-    "squared_error",
-    "status",
-    "error_type",
-    "error_message",
-    "failed",
-    "converged",
-    "cr_lower",
-    "cr_upper",
-    "cr_length",
-    "cr_empty",
-    "cr_disconnected",
-    "cr_covers_true",
-    "selected_controls",
-    "runtime_seconds",
-    "failed_alpha_count",
-    "alpha_grid_size",
-    "message",
-}
-
-
-import importlib.util
-import sys
-
-FULL_SIMULATION_SCRIPT = Path(__file__).resolve().parents[2] / "scenarios" / "main_simulation.py"
-spec = importlib.util.spec_from_file_location("full_simulation_cli", FULL_SIMULATION_SCRIPT)
-if spec is None or spec.loader is None:
-    raise ImportError(f"Could not load {FULL_SIMULATION_SCRIPT}")
-full_simulation_cli = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = full_simulation_cli
-spec.loader.exec_module(full_simulation_cli)
+full_simulation_cli = load_main_simulation_cli()
 full_simulation_main = full_simulation_cli.main
 
-FULL_CONTROL_SCRIPT = (
-    Path(__file__).resolve().parents[2] / "scenarios" / "full_control_ivqr.py"
-)
-full_control_spec = importlib.util.spec_from_file_location(
-    "full_control_cli", FULL_CONTROL_SCRIPT
-)
-if full_control_spec is None or full_control_spec.loader is None:
-    raise ImportError(f"Could not load {FULL_CONTROL_SCRIPT}")
-full_control_cli = importlib.util.module_from_spec(full_control_spec)
-sys.modules[full_control_spec.name] = full_control_cli
-full_control_spec.loader.exec_module(full_control_cli)
+full_control_cli = load_full_control_cli()
 full_control_main = full_control_cli.main
 
 
@@ -106,7 +59,7 @@ def test_run_simulation_batch_returns_expected_rows() -> None:
 
     assert len(results) == 4
     assert set(results["estimator"]) == {"post_selection_ivqr", "dml_ivqr"}
-    assert REQUIRED_KEYS.issubset(results.columns)
+    assert SIMULATION_RESULT_REQUIRED_KEYS.issubset(results.columns)
 
 
 def test_run_simulation_batch_writes_csv(tmp_path: Path) -> None:
