@@ -21,19 +21,21 @@ from simulation.config import (
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_DML_K_FOLDS,
     DEFAULT_QUANTREG_MAX_ITER,
+    DGPS,
+    MAIN_ESTIMATORS,
 )
 
 
 EstimatorFn = Callable[..., EstimationResult]
-VALID_ESTIMATORS = ("oracle", "post_selection", "dml")
-DEFAULT_SIMULATION_ESTIMATORS = ("oracle", "post_selection", "dml")
-VALID_DGPS = ("dgp1", "dgp2", "dgp3")
+VALID_ESTIMATORS: tuple[str, ...] = MAIN_ESTIMATORS
+DEFAULT_SIMULATION_ESTIMATORS: tuple[str, ...] = MAIN_ESTIMATORS
+VALID_DGPS: tuple[str, ...] = DGPS
 ESTIMATOR_OUTPUT_NAMES = {
     "oracle": "oracle",
     "post_selection": "post_selection_ivqr",
     "dml": "dml_ivqr",
 }
-RESULT_COLUMNS = [
+RESULT_COLUMNS: tuple[str, ...] = (
     "dgp",
     "n",
     "p",
@@ -63,9 +65,24 @@ RESULT_COLUMNS = [
     "failed_alpha_count",
     "alpha_grid_size",
     "message",
-]
-DESIGN_KEY_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep", "seed"]
+)
+DESIGN_KEY_COLUMNS: tuple[str, ...] = ("dgp", "n", "p", "pi", "tau", "rep", "seed")
 MAX_ERROR_MESSAGE_LENGTH = 500
+
+
+__all__ = [
+    "DEFAULT_SIMULATION_ESTIMATORS",
+    "DESIGN_KEY_COLUMNS",
+    "ESTIMATOR_OUTPUT_NAMES",
+    "MAX_ERROR_MESSAGE_LENGTH",
+    "RESULT_COLUMNS",
+    "VALID_DGPS",
+    "VALID_ESTIMATORS",
+    "make_simulation_grid",
+    "quantreg_iteration_warning_filter",
+    "run_single_replication",
+    "run_small_simulation",
+]
 
 
 @contextmanager
@@ -80,20 +97,111 @@ def quantreg_iteration_warning_filter(show_warnings: bool = False):
         yield
 
 
-def _validate_estimators(estimators: tuple[str, ...]) -> None:
+def _validate_positive_int(name: str, value: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
+def _validate_nonnegative_float(name: str, value: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite and nonnegative")
+    value = float(value)
+    if not np.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be finite and nonnegative")
+    return value
+
+
+def _validate_probability_quantile(name: str, value: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must satisfy 0 < {name} < 1")
+    value = float(value)
+    if not np.isfinite(value) or not 0 < value < 1:
+        raise ValueError(f"{name} must satisfy 0 < {name} < 1")
+    return value
+
+
+def _validate_bool(name: str, value: bool) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _validate_finite_float(name: str, value: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    value = float(value)
+    if not np.isfinite(value):
+        raise ValueError(f"{name} must be finite")
+    return value
+
+
+def _validate_alpha_candidates(alphas: np.ndarray) -> np.ndarray:
+    alphas = np.asarray(alphas, dtype=float)
+    if alphas.ndim != 1 or alphas.size == 0:
+        raise ValueError("alphas must be a nonempty one-dimensional array")
+    if not np.all(np.isfinite(alphas)):
+        raise ValueError("alphas must be finite")
+    if not np.all(np.diff(alphas) > 0):
+        raise ValueError("alphas must be strictly increasing")
+    return alphas
+
+
+def _validate_estimators(
+    estimators: tuple[str, ...] | list[str],
+) -> tuple[str, ...]:
+    if isinstance(estimators, str):
+        raise ValueError("estimators must be a sequence of estimator names")
+    try:
+        estimators = tuple(estimators)
+    except TypeError as exc:
+        raise ValueError("estimators must be a sequence of estimator names") from exc
     if len(estimators) == 0:
         raise ValueError("estimators must contain at least one estimator name")
-
+    if any(not isinstance(estimator, str) for estimator in estimators):
+        raise ValueError("estimators must contain only strings")
+    if len(set(estimators)) != len(estimators):
+        raise ValueError("estimators must not contain duplicates")
     invalid = sorted(set(estimators) - set(VALID_ESTIMATORS))
     if invalid:
         valid = ", ".join(VALID_ESTIMATORS)
         raise ValueError(f"Unknown estimator(s): {invalid}. Valid estimators: {valid}")
+    return estimators
 
 
-def _validate_dgps(dgps: tuple[str, ...]) -> None:
+def _validate_dgps(dgps: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    if isinstance(dgps, str):
+        raise ValueError("dgps must be a sequence of DGP names")
+    try:
+        dgps = tuple(dgps)
+    except TypeError as exc:
+        raise ValueError("dgps must be a sequence of DGP names") from exc
+    if len(dgps) == 0:
+        raise ValueError("dgps must be nonempty")
+    if any(not isinstance(dgp, str) for dgp in dgps):
+        raise ValueError("dgps must contain only strings")
+    if len(set(dgps)) != len(dgps):
+        raise ValueError("dgps must not contain duplicates")
     invalid_dgps = sorted(set(dgps) - set(VALID_DGPS))
     if invalid_dgps:
         raise ValueError(f"Unknown DGP(s): {invalid_dgps}. Valid DGPs: {VALID_DGPS}")
+    return dgps
+
+
+def _validate_unique_sequence(name: str, values: tuple | list) -> tuple:
+    if isinstance(values, (str, bytes)):
+        raise ValueError(f"{name} must be a nonempty sequence")
+    try:
+        values = tuple(values)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be a nonempty sequence") from exc
+    if not values:
+        raise ValueError(f"{name} must be nonempty")
+    if len(set(values)) != len(values):
+        raise ValueError(f"{name} must not contain duplicates")
+    return values
 
 
 def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object]:
@@ -230,27 +338,20 @@ def make_simulation_grid(
     base_seed: int = 12345,
 ) -> list[Design]:
     """Create the deterministic full Monte Carlo design grid."""
-    inputs = {
-        "dgps": dgps,
-        "n_values": n_values,
-        "p_values": p_values,
-        "pi_values": pi_values,
-        "taus": taus,
-    }
-    empty = [name for name, values in inputs.items() if len(values) == 0]
-    if empty:
-        raise ValueError(f"Simulation grid inputs cannot be empty: {empty}")
-    _validate_dgps(dgps)
-    if reps < 1:
-        raise ValueError("reps must be at least 1")
-    if any(n <= 0 for n in n_values):
-        raise ValueError("all n values must be positive")
-    if any(p <= 0 for p in p_values):
-        raise ValueError("all p values must be positive")
-    if any(pi < 0 for pi in pi_values):
-        raise ValueError("all pi values must be nonnegative")
-    if any(tau <= 0 or tau >= 1 for tau in taus):
-        raise ValueError("all tau values must be strictly between 0 and 1")
+    dgps = _validate_dgps(dgps)
+    n_values = _validate_unique_sequence("n_values", n_values)
+    p_values = _validate_unique_sequence("p_values", p_values)
+    pi_values = _validate_unique_sequence("pi_values", pi_values)
+    taus = _validate_unique_sequence("taus", taus)
+    reps = _validate_positive_int("reps", reps)
+    if reps >= 1000:
+        raise ValueError("reps must be less than 1000 under the deterministic seed schedule")
+    if not isinstance(base_seed, int) or isinstance(base_seed, bool):
+        raise ValueError("base_seed must be an integer")
+    n_values = tuple(_validate_positive_int("n", n) for n in n_values)
+    p_values = tuple(_validate_positive_int("p", p) for p in p_values)
+    pi_values = tuple(_validate_nonnegative_float("pi", pi) for pi in pi_values)
+    taus = tuple(_validate_probability_quantile("tau", tau) for tau in taus)
 
     designs: list[Design] = []
     seeds: set[int] = set()
@@ -302,12 +403,25 @@ def run_single_replication(
     show_quantreg_warnings: bool = False,
 ) -> list[dict[str, object]]:
     """Generate one dataset and run requested estimators on it."""
-    _validate_estimators(estimators)
-    if quantreg_max_iter <= 0:
-        raise ValueError("quantreg_max_iter must be positive")
-    alphas = np.asarray(alphas, dtype=float)
-    if alphas.ndim != 1 or alphas.size == 0:
-        raise ValueError("alphas must be a nonempty one-dimensional array")
+    estimators = _validate_estimators(estimators)
+    quantreg_max_iter = _validate_positive_int("quantreg_max_iter", quantreg_max_iter)
+    selection_cv = _validate_positive_int("selection_cv", selection_cv)
+    selection_max_iter = _validate_positive_int("selection_max_iter", selection_max_iter)
+    dml_k_folds = _validate_positive_int("dml_k_folds", dml_k_folds)
+    dml_quantile_penalty = _validate_nonnegative_float(
+        "dml_quantile_penalty", dml_quantile_penalty
+    )
+    dml_ridge_alpha = _validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
+    gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
+    show_quantreg_warnings = _validate_bool(
+        "show_quantreg_warnings", show_quantreg_warnings
+    )
+    if dml_fold_random_state is not None and (
+        not isinstance(dml_fold_random_state, int)
+        or isinstance(dml_fold_random_state, bool)
+    ):
+        raise ValueError("dml_fold_random_state must be an integer or None")
+    alphas = _validate_alpha_candidates(alphas)
 
     data = generate_data(design)
     estimator_map: dict[str, EstimatorFn] = {
@@ -391,18 +505,38 @@ def run_small_simulation(
     show_quantreg_warnings: bool = False,
 ) -> pd.DataFrame:
     """Run a small simulation and return raw estimator-level rows."""
-    if reps < 1:
-        raise ValueError("reps must be positive")
+    dgp = _validate_dgps((dgp,))[0]
+    n = _validate_positive_int("n", n)
+    p = _validate_positive_int("p", p)
+    pi = _validate_nonnegative_float("pi", pi)
+    tau = _validate_probability_quantile("tau", tau)
+    reps = _validate_positive_int("reps", reps)
+    if not isinstance(base_seed, int) or isinstance(base_seed, bool):
+        raise ValueError("base_seed must be an integer")
+    alpha_grid_size = _validate_positive_int("alpha_grid_size", alpha_grid_size)
     if alpha_grid_size < 3:
         raise ValueError("alpha_grid_size must be at least 3")
-    if quantreg_max_iter <= 0:
-        raise ValueError("quantreg_max_iter must be positive")
-    _validate_estimators(estimators)
+    alpha_min = _validate_finite_float("alpha_min", alpha_min)
+    alpha_max = _validate_finite_float("alpha_max", alpha_max)
+    if alpha_max <= alpha_min:
+        raise ValueError("alpha_max must be greater than alpha_min")
+    quantreg_max_iter = _validate_positive_int("quantreg_max_iter", quantreg_max_iter)
+    selection_cv = _validate_positive_int("selection_cv", selection_cv)
+    selection_max_iter = _validate_positive_int("selection_max_iter", selection_max_iter)
+    dml_k_folds = _validate_positive_int("dml_k_folds", dml_k_folds)
+    dml_quantile_penalty = _validate_nonnegative_float(
+        "dml_quantile_penalty", dml_quantile_penalty
+    )
+    dml_ridge_alpha = _validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
+    gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
+    show_quantreg_warnings = _validate_bool(
+        "show_quantreg_warnings", show_quantreg_warnings
+    )
+    estimators = _validate_estimators(estimators)
 
     if alphas is None:
         alphas = np.linspace(alpha_min, alpha_max, alpha_grid_size)
-    else:
-        alphas = np.asarray(alphas, dtype=float)
+    alphas = _validate_alpha_candidates(alphas)
 
     rows: list[dict[str, object]] = []
     for rep in range(reps):
@@ -431,4 +565,4 @@ def run_small_simulation(
             )
         )
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=RESULT_COLUMNS)

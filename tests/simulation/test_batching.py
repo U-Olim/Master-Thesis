@@ -7,13 +7,16 @@ import pandas as pd
 import pytest
 
 from dgp.designs import Design
+import simulation.batching as batching_module
+import simulation.chunking as chunking_module
 from simulation.batching import (
+    _as_bool,
     completed_design_keys,
     filter_completed_designs,
     observed_design_keys,
     run_simulation_batch,
 )
-from simulation.chunking import select_design_chunk
+from simulation.chunking import select_design_chunk, validate_chunk_args
 from simulation.runner import run_small_simulation
 from tests.helpers import (
     SIMULATION_RESULT_REQUIRED_KEYS,
@@ -42,6 +45,12 @@ def test_run_small_simulation_does_not_write_files(tmp_path: Path, monkeypatch) 
     run_small_simulation(reps=1, n=80, p=5, alphas=np.linspace(0.0, 2.0, 5))
 
     assert not Path("results/raw/small_simulation_results.csv").exists()
+
+
+def test_batching_and_chunking_public_apis_exclude_private_helpers() -> None:
+    assert "run_simulation_batch" in batching_module.__all__
+    assert "_as_bool" not in batching_module.__all__
+    assert chunking_module.__all__ == ["select_design_chunk", "validate_chunk_args"]
 
 
 def test_run_simulation_batch_returns_expected_rows() -> None:
@@ -79,6 +88,9 @@ def test_run_simulation_batch_writes_csv(tmp_path: Path) -> None:
     assert written.loc[0, "estimator"] == "post_selection_ivqr"
 
 
+@pytest.mark.filterwarnings(
+    r"ignore:This process .* is multi-threaded, use of fork\(\) may lead to deadlocks in the child:DeprecationWarning"
+)
 def test_run_simulation_batch_parallel_writes_valid_csv(tmp_path: Path) -> None:
     output_path = tmp_path / "parallel_batch.csv"
     designs = [
@@ -101,6 +113,9 @@ def test_run_simulation_batch_parallel_writes_valid_csv(tmp_path: Path) -> None:
     assert set(written["estimator"]) == {"post_selection_ivqr"}
 
 
+@pytest.mark.filterwarnings(
+    r"ignore:This process .* is multi-threaded, use of fork\(\) may lead to deadlocks in the child:DeprecationWarning"
+)
 def test_run_simulation_batch_serial_and_parallel_are_equivalent() -> None:
     designs = [
         Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123),
@@ -542,5 +557,105 @@ def test_full_control_dry_run_reports_default_output(
 
     expected_output = Path("results/raw/full_control_ivqr_results.csv")
     assert f"Output: {expected_output}" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("n_jobs", [True, 0, 1.5])
+def test_run_simulation_batch_rejects_strictly_invalid_n_jobs(n_jobs) -> None:
+    with pytest.raises(ValueError):
+        run_simulation_batch(
+            [Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)],
+            np.linspace(0.0, 2.0, 5),
+            estimators=("post_selection",),
+            n_jobs=n_jobs,
+        )
+
+
+def test_run_simulation_batch_rejects_nonboolean_append() -> None:
+    with pytest.raises(ValueError, match="append must be a boolean"):
+        run_simulation_batch(
+            [],
+            np.linspace(0.0, 2.0, 5),
+            append="yes",
+        )
+
+
+@pytest.mark.parametrize(
+    "alphas",
+    [
+        np.array([0.0, np.nan]),
+        np.array([0.0, np.inf]),
+        np.array([1.0, 0.0]),
+        np.array([0.0, 0.0]),
+    ],
+)
+def test_run_simulation_batch_rejects_invalid_alphas(alphas) -> None:
+    with pytest.raises(ValueError):
+        run_simulation_batch([], alphas)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (True, True),
+        (False, False),
+        (1, True),
+        (1.0, True),
+        (0, False),
+        (0.0, False),
+        (2, False),
+        (-1, False),
+        ("true", True),
+        ("1", True),
+        ("yes", True),
+        ("false", False),
+        ("0", False),
+        ("no", False),
+        ("maybe", False),
+    ],
+)
+def test_as_bool_parses_only_explicit_boolean_values(value, expected) -> None:
+    assert _as_bool(value) is expected
+
+
+def test_observed_design_keys_rejects_invalid_key_values(tmp_path: Path) -> None:
+    output_path = tmp_path / "invalid_keys.csv"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": "invalid",
+                "p": 5,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 0,
+                "seed": 123,
+            }
+        ]
+    ).to_csv(output_path, index=False)
+
+    with pytest.raises(
+        ValueError,
+        match="results CSV contains invalid design-key values",
+    ):
+        observed_design_keys(output_path)
+
+
+@pytest.mark.parametrize(
+    ("chunk_index", "num_chunks"),
+    [
+        (True, 2),
+        (0, True),
+        (1.5, 2),
+        (0, 2.5),
+        ("0", 2),
+        (0, "2"),
+    ],
+)
+def test_validate_chunk_args_rejects_bool_and_noninteger_values(
+    chunk_index,
+    num_chunks,
+) -> None:
+    with pytest.raises(ValueError):
+        validate_chunk_args(chunk_index, num_chunks)
 
 

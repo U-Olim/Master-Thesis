@@ -8,6 +8,10 @@ from dgp.true_parameters import get_oracle_control_indices
 from estimators.base import EstimationResult
 from simulation import runner as runner_module
 from simulation.runner import (
+    DESIGN_KEY_COLUMNS,
+    RESULT_COLUMNS,
+    _validate_dgps,
+    _validate_estimators,
     make_simulation_grid,
     run_single_replication,
     run_small_simulation,
@@ -25,6 +29,17 @@ def test_run_small_simulation_estimator_subset() -> None:
 
     assert len(results) == 2
     assert set(results["estimator"]) == {"post_selection_ivqr"}
+
+
+def test_runner_schema_constants_are_immutable_tuples() -> None:
+    assert isinstance(RESULT_COLUMNS, tuple)
+    assert isinstance(DESIGN_KEY_COLUMNS, tuple)
+
+
+def test_runner_public_api_excludes_private_validation_helpers() -> None:
+    assert "run_small_simulation" in runner_module.__all__
+    assert "RESULT_COLUMNS" in runner_module.__all__
+    assert "_validate_estimators" not in runner_module.__all__
 
 
 def test_run_small_simulation_invalid_estimator_raises() -> None:
@@ -247,5 +262,113 @@ def test_run_single_replication_accepts_oracle_estimator() -> None:
     assert rows[0]["estimator"] == "oracle"
     assert rows[0]["selected_controls"] == 10
     assert rows[0]["status"] in {"ok", "failed"}
+
+
+@pytest.mark.parametrize(
+    "estimators",
+    [
+        "oracle",
+        ("oracle", "oracle"),
+        ("oracle", 1),
+        (),
+    ],
+)
+def test_validate_estimators_rejects_invalid_sequences(estimators) -> None:
+    with pytest.raises(ValueError):
+        _validate_estimators(estimators)
+
+
+@pytest.mark.parametrize("dgps", ["dgp1", ("dgp1", "dgp1"), ()])
+def test_validate_dgps_rejects_invalid_sequences(dgps) -> None:
+    with pytest.raises(ValueError):
+        _validate_dgps(dgps)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"n_values": (True,)},
+        {"p_values": (1.5,)},
+        {"pi_values": (True,)},
+        {"pi_values": (np.inf,)},
+        {"taus": (True,)},
+        {"taus": (1.0,)},
+        {"reps": True},
+        {"reps": 1000},
+        {"base_seed": True},
+        {"n_values": (80, 80)},
+    ],
+)
+def test_make_simulation_grid_rejects_invalid_design_inputs(overrides) -> None:
+    arguments = {
+        "dgps": ("dgp1",),
+        "n_values": (80,),
+        "p_values": (5,),
+        "pi_values": (1.0,),
+        "taus": (0.5,),
+        "reps": 1,
+        "base_seed": 123,
+    }
+    arguments.update(overrides)
+
+    with pytest.raises(ValueError):
+        make_simulation_grid(**arguments)
+
+
+def test_make_simulation_grid_accepts_500_reps_with_existing_seed_schedule() -> None:
+    designs = make_simulation_grid(
+        dgps=("dgp1",),
+        n_values=(80,),
+        p_values=(5,),
+        pi_values=(1.0,),
+        taus=(0.5,),
+        reps=500,
+        base_seed=123,
+    )
+
+    assert len(designs) == 500
+    assert designs[0].seed == 123
+    assert designs[-1].seed == 622
+
+
+@pytest.mark.parametrize(
+    "alphas",
+    [
+        np.array([]),
+        np.array([0.0, np.nan]),
+        np.array([0.0, np.inf]),
+        np.array([1.0, 0.0]),
+        np.array([0.0, 0.0]),
+        np.array([[0.0, 1.0]]),
+    ],
+)
+def test_run_small_simulation_rejects_invalid_explicit_alphas(alphas) -> None:
+    with pytest.raises(ValueError):
+        run_small_simulation(reps=1, n=80, p=5, alphas=alphas)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"quantreg_max_iter": True},
+        {"selection_cv": 0},
+        {"selection_max_iter": 1.5},
+        {"dml_k_folds": True},
+        {"dml_quantile_penalty": -1.0},
+        {"dml_ridge_alpha": np.inf},
+        {"gmm_ridge": True},
+        {"show_quantreg_warnings": 1},
+        {"dml_fold_random_state": True},
+    ],
+)
+def test_run_single_replication_rejects_invalid_runtime_parameters(kwargs) -> None:
+    design = Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)
+
+    with pytest.raises(ValueError):
+        run_single_replication(
+            design,
+            np.linspace(0.0, 2.0, 5),
+            **kwargs,
+        )
 
 

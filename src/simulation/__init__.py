@@ -1,1 +1,1 @@
-"""Simulation design, runner, and aggregation utilities."""
+"""Simulation configuration, design-grid construction, batching, and chunking."""
