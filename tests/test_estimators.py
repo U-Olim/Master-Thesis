@@ -315,6 +315,73 @@ def test_estimate_full_control_ivqr_returns_estimation_result() -> None:
     assert result.runtime_seconds >= 0.0
 
 
+def test_full_control_delegates_all_controls_to_ch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import estimators.full_control_ivqr as full_control_module
+
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    alphas = np.linspace(0.0, 2.0, 3)
+    captured: dict[str, object] = {}
+
+    def fake_ch_estimator(**kwargs):
+        captured.update(kwargs)
+        return EstimationResult(
+            estimator=kwargs["estimator_name"],
+            alpha_hat=1.0,
+            alpha_true=kwargs["data"].alpha_true,
+            tau=kwargs["tau"],
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(kwargs["alphas"]),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=kwargs["selected_controls"],
+            runtime_seconds=0.0,
+        )
+
+    monkeypatch.setattr(
+        full_control_module,
+        "estimate_ch_ivqr_controls",
+        fake_ch_estimator,
+    )
+
+    result = estimate_full_control_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        alpha_min=-1.0,
+        alpha_max=3.0,
+        alpha_step=0.25,
+        confidence_level=0.9,
+        max_iter=2000,
+        gmm_ridge=1e-4,
+    )
+
+    assert captured["data"] is data
+    assert captured["tau"] == 0.5
+    assert captured["x_controls"] is data.x
+    assert captured["estimator_name"] == "full_control_ivqr"
+    np.testing.assert_array_equal(captured["alphas"], alphas)
+    assert captured["alpha_min"] == -1.0
+    assert captured["alpha_max"] == 3.0
+    assert captured["alpha_step"] == 0.25
+    assert captured["confidence_level"] == 0.9
+    assert captured["max_iter"] == 2000
+    assert captured["selected_controls"] == data.x.shape[1]
+    assert result.selected_controls == data.x.shape[1]
+
+
 def test_estimate_full_control_ivqr_infeasible_high_dimensional_case_fails_cleanly() -> None:
     design = Design("dgp1", n=20, p=25, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
@@ -393,16 +460,92 @@ def test_estimate_full_control_ivqr_invalid_tau_raises_value_error() -> None:
         estimate_full_control_ivqr(data, tau=0.0, alphas=np.linspace(0.0, 2.0, 5))
 
 
-def test_estimate_full_control_ivqr_invalid_max_iter_raises_value_error() -> None:
+@pytest.mark.parametrize("max_iter", [0, True, 1.5])
+def test_estimate_full_control_ivqr_invalid_max_iter_raises_value_error(
+    max_iter: object,
+) -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
 
-    with pytest.raises(ValueError, match="max_iter must be positive"):
+    with pytest.raises(ValueError, match="max_iter must"):
         estimate_full_control_ivqr(
             data,
             tau=0.5,
             alphas=np.linspace(0.0, 2.0, 5),
-            max_iter=0,
+            max_iter=max_iter,
+        )
+
+
+@pytest.mark.parametrize("gmm_ridge", [-1.0, np.nan, np.inf, True])
+def test_estimate_full_control_ivqr_rejects_invalid_gmm_ridge(
+    gmm_ridge: object,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(ValueError, match="gmm_ridge must be finite and nonnegative"):
+        estimate_full_control_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.linspace(0.0, 2.0, 3),
+            gmm_ridge=gmm_ridge,
+        )
+
+
+@pytest.mark.parametrize(
+    "confidence_level",
+    [0.0, 1.0, -0.1, np.nan, np.inf, True],
+)
+def test_estimate_full_control_ivqr_rejects_invalid_confidence_level(
+    confidence_level: object,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="confidence_level must satisfy 0 < confidence_level < 1",
+    ):
+        estimate_full_control_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.linspace(0.0, 2.0, 3),
+            confidence_level=confidence_level,
+        )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"alpha_min": np.nan}, "alpha grid bounds must be finite"),
+        ({"alpha_max": np.inf}, "alpha grid bounds must be finite"),
+        ({"alpha_step": np.nan}, "alpha grid bounds must be finite"),
+        ({"alpha_step": 0.0}, "alpha_step must be positive"),
+        (
+            {"alpha_step": True},
+            "alpha grid bounds must be finite numeric values",
+        ),
+        (
+            {"alpha_min": 1.0, "alpha_max": 1.0},
+            "alpha_max must be greater than alpha_min",
+        ),
+    ],
+)
+def test_estimate_full_control_ivqr_rejects_invalid_alpha_grid_bounds(
+    arguments: dict[str, object],
+    message: str,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(ValueError, match=message):
+        estimate_full_control_ivqr(
+            data,
+            tau=0.5,
+            **arguments,
         )
 
 
@@ -483,6 +626,7 @@ def test_estimate_full_control_ivqr_output_is_deterministic() -> None:
     assert result_2.objective_value is not None
     assert result_1.alpha_hat == pytest.approx(result_2.alpha_hat)
     assert result_1.objective_value == pytest.approx(result_2.objective_value)
+    assert result_1.cr_empty is result_2.cr_empty
     if result_1.cr_lower is None:
         assert result_2.cr_lower is None
     else:
@@ -493,6 +637,37 @@ def test_estimate_full_control_ivqr_output_is_deterministic() -> None:
     else:
         assert result_2.cr_upper is not None
         assert result_1.cr_upper == pytest.approx(result_2.cr_upper)
+
+
+def test_full_control_gmm_ridge_is_compatibility_only() -> None:
+    data = generate_data(
+        Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    alphas = np.linspace(0.0, 2.0, 11)
+
+    result_1 = estimate_full_control_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        gmm_ridge=0.0,
+    )
+    result_2 = estimate_full_control_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        gmm_ridge=1e-4,
+    )
+
+    assert result_1.alpha_hat == pytest.approx(result_2.alpha_hat)
+    assert result_1.objective_value == pytest.approx(result_2.objective_value)
+    if result_1.cr_lower is None:
+        assert result_2.cr_lower is None
+    else:
+        assert result_2.cr_lower == pytest.approx(result_1.cr_lower)
+    if result_1.cr_upper is None:
+        assert result_2.cr_upper is None
+    else:
+        assert result_2.cr_upper == pytest.approx(result_1.cr_upper)
 
 
 def test_select_controls_lasso_returns_valid_indices() -> None:
