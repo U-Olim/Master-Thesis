@@ -39,6 +39,7 @@ from simulation.config import (  # noqa: E402
     FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
     FULL_CONTROL_BENCHMARK_DGPS,
     FULL_CONTROL_BENCHMARK_N_VALUES,
+    FULL_CONTROL_BENCHMARK_OUTPUT,
     FULL_CONTROL_BENCHMARK_PI_VALUES,
     FULL_CONTROL_BENCHMARK_P_VALUES,
     FULL_CONTROL_BENCHMARK_TAUS,
@@ -57,10 +58,7 @@ except ImportError:  # pragma: no cover - statsmodels is a project dependency.
     IterationLimitWarning = Warning
 
 
-DEFAULT_RESULTS_DIR = Path("results/raw")
-DEFAULT_FULL_CONTROL_OUTPUT = (
-    DEFAULT_RESULTS_DIR / "full_control_ivqr_results.csv"
-)
+DEFAULT_FULL_CONTROL_OUTPUT = Path(FULL_CONTROL_BENCHMARK_OUTPUT)
 ESTIMATOR_NAME = "full_control_ivqr"
 MAX_ERROR_MESSAGE_LENGTH = 500
 

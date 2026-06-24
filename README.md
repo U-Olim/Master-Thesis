@@ -55,14 +55,25 @@ pixi run full_control
 ```
 
 Results, summaries, tables, and figures are generated automatically after each
-normal run. No separate table or figure command is required.
+successful fast, full, or full-control run. No separate make-table or figure
+script is required. Dry-runs print the planned settings without creating raw
+results, manifests, tables, or figures.
 
 ## Outputs
 
-Main simulation writes:
+Fast mode writes:
 
 ```text
-results/raw/main_simulation_results.csv
+results/raw/fast_mode_results.csv
+results/summary/main_simulation_summary.csv
+results/tables/main/
+results/figures/main/
+```
+
+Full mode writes:
+
+```text
+results/raw/full_mode_results.csv
 results/summary/main_simulation_summary.csv
 results/tables/main/
 results/figures/main/

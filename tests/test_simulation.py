@@ -41,6 +41,19 @@ sys.modules[spec.name] = full_simulation_cli
 spec.loader.exec_module(full_simulation_cli)
 full_simulation_main = full_simulation_cli.main
 
+FULL_CONTROL_SCRIPT = (
+    Path(__file__).resolve().parents[1] / "scenarios" / "full_control_ivqr.py"
+)
+full_control_spec = importlib.util.spec_from_file_location(
+    "full_control_cli", FULL_CONTROL_SCRIPT
+)
+if full_control_spec is None or full_control_spec.loader is None:
+    raise ImportError(f"Could not load {FULL_CONTROL_SCRIPT}")
+full_control_cli = importlib.util.module_from_spec(full_control_spec)
+sys.modules[full_control_spec.name] = full_control_cli
+full_control_spec.loader.exec_module(full_control_cli)
+full_control_main = full_control_cli.main
+
 
 REQUIRED_KEYS = {
     "dgp",
@@ -832,6 +845,9 @@ def test_full_simulation_dry_run_does_not_write_output_csv(
 ) -> None:
     output_path = tmp_path / "dry_run.csv"
     manifest_path = tmp_path / "manifest.json"
+    summary_path = tmp_path / "reports" / "summary.csv"
+    tables_dir = tmp_path / "reports" / "tables"
+    figures_dir = tmp_path / "reports" / "figures"
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -853,13 +869,22 @@ def test_full_simulation_dry_run_does_not_write_output_csv(
             str(output_path),
             "--manifest",
             str(manifest_path),
+            "--summary-output",
+            str(summary_path),
+            "--tables-dir",
+            str(tables_dir),
+            "--figures-dir",
+            str(figures_dir),
         ],
     )
 
     full_simulation_main()
 
     assert not output_path.exists()
-    assert manifest_path.exists()
+    assert not manifest_path.exists()
+    assert not summary_path.exists()
+    assert not tables_dir.exists()
+    assert not figures_dir.exists()
 
 
 def test_full_simulation_fast_mode_defaults_exclude_full_control() -> None:
@@ -890,10 +915,10 @@ def test_full_simulation_fast_mode_defaults_exclude_full_control() -> None:
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 10
     assert args.alpha_grid_size == 9
-    assert args.output == "results/raw/main_simulation_results.csv"
-    assert args.summary_output == "results/summary/main_simulation_summary.csv"
-    assert args.tables_dir == "results/tables/main"
-    assert args.figures_dir == "results/figures/main"
+    assert args.output == Path("results/raw/fast_mode_results.csv")
+    assert args.summary_output == Path("results/summary/main_simulation_summary.csv")
+    assert args.tables_dir == Path("results/tables/main")
+    assert args.figures_dir == Path("results/figures/main")
 
 
 def test_full_simulation_full_mode_defaults_use_500_reps() -> None:
@@ -923,8 +948,58 @@ def test_full_simulation_full_mode_defaults_use_500_reps() -> None:
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 500
     assert args.alpha_grid_size == 9
-    assert args.output == "results/raw/main_simulation_results.csv"
-    assert args.summary_output == "results/summary/main_simulation_summary.csv"
+    assert args.output == Path("results/raw/full_mode_results.csv")
+    assert args.summary_output == Path("results/summary/main_simulation_summary.csv")
+
+
+def test_main_simulation_mode_outputs_are_separate() -> None:
+    assert full_simulation_cli._default_output_for_mode("fast") == Path(
+        "results/raw/fast_mode_results.csv"
+    )
+    assert full_simulation_cli._default_output_for_mode("full") == Path(
+        "results/raw/full_mode_results.csv"
+    )
+    assert full_simulation_cli._default_output_for_mode(
+        "fast"
+    ) != full_simulation_cli._default_output_for_mode("full")
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_output"),
+    [
+        ("fast", Path("results/raw/fast_mode_results.csv")),
+        ("full", Path("results/raw/full_mode_results.csv")),
+    ],
+)
+def test_main_simulation_dry_run_reports_mode_output(
+    mode: str,
+    expected_output: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["main_simulation.py", "--mode", mode, "--dry-run"],
+    )
+
+    full_simulation_main()
+
+    assert f"Output: {expected_output}" in capsys.readouterr().out
+
+
+def test_full_control_dry_run_reports_default_output(
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["full_control_ivqr.py", "--dry-run"],
+    )
+
+    full_control_main()
+
+    expected_output = Path("results/raw/full_control_ivqr_results.csv")
+    assert f"Output: {expected_output}" in capsys.readouterr().out
 
 
 def test_full_simulation_mode_defaults_respect_explicit_overrides() -> None:
@@ -954,7 +1029,7 @@ def test_full_simulation_mode_defaults_respect_explicit_overrides() -> None:
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 10
     assert args.alpha_grid_size == 3
-    assert args.output == "custom.csv"
+    assert args.output == Path("custom.csv")
     assert args.summary_output == "custom_summary.csv"
     assert args.tables_dir == "custom_tables"
     assert args.figures_dir == "custom_figures"
