@@ -17,13 +17,13 @@ from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
+from inference.alpha_grid import alpha_grid
 from inference.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
     sanitize_grid_statistics,
 )
-from inference.moments import alpha_grid
 from simulation.config import DEFAULT_QUANTREG_MAX_ITER
 from utils.validation import (
     validate_1d_array,

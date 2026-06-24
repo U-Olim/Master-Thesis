@@ -12,6 +12,18 @@ from scipy.stats import chi2
 FAILED_ALPHA_STATISTIC = 1e12
 
 
+__all__ = [
+    "FAILED_ALPHA_STATISTIC",
+    "ConfidenceRegion",
+    "invert_score_test",
+    "is_disconnected_region",
+    "critical_value_chi_square",
+    "sanitize_grid_statistics",
+    "argmin_grid",
+    "summarize_region",
+]
+
+
 @dataclass(frozen=True)
 class ConfidenceRegion:
     """Grid-based confidence region from score-test inversion."""
@@ -84,10 +96,27 @@ def _validate_grid_and_statistics(
 
 
 def _validate_critical_value(critical_value: float) -> float:
+    if isinstance(critical_value, bool):
+        raise ValueError("critical value must be positive and finite")
     critical_value = float(critical_value)
     if not np.isfinite(critical_value) or critical_value <= 0:
         raise ValueError("critical value must be positive and finite")
     return critical_value
+
+
+def _validate_statistic_reference(value: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError("statistic_reference must be finite when provided")
+    value = float(value)
+    if not np.isfinite(value):
+        raise ValueError("statistic_reference must be finite when provided")
+    return value
+
+
+def _readonly_copy(values: np.ndarray) -> np.ndarray:
+    copied = np.array(values, dtype=float, copy=True)
+    copied.setflags(write=False)
+    return copied
 
 
 def _accepted_blocks(
@@ -98,7 +127,10 @@ def _accepted_blocks(
     alpha_candidates = _as_1d_array(alpha_candidates, "alpha candidates")
     _validate_strictly_increasing(alpha_candidates)
 
-    accepted = np.asarray(accepted, dtype=bool)
+    accepted_array = np.asarray(accepted)
+    if accepted_array.dtype != np.bool_:
+        raise ValueError("accepted mask must be boolean")
+    accepted = accepted_array
     if accepted.ndim != 1:
         raise ValueError("accepted mask must be one-dimensional")
     if accepted.size != alpha_candidates.size:
@@ -158,7 +190,10 @@ def _accepted_blocks_interpolated(
     statistic_values = _as_1d_array(statistic_values, "statistic values")
     _validate_strictly_increasing(alpha_candidates)
 
-    accepted = np.asarray(accepted, dtype=bool)
+    accepted_array = np.asarray(accepted)
+    if accepted_array.dtype != np.bool_:
+        raise ValueError("accepted mask must be boolean")
+    accepted = accepted_array
     if accepted.ndim != 1:
         raise ValueError("accepted mask must be one-dimensional")
     if not (
@@ -229,10 +264,15 @@ def invert_score_test(
     if inversion_type == "absolute":
         statistic_reference = 0.0
     elif statistic_reference is None:
-        statistic_reference = 0.0
-    statistic_reference = float(statistic_reference)
-    if not np.isfinite(statistic_reference):
-        raise ValueError("statistic_reference must be finite when provided")
+        statistic_reference = float(np.min(statistics))
+    statistic_reference = _validate_statistic_reference(statistic_reference)
+    if (
+        inversion_type == "qlr"
+        and statistic_reference > float(np.min(statistics)) + 1e-10
+    ):
+        raise ValueError(
+            "statistic_reference cannot exceed the minimum statistic for qlr inversion"
+        )
 
     statistic_values = statistics - statistic_reference
     accepted_mask = statistic_values <= critical_value
@@ -257,7 +297,7 @@ def invert_score_test(
             empty=True,
             disconnected=False,
             covers_true=covers_true,
-            selected_grid=accepted,
+            selected_grid=_readonly_copy(accepted),
             critical_value=critical_value,
             statistic_reference=statistic_reference,
         )
@@ -278,7 +318,7 @@ def invert_score_test(
         empty=False,
         disconnected=len(blocks) > 1,
         covers_true=covers_true,
-        selected_grid=accepted,
+        selected_grid=_readonly_copy(accepted),
         critical_value=critical_value,
         statistic_reference=statistic_reference,
     )
@@ -321,7 +361,10 @@ def critical_value_chi_square(
     should be supplied explicitly. In this project, confidence regions are
     formed by inverting the scalar alpha objective over a grid.
     """
-    if not 0 < level < 1:
+    if isinstance(level, bool):
+        raise ValueError("level must satisfy 0 < level < 1")
+    level = float(level)
+    if not np.isfinite(level) or not 0 < level < 1:
         raise ValueError("level must satisfy 0 < level < 1")
     if not isinstance(df, int) or isinstance(df, bool):
         raise ValueError("df must be an integer")
@@ -338,7 +381,10 @@ def sanitize_grid_statistics(
 ) -> tuple[np.ndarray, int]:
     """Replace failed or non-finite alpha-grid statistics with a finite value."""
     statistics = np.asarray(statistics, dtype=float)
-    converged = np.asarray(converged, dtype=bool)
+    converged_array = np.asarray(converged)
+    if converged_array.dtype != np.bool_:
+        raise ValueError("converged must be boolean")
+    converged = converged_array
 
     if statistics.ndim != 1:
         raise ValueError("statistics must be one-dimensional")
@@ -348,6 +394,9 @@ def sanitize_grid_statistics(
         raise ValueError("statistics and converged must have equal length")
     if statistics.size == 0:
         raise ValueError("statistics must be nonempty")
+    if isinstance(failed_value, bool):
+        raise ValueError("failed_value must be positive and finite")
+    failed_value = float(failed_value)
     if not np.isfinite(failed_value) or failed_value <= 0:
         raise ValueError("failed_value must be positive and finite")
 

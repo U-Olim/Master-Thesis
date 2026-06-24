@@ -23,14 +23,12 @@ from estimators.ch_inverse_ivqr import (
     as_2d_instruments,
     evaluate_alpha_ch_ivqr as _evaluate_alpha_ch_ivqr,
 )
+from inference.alpha_grid import alpha_grid
 from inference.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
     sanitize_grid_statistics,
-)
-from inference.moments import (
-    alpha_grid,
 )
 from simulation.config import DEFAULT_QUANTREG_MAX_ITER
 from utils.validation import (

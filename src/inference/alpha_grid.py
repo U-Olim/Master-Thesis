@@ -5,12 +5,33 @@ from __future__ import annotations
 import numpy as np
 
 
+__all__ = ["alpha_grid"]
+
+
+def _validate_grid_scalar(name: str, value: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    value = float(value)
+    if not np.isfinite(value):
+        raise ValueError(f"{name} must be finite")
+    return value
+
+
 def alpha_grid(
     alpha_min: float,
     alpha_max: float,
     step: float,
 ) -> np.ndarray:
-    """Create an alpha grid with inclusive endpoint when it lies on the grid."""
+    """Create a finite, strictly increasing alpha grid with an inclusive endpoint.
+
+    The grid starts at `alpha_min`, advances by `step`, and always includes
+    `alpha_max` as the final candidate. If the step does not divide the interval
+    exactly, the last interval is shorter.
+    """
+    alpha_min = _validate_grid_scalar("alpha_min", alpha_min)
+    alpha_max = _validate_grid_scalar("alpha_max", alpha_max)
+    step = _validate_grid_scalar("step", step)
+
     if alpha_max <= alpha_min:
         raise ValueError("alpha_max must be greater than alpha_min")
     if step <= 0:
@@ -23,5 +44,12 @@ def alpha_grid(
         grid[-1] = alpha_max
     elif grid[-1] < alpha_max:
         grid = np.append(grid, alpha_max)
+
+    if grid.ndim != 1 or grid.size == 0:
+        raise ValueError("alpha grid must be nonempty and one-dimensional")
+    if not np.all(np.isfinite(grid)):
+        raise ValueError("alpha grid must be finite")
+    if not np.all(np.diff(grid) > 0):
+        raise ValueError("alpha grid must be strictly increasing")
 
     return grid
