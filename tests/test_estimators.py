@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 import warnings
+from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp import generate_data
 from dgp.designs import Design
@@ -105,6 +106,77 @@ def test_add_intercept_prepends_ones() -> None:
     assert np.allclose(x_design[:, 1:], x)
 
 
+def test_add_intercept_rejects_zero_rows() -> None:
+    with pytest.raises(ValueError, match="x must contain at least one row"):
+        add_intercept(np.empty((0, 2)))
+
+
+def test_as_2d_instruments_rejects_zero_rows() -> None:
+    with pytest.raises(ValueError, match="z must contain at least one row"):
+        ch_inverse_ivqr.as_2d_instruments(np.empty((0, 1)))
+
+
+def test_wald_statistic_uses_covariance_scaling_without_extra_n() -> None:
+    gamma_hat = np.array([2.0])
+    # cov_gamma estimates Var(gamma_hat), so its inverse already includes
+    # the CH sample-size scaling and no additional factor of n is applied.
+    cov_gamma = np.array([[4.0]])
+
+    assert ch_inverse_ivqr.wald_statistic(gamma_hat, cov_gamma) == pytest.approx(
+        1.0
+    )
+
+
+@pytest.mark.parametrize("alpha", [np.nan, np.inf, -np.inf])
+def test_evaluate_alpha_ch_ivqr_rejects_nonfinite_alpha(alpha: float) -> None:
+    with pytest.raises(ValueError, match="alpha must be finite"):
+        ch_inverse_ivqr.evaluate_alpha_ch_ivqr(
+            y=np.arange(6, dtype=float),
+            d=np.ones(6),
+            x_controls=np.ones((6, 2)),
+            z=np.arange(6, dtype=float),
+            alpha=alpha,
+            tau=0.5,
+        )
+
+
+@pytest.mark.parametrize(
+    ("diagnostics", "message"),
+    [
+        (
+            {"runtime_seconds": -1.0},
+            "runtime_seconds must be finite and nonnegative",
+        ),
+        ({"alpha_grid_size": 0}, "alpha_grid_size must be at least 1"),
+        ({"failed_alpha_count": -1}, "failed_alpha_count must be nonnegative"),
+        (
+            {"alpha_grid_size": 2, "failed_alpha_count": 3},
+            "failed_alpha_count must not exceed alpha_grid_size",
+        ),
+    ],
+)
+def test_failed_ch_ivqr_result_rejects_invalid_diagnostics(
+    diagnostics: dict[str, int | float],
+    message: str,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=20, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    arguments: dict[str, object] = {
+        "data": data,
+        "tau": 0.5,
+        "estimator": "test",
+        "message": "failed",
+        "runtime_seconds": 0.0,
+        "alpha_grid_size": 3,
+        "failed_alpha_count": 1,
+    }
+    arguments.update(diagnostics)
+
+    with pytest.raises(ValueError, match=message):
+        ch_inverse_ivqr.failed_ch_ivqr_result(**arguments)
+
+
 def test_evaluate_full_control_ivqr_alpha_returns_finite_statistic() -> None:
     design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     data = generate_data(design)
@@ -176,6 +248,51 @@ def test_ch_ivqr_evaluator_extracts_gamma_after_controls(
     assert evaluation.dim_z == 1
     assert evaluation.gamma_hat.tolist() == [2.0]
     assert evaluation.statistic == pytest.approx(1.0)
+
+
+def test_ch_ivqr_evaluator_marks_iteration_limit_as_nonconverged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class IterationLimitedQuantReg:
+        def __init__(self, y_alpha, design):
+            self.design = design
+
+        def fit(self, q, max_iter):
+            warnings.warn(
+                "Maximum number of iterations reached",
+                IterationLimitWarning,
+            )
+
+            class Result:
+                params = np.zeros(4)
+
+                @staticmethod
+                def cov_params():
+                    return np.eye(4)
+
+            return Result()
+
+    monkeypatch.setattr(
+        ch_inverse_ivqr,
+        "QuantReg",
+        IterationLimitedQuantReg,
+    )
+
+    evaluation = ch_inverse_ivqr.evaluate_alpha_ch_ivqr(
+        y=np.arange(6, dtype=float),
+        d=np.ones(6),
+        x_controls=np.ones((6, 2)),
+        z=np.arange(6, dtype=float),
+        alpha=1.0,
+        tau=0.5,
+        max_iter=10,
+    )
+
+    assert evaluation.converged is False
+    assert evaluation.statistic == np.inf
+    assert np.all(np.isnan(evaluation.gamma_hat))
+    assert np.all(np.isnan(evaluation.cov_gamma))
+    assert evaluation.message == "QuantReg reached iteration limit"
 
 
 def test_estimate_full_control_ivqr_returns_estimation_result() -> None:
@@ -497,7 +614,12 @@ def test_estimate_post_selection_ivqr_returns_estimation_result() -> None:
     assert np.isfinite(result.objective_value)
     assert result.cr_disconnected is not None
     assert result.alpha_grid_size == len(alphas)
-    assert result.failed_alpha_count == 0
+    assert result.failed_alpha_count is not None
+    assert 0 < result.failed_alpha_count < len(alphas)
+    assert (
+        f"failed_alpha_points={result.failed_alpha_count}/{len(alphas)}"
+        in result.message
+    )
     assert result.runtime_seconds >= 0.0
 
 
@@ -534,6 +656,9 @@ def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
     assert result_1.alpha_hat == pytest.approx(result_2.alpha_hat)
     assert result_1.selected_controls == result_2.selected_controls
     assert result_1.objective_value == pytest.approx(result_2.objective_value)
+    assert result_1.failed_alpha_count == result_2.failed_alpha_count
+    assert result_1.failed_alpha_count is not None
+    assert result_1.failed_alpha_count > 0
     if result_1.cr_lower is None:
         assert result_2.cr_lower is None
     else:
@@ -548,6 +673,125 @@ def test_estimate_post_selection_ivqr_output_is_deterministic() -> None:
 
 def test_estimate_oracle_ivqr_is_not_full_control_alias() -> None:
     assert estimate_oracle_ivqr is not estimate_full_control_ivqr
+
+
+def test_estimate_oracle_ivqr_rejects_unknown_kwargs() -> None:
+    data = generate_data(
+        Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    with pytest.raises(TypeError, match="Unknown oracle IVQR keyword"):
+        estimate_oracle_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.linspace(0.0, 2.0, 3),
+            oracle_indices=np.arange(10),
+            bad_argument=123,
+        )
+
+
+def test_estimate_oracle_ivqr_accepts_gmm_ridge_for_compatibility(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    captured: dict[str, object] = {}
+
+    def fake_common_estimator(data, x_controls, estimator_name, **kwargs):
+        captured.update(kwargs)
+        return EstimationResult(
+            estimator=estimator_name,
+            alpha_hat=1.0,
+            alpha_true=data.alpha_true,
+            tau=kwargs["tau"],
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(kwargs["alphas"]),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=None,
+            runtime_seconds=0.0,
+        )
+
+    import estimators.oracle_ivqr as oracle_module
+
+    monkeypatch.setattr(
+        oracle_module,
+        "estimate_ch_ivqr_controls",
+        fake_common_estimator,
+    )
+
+    result = estimate_oracle_ivqr(
+        data,
+        tau=0.5,
+        alphas=np.linspace(0.0, 2.0, 3),
+        oracle_indices=np.arange(10),
+        gmm_ridge=1e-6,
+    )
+
+    assert result.estimator == "oracle"
+    assert "gmm_ridge" not in captured
+
+
+def test_estimate_oracle_ivqr_alphas_alias_still_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    alphas = np.linspace(0.0, 2.0, 3)
+    captured: dict[str, np.ndarray] = {}
+
+    def fake_common_estimator(data, x_controls, estimator_name, **kwargs):
+        captured["alphas"] = kwargs["alphas"]
+        return EstimationResult(
+            estimator=estimator_name,
+            alpha_hat=1.0,
+            alpha_true=data.alpha_true,
+            tau=kwargs["tau"],
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(kwargs["alphas"]),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=None,
+            runtime_seconds=0.0,
+        )
+
+    import estimators.oracle_ivqr as oracle_module
+
+    monkeypatch.setattr(
+        oracle_module,
+        "estimate_ch_ivqr_controls",
+        fake_common_estimator,
+    )
+
+    result = estimate_oracle_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        oracle_indices=np.arange(10),
+    )
+
+    assert result.estimator == "oracle"
+    np.testing.assert_array_equal(captured["alphas"], alphas)
 
 
 def test_estimate_oracle_ivqr_uses_reduced_controls(monkeypatch: pytest.MonkeyPatch) -> None:

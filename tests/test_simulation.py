@@ -12,6 +12,7 @@ from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from estimators.base import EstimationResult
 from dgp.designs import Design
+from dgp.true_parameters import get_oracle_control_indices
 from simulation import runner as runner_module
 from simulation.batching import (
     completed_design_keys,
@@ -220,12 +221,20 @@ def test_quantreg_iteration_warning_filter_can_show_warnings() -> None:
     assert issubclass(caught[0].category, IterationLimitWarning)
 
 
-def test_quantreg_max_iter_is_passed_to_oracle_estimator(monkeypatch) -> None:
-    captured: dict[str, int] = {}
+@pytest.mark.parametrize(
+    ("dgp", "expected_support_size"),
+    [("dgp1", 10), ("dgp2", 20), ("dgp3", 10)],
+)
+def test_runner_passes_dgp_oracle_support_to_oracle_estimator(
+    monkeypatch,
+    dgp: str,
+    expected_support_size: int,
+) -> None:
+    captured: dict[str, object] = {}
 
     def fake_oracle_estimator(data, tau, alphas, oracle_indices, max_iter, gmm_ridge):
         captured["max_iter"] = max_iter
-        captured["oracle_indices"] = len(oracle_indices)
+        captured["oracle_indices"] = np.asarray(oracle_indices)
         return EstimationResult(
             estimator="oracle",
             alpha_hat=1.0,
@@ -249,7 +258,7 @@ def test_quantreg_max_iter_is_passed_to_oracle_estimator(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(runner_module, "estimate_oracle_ivqr", fake_oracle_estimator)
-    design = Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
+    design = Design(dgp, n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
 
     rows = run_single_replication(
         design,
@@ -260,7 +269,9 @@ def test_quantreg_max_iter_is_passed_to_oracle_estimator(monkeypatch) -> None:
 
     assert len(rows) == 1
     assert captured["max_iter"] == 123
-    assert captured["oracle_indices"] == 10
+    expected_indices = get_oracle_control_indices(dgp, design.p)
+    np.testing.assert_array_equal(captured["oracle_indices"], expected_indices)
+    assert len(expected_indices) == expected_support_size
 
 
 def test_dml_k_folds_is_passed_to_dml_estimator(monkeypatch) -> None:

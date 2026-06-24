@@ -42,6 +42,8 @@ def test_main_simulation_help_uses_modes() -> None:
 
 
 def test_main_simulation_fast_dry_run_excludes_full_control() -> None:
+    output_path = PROJECT_ROOT / "results" / "raw" / "fast_mode_results.csv"
+    output_existed_before = output_path.exists()
     result = _run_script(
         FULL_SIMULATION_SCRIPT,
         "--mode",
@@ -62,13 +64,18 @@ def test_main_simulation_fast_dry_run_excludes_full_control() -> None:
     )
 
     assert result.returncode == 0
-    assert "mode: fast" in result.stdout
-    assert "replications per scenario: 1" in result.stdout
-    assert "estimators: oracle,post_selection,dml" in result.stdout
-    assert "Full-control IVQR is excluded" in result.stdout
+    assert "Mode: fast" in result.stdout
+    assert "Replications per design: 1" in result.stdout
+    assert "Alpha grid size: 9" in result.stdout
+    assert str(Path("results/raw/fast_mode_results.csv")) in result.stdout
+    assert "Reports: automatic after successful run" in result.stdout
+    assert "full-control IVQR benchmark" not in result.stdout
+    assert output_path.exists() is output_existed_before
 
 
 def test_main_simulation_full_dry_run_uses_500_reps() -> None:
+    output_path = PROJECT_ROOT / "results" / "raw" / "full_mode_results.csv"
+    output_existed_before = output_path.exists()
     result = _run_script(
         FULL_SIMULATION_SCRIPT,
         "--mode",
@@ -87,9 +94,12 @@ def test_main_simulation_full_dry_run_uses_500_reps() -> None:
     )
 
     assert result.returncode == 0
-    assert "mode: full" in result.stdout
-    assert "replications per scenario: 500" in result.stdout
-    assert "estimators: oracle,post_selection,dml" in result.stdout
+    assert "Mode: full" in result.stdout
+    assert "Replications per design: 500" in result.stdout
+    assert "Alpha grid size: 9" in result.stdout
+    assert str(Path("results/raw/full_mode_results.csv")) in result.stdout
+    assert "Reports: automatic after successful run" in result.stdout
+    assert output_path.exists() is output_existed_before
 
 
 def test_main_simulation_rejects_full_control_estimator() -> None:
@@ -100,12 +110,19 @@ def test_main_simulation_rejects_full_control_estimator() -> None:
 
 
 def test_full_control_script_dry_run_uses_limited_design() -> None:
+    output_path = (
+        PROJECT_ROOT / "results" / "raw" / "full_control_ivqr_results.csv"
+    )
+    output_existed_before = output_path.exists()
     result = _run_script(FULL_CONTROL_SCRIPT, "--dry-run")
 
     assert result.returncode == 0
-    assert "Full-Control IVQR benchmark plan" in result.stdout
-    assert "replications per scenario: 500" in result.stdout
-    assert "separate naive benchmark" in result.stdout
+    assert "Mode: full-control IVQR benchmark" in result.stdout
+    assert "Replications per design: 500" in result.stdout
+    assert "Alpha grid size: 9" in result.stdout
+    assert str(Path("results/raw/full_control_ivqr_results.csv")) in result.stdout
+    assert "Reports: automatic after successful run" in result.stdout
+    assert output_path.exists() is output_existed_before
 
 
 @pytest.mark.slow

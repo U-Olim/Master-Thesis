@@ -3,14 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
-from estimators.ch_inverse_ivqr import add_intercept, estimate_ch_ivqr_controls
+from estimators.ch_inverse_ivqr import estimate_ch_ivqr_controls
 from utils.validation import validate_1d_array, validate_2d_array, validate_data_arrays
+
+
+_CH_COMPATIBILITY_KWARGS = {
+    "alpha_min",
+    "alpha_max",
+    "alpha_step",
+    "confidence_level",
+    "max_iter",
+}
 
 
 def _validate_oracle_indices(oracle_indices: Any, p: int) -> np.ndarray:
@@ -36,16 +45,24 @@ def estimate_oracle_ivqr(
     x: np.ndarray | None = None,
     z: np.ndarray | None = None,
     tau: float | None = None,
-    alpha_candidates: np.ndarray | None = None,
-    oracle_indices: np.ndarray | None = None,
+    alpha_candidates: Sequence[float] | np.ndarray | None = None,
+    oracle_indices: Sequence[int] | np.ndarray | None = None,
     alpha_true: float | None = None,
+    gmm_ridge: float | None = None,
     **kwargs: Any,
 ) -> EstimationResult:
     """Estimate infeasible oracle IVQR using the true active controls only."""
     if alpha_candidates is None and "alphas" in kwargs:
         alpha_candidates = kwargs.pop("alphas")
 
-    kwargs.pop("gmm_ridge", None)
+    # CH inverse-IVQR does not use GMM ridge regularization.
+    # This argument is accepted only for simulation-runner API compatibility.
+    _ = gmm_ridge
+
+    unknown = sorted(set(kwargs) - _CH_COMPATIBILITY_KWARGS)
+    if unknown:
+        names = ", ".join(unknown)
+        raise TypeError(f"Unknown oracle IVQR keyword argument(s): {names}")
 
     if isinstance(y, SimData):
         if tau is None:
@@ -98,4 +115,4 @@ def estimate_oracle_ivqr(
     return replace(result, estimator="oracle", selected_controls=int(indices.size))
 
 
-__all__ = ["add_intercept", "estimate_oracle_ivqr"]
+__all__ = ["estimate_oracle_ivqr"]

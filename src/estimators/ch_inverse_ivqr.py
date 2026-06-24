@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from time import perf_counter
+import warnings
 
 import numpy as np
 from statsmodels.regression.quantile_regression import QuantReg
+from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
@@ -47,6 +49,8 @@ class AlphaEvaluation:
 def add_intercept(x: np.ndarray) -> np.ndarray:
     """Return a design matrix with a leading intercept column."""
     x = validate_2d_array("x", x)
+    if x.shape[0] == 0:
+        raise ValueError("x must contain at least one row")
     return np.column_stack([np.ones(x.shape[0]), x])
 
 
@@ -57,6 +61,8 @@ def as_2d_instruments(z: np.ndarray) -> np.ndarray:
         z_array = z_array.reshape(-1, 1)
     if z_array.ndim != 2:
         raise ValueError("z must be one- or two-dimensional")
+    if z_array.shape[0] == 0:
+        raise ValueError("z must contain at least one row")
     if z_array.shape[1] == 0:
         raise ValueError("z must contain at least one excluded instrument")
     if not np.all(np.isfinite(z_array)):
@@ -78,7 +84,14 @@ def ch_ivqr_design(x_controls: np.ndarray, z: np.ndarray) -> tuple[np.ndarray, s
 
 
 def wald_statistic(gamma_hat: np.ndarray, cov_gamma: np.ndarray) -> float:
-    """Wald statistic for the excluded-instrument coefficient block."""
+    """Return the Wald statistic for the excluded-instrument coefficients.
+
+    CH writes the statistic as ``W_n(a) = n * gamma_hat' A_hat gamma_hat``.
+    Statsmodels ``cov_params()`` estimates ``Var(gamma_hat)``, which already
+    contains the inverse sample-size scaling. Therefore
+    ``gamma_hat' Var(gamma_hat)^(-1) gamma_hat`` is the CH Wald statistic;
+    multiplying by ``n`` again would double-count the sample-size scaling.
+    """
     gamma_hat = np.asarray(gamma_hat, dtype=float).reshape(-1)
     cov_gamma = np.atleast_2d(np.asarray(cov_gamma, dtype=float))
     if cov_gamma.shape != (gamma_hat.size, gamma_hat.size):
@@ -113,6 +126,9 @@ def evaluate_alpha_ch_ivqr(
     if max_iter <= 0:
         raise ValueError("max_iter must be positive")
     validate_tau(tau)
+    alpha = float(alpha)
+    if not np.isfinite(alpha):
+        raise ValueError("alpha must be finite")
     y = validate_1d_array("y", y)
     d = validate_1d_array("d", d)
     x_controls = validate_2d_array("x_controls", x_controls)
@@ -125,7 +141,21 @@ def evaluate_alpha_ch_ivqr(
     dim_z = z_2d.shape[1]
 
     try:
-        result = QuantReg(y_alpha, design).fit(q=tau, max_iter=max_iter)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", IterationLimitWarning)
+            result = QuantReg(y_alpha, design).fit(q=tau, max_iter=max_iter)
+        if any(
+            issubclass(warning.category, IterationLimitWarning)
+            for warning in caught
+        ):
+            return AlphaEvaluation(
+                statistic=np.inf,
+                gamma_hat=np.full(dim_z, np.nan),
+                cov_gamma=np.full((dim_z, dim_z), np.nan),
+                dim_z=dim_z,
+                converged=False,
+                message="QuantReg reached iteration limit",
+            )
         params = np.asarray(result.params, dtype=float)
         cov_params = np.asarray(result.cov_params(), dtype=float)
     except Exception as exc:  # noqa: BLE001 - QuantReg can fail in several ways.
@@ -193,6 +223,18 @@ def failed_ch_ivqr_result(
     selected_controls: int | None = None,
 ) -> EstimationResult:
     """Create a standard failed result for any CH-IVQR-style estimator."""
+    if not np.isfinite(runtime_seconds) or runtime_seconds < 0:
+        raise ValueError("runtime_seconds must be finite and nonnegative")
+    if alpha_grid_size is not None and alpha_grid_size < 1:
+        raise ValueError("alpha_grid_size must be at least 1 when provided")
+    if failed_alpha_count is not None and failed_alpha_count < 0:
+        raise ValueError("failed_alpha_count must be nonnegative when provided")
+    if (
+        alpha_grid_size is not None
+        and failed_alpha_count is not None
+        and failed_alpha_count > alpha_grid_size
+    ):
+        raise ValueError("failed_alpha_count must not exceed alpha_grid_size")
     return EstimationResult(
         estimator=estimator,
         alpha_hat=None,
@@ -234,7 +276,10 @@ def estimate_ch_ivqr_controls(
     if max_iter <= 0:
         raise ValueError("max_iter must be positive")
     validate_tau(tau)
-    y, d, z, _x = validate_data_arrays(data.y, data.d, data.x, data.z)
+    y, d, z, original_x = validate_data_arrays(data.y, data.d, data.x, data.z)
+    # original_x is validated only to ensure the SimData object is well-formed.
+    # CH inverse-IVQR estimation uses the supplied x_controls matrix.
+    _ = original_x
     x_controls = validate_2d_array("x_controls", x_controls)
     if x_controls.shape[0] != len(y):
         raise ValueError("x_controls must have the same number of rows as y")
@@ -324,3 +369,15 @@ def estimate_ch_ivqr_controls(
         selected_controls=selected_controls,
         runtime_seconds=perf_counter() - start,
     )
+
+
+__all__ = [
+    "AlphaEvaluation",
+    "add_intercept",
+    "as_2d_instruments",
+    "ch_ivqr_design",
+    "wald_statistic",
+    "evaluate_alpha_ch_ivqr",
+    "failed_ch_ivqr_result",
+    "estimate_ch_ivqr_controls",
+]
