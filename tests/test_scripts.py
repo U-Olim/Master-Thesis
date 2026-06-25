@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -234,6 +235,54 @@ def test_main_simulation_full_dry_run_uses_500_reps(
     assert not output.exists()
 
 
+@pytest.mark.parametrize(
+    (
+        "mode",
+        "expected_output",
+        "expected_summary",
+        "expected_tables",
+        "expected_figures",
+    ),
+    [
+        (
+            "fast",
+            Path("results/raw/fast_mode_results.csv"),
+            Path("results/summary/fast_mode_summary.csv"),
+            Path("results/tables/fast"),
+            Path("results/figures/fast"),
+        ),
+        (
+            "full",
+            Path("results/raw/full_mode_results.csv"),
+            Path("results/summary/full_mode_summary.csv"),
+            Path("results/tables/full"),
+            Path("results/figures/full"),
+        ),
+    ],
+)
+def test_main_mode_defaults_use_separate_report_paths(
+    main_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    expected_output: Path,
+    expected_summary: Path,
+    expected_tables: Path,
+    expected_figures: Path,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [str(main_cli.__file__), "--mode", mode, "--dry-run"],
+    )
+    args = main_cli._parse_args()
+    main_cli._apply_mode_defaults(args)
+
+    assert args.output == expected_output
+    assert args.summary_output == expected_summary
+    assert args.tables_dir == expected_tables
+    assert args.figures_dir == expected_figures
+
+
 def test_main_simulation_rejects_full_control_estimator(
     main_cli,
     monkeypatch: pytest.MonkeyPatch,
@@ -275,6 +324,260 @@ def test_full_control_script_dry_run_uses_limited_design(
     assert str(output) in result.stdout
     assert "Reports: automatic after successful run" in result.stdout
     assert not output.exists()
+
+
+def test_main_resume_applies_chunking_before_filtering(
+    main_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "main.csv"
+    manifest = tmp_path / "main_manifest.json"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 20,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 1,
+                "seed": 12346,
+                "estimator": estimator,
+            }
+            for estimator in ("oracle", "post_selection_ivqr", "dml_ivqr")
+        ]
+    ).to_csv(output, index=False)
+    captured_designs: list[Design] = []
+
+    def fake_run_simulation_batch(designs, alphas, **kwargs):
+        captured_designs.extend(designs)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(main_cli, "run_simulation_batch", fake_run_simulation_batch)
+    monkeypatch.setattr(main_cli, "_make_reports", lambda args: None)
+    monkeypatch.setattr(main_cli, "_count_rows", lambda path: 3)
+
+    _run_cli_in_process(
+        main_cli,
+        [
+            "--resume",
+            "--reps",
+            "4",
+            "--dgps",
+            "dgp1",
+            "--n-values",
+            "80",
+            "--p-values",
+            "20",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--chunk-index",
+            "0",
+            "--num-chunks",
+            "2",
+            "--batch-size",
+            "10",
+            "--n-jobs",
+            "1",
+            "--output",
+            str(output),
+            "--manifest",
+            str(manifest),
+        ],
+        monkeypatch,
+        capsys,
+        tmp_path,
+    )
+
+    assert [design.rep for design in captured_designs] == [0, 2]
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["total_designs"] == 4
+    assert payload["chunk_designs"] == 2
+    assert payload["pending_designs"] == 2
+    assert payload["designs_in_run"] == 2
+    assert payload["resume_signature"]["mode"] == "fast"
+
+
+def test_full_control_resume_applies_chunking_before_filtering(
+    full_control_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "full_control.csv"
+    manifest = tmp_path / "full_control_manifest.json"
+    pd.DataFrame(
+        [
+            {
+                "dgp": "dgp1",
+                "n": 80,
+                "p": 20,
+                "pi": 1.0,
+                "tau": 0.5,
+                "rep": 1,
+                "seed": 54322,
+                "estimator": "full_control_ivqr",
+            }
+        ]
+    ).to_csv(output, index=False)
+    captured_designs: list[Design] = []
+
+    def fake_run_batch(
+        designs,
+        alphas,
+        quantreg_max_iter,
+        n_jobs,
+        show_quantreg_warnings,
+    ):
+        captured_designs.extend(designs)
+        return pd.DataFrame(columns=full_control_cli.RESULT_COLUMNS)
+
+    monkeypatch.setattr(full_control_cli, "_run_batch", fake_run_batch)
+    monkeypatch.setattr(full_control_cli, "_make_reports", lambda args: None)
+
+    _run_cli_in_process(
+        full_control_cli,
+        [
+            "--resume",
+            "--reps",
+            "4",
+            "--dgps",
+            "dgp1",
+            "--n-values",
+            "80",
+            "--p-values",
+            "20",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--chunk-index",
+            "0",
+            "--num-chunks",
+            "2",
+            "--batch-size",
+            "10",
+            "--n-jobs",
+            "1",
+            "--output",
+            str(output),
+            "--manifest",
+            str(manifest),
+        ],
+        monkeypatch,
+        capsys,
+        tmp_path,
+    )
+
+    assert [design.rep for design in captured_designs] == [0, 2]
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["total_designs"] == 4
+    assert payload["chunk_designs"] == 2
+    assert payload["pending_designs"] == 2
+    assert payload["designs_in_run"] == 2
+    assert "resume_signature" in payload
+
+
+def test_full_control_resume_key_rejects_decimal_integer_fields(
+    full_control_cli,
+) -> None:
+    row = pd.Series(
+        {
+            "dgp": "dgp1",
+            "n": 80.5,
+            "p": 5,
+            "pi": 1.0,
+            "tau": 0.5,
+            "rep": 0,
+            "seed": 123,
+        }
+    )
+
+    with pytest.raises(ValueError, match="invalid design-key values"):
+        full_control_cli._row_design_key(row)
+
+
+def test_full_control_as_bool_uses_explicit_parsing(full_control_cli) -> None:
+    assert full_control_cli._as_bool(1) is True
+    assert full_control_cli._as_bool(0) is False
+    assert full_control_cli._as_bool(2) is False
+    assert full_control_cli._as_bool("yes") is True
+    assert full_control_cli._as_bool("no") is False
+
+
+def test_scenario_output_validation_rejects_directories(
+    main_cli,
+    full_control_cli,
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="file path"):
+        main_cli._validate_output_path(tmp_path, resume=False)
+    with pytest.raises(ValueError, match="file path"):
+        full_control_cli._validate_output_path(tmp_path, resume=False)
+
+    parent_file = tmp_path / "parent"
+    parent_file.write_text("not a directory", encoding="utf-8")
+    with pytest.raises(ValueError, match="parent must be a directory"):
+        main_cli._validate_output_path(parent_file / "main.csv", resume=False)
+    with pytest.raises(ValueError, match="parent must be a directory"):
+        full_control_cli._validate_output_path(
+            parent_file / "full_control.csv",
+            resume=False,
+        )
+
+
+@pytest.mark.parametrize("changed_field", ["alpha_grid_size", "mode"])
+def test_main_resume_manifest_rejects_incompatible_settings(
+    main_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    changed_field: str,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [str(main_cli.__file__), "--mode", "fast"],
+    )
+    args = main_cli._parse_args()
+    main_cli._apply_mode_defaults(args)
+    manifest = tmp_path / "main_manifest.json"
+    manifest.write_text(
+        json.dumps({"resume_signature": main_cli._resume_signature(args)}),
+        encoding="utf-8",
+    )
+
+    main_cli._validate_resume_manifest(manifest, args)
+    if changed_field == "alpha_grid_size":
+        args.alpha_grid_size += 1
+    else:
+        args.mode = "full"
+
+    with pytest.raises(ValueError, match="resume signature"):
+        main_cli._validate_resume_manifest(manifest, args)
+
+
+def test_full_control_resume_manifest_rejects_incompatible_settings(
+    full_control_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(sys, "argv", [str(full_control_cli.__file__)])
+    args = full_control_cli._parse_args()
+    manifest = tmp_path / "full_control_manifest.json"
+    manifest.write_text(
+        json.dumps({"resume_signature": full_control_cli._resume_signature(args)}),
+        encoding="utf-8",
+    )
+
+    full_control_cli._validate_resume_manifest(manifest, args)
+    args.alpha_grid_size += 1
+
+    with pytest.raises(ValueError, match="resume signature"):
+        full_control_cli._validate_resume_manifest(manifest, args)
 
 
 @pytest.mark.slow

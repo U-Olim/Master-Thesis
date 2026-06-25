@@ -65,18 +65,18 @@ Fast mode writes:
 
 ```text
 results/raw/fast_mode_results.csv
-results/summary/main_simulation_summary.csv
-results/tables/main/
-results/figures/main/
+results/summary/fast_mode_summary.csv
+results/tables/fast/
+results/figures/fast/
 ```
 
 Full mode writes:
 
 ```text
 results/raw/full_mode_results.csv
-results/summary/main_simulation_summary.csv
-results/tables/main/
-results/figures/main/
+results/summary/full_mode_summary.csv
+results/tables/full/
+results/figures/full/
 ```
 
 Full-control benchmark writes:
@@ -87,6 +87,10 @@ results/summary/full_control_ivqr_summary.csv
 results/tables/full_control/
 results/figures/full_control/
 ```
+
+When `--resume` is used, new pending rows are appended to the existing raw CSV.
+Use the same manifest path to guard against accidentally resuming with
+incompatible settings.
 
 Generated tables include `comparison_table.csv`, `diagnostic_table.csv`,
 `bias_wide.csv`, `rmse_wide.csv`, `coverage_wide.csv`, `cr_length_wide.csv`,

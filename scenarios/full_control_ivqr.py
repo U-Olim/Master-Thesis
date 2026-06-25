@@ -33,6 +33,12 @@ from reporting.figures import write_figures  # noqa: E402
 from reporting.summaries import aggregate_results_file  # noqa: E402
 from reporting.tables import write_tables  # noqa: E402
 from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa: E402
+from simulation._validation import (  # noqa: E402
+    design_key,
+    parse_explicit_bool,
+    row_design_key,
+    validate_output_file_path,
+)
 from simulation.config import (  # noqa: E402
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
@@ -105,9 +111,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-chunks", type=int, default=None)
     parser.add_argument("--max-designs", type=int, default=None)
     parser.add_argument("--manifest", type=Path, default=None)
-    parser.add_argument(
-        "--dgps", nargs="+", default=list(FULL_CONTROL_BENCHMARK_DGPS)
-    )
+    parser.add_argument("--dgps", nargs="+", default=list(FULL_CONTROL_BENCHMARK_DGPS))
     parser.add_argument(
         "--n-values",
         nargs="+",
@@ -169,9 +173,10 @@ def _validate_args(args: argparse.Namespace) -> None:
 
 
 def _validate_output_path(output_path: Path, *, resume: bool) -> None:
-    if output_path.exists() and not resume:
+    validated = validate_output_file_path(output_path)
+    if validated.exists() and not resume:
         raise FileExistsError(
-            f"Output file already exists: {output_path}. "
+            f"Output file already exists: {validated}. "
             "Use --resume to continue, pass --output to choose a new file, "
             "or delete the existing file manually."
         )
@@ -181,9 +186,7 @@ def _configure_warnings(show_quantreg_warnings: bool) -> None:
     if show_quantreg_warnings:
         return
     warnings.filterwarnings("ignore", category=IterationLimitWarning)
-    warnings.filterwarnings(
-        "ignore", message=r"Maximum number of iterations reached.*"
-    )
+    warnings.filterwarnings("ignore", message=r"Maximum number of iterations reached.*")
 
 
 def _count_rows(path: Path) -> int:
@@ -195,38 +198,48 @@ def _count_rows(path: Path) -> int:
         return 0
 
 
+def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
+    return {
+        "dgps": list(args.dgps),
+        "n_values": list(args.n_values),
+        "p_values": list(args.p_values),
+        "pi_values": list(args.pi_values),
+        "taus": list(args.taus),
+        "reps": args.reps,
+        "base_seed": args.base_seed,
+        "alpha_min": args.alpha_min,
+        "alpha_max": args.alpha_max,
+        "alpha_grid_size": args.alpha_grid_size,
+        "quantreg_max_iter": args.quantreg_max_iter,
+    }
+
+
+def _validate_resume_manifest(
+    manifest_path: Path | None,
+    args: argparse.Namespace,
+) -> None:
+    if manifest_path is None or not manifest_path.exists():
+        return
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    previous = payload.get("resume_signature")
+    current = _resume_signature(args)
+    if previous is not None and previous != current:
+        raise ValueError(
+            "Manifest resume signature does not match current run settings. "
+            "Use a different output/manifest path or rerun from scratch."
+        )
+
+
 def _design_key(design: Design) -> tuple[object, ...]:
-    return (
-        design.dgp,
-        design.n,
-        design.p,
-        design.pi,
-        design.tau,
-        design.rep,
-        design.seed,
-    )
+    return design_key(design)
 
 
 def _row_design_key(row: pd.Series) -> tuple[object, ...]:
-    return (
-        row["dgp"],
-        int(row["n"]),
-        int(row["p"]),
-        float(row["pi"]),
-        float(row["tau"]),
-        int(row["rep"]),
-        int(row["seed"]),
-    )
+    return row_design_key(row)
 
 
 def _as_bool(value: object) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    if isinstance(value, str):
-        return value.strip().lower() in {"true", "1", "yes"}
-    return False
+    return parse_explicit_bool(value)
 
 
 def _successful_rows(existing: pd.DataFrame) -> pd.Series:
@@ -249,12 +262,10 @@ def _completed_design_keys(
     except pd.errors.EmptyDataError as exc:
         raise ValueError("results CSV is empty or malformed") from exc
 
-    required_columns = set(DESIGN_KEY_COLUMNS + ["estimator"])
+    required_columns = set(DESIGN_KEY_COLUMNS + ("estimator",))
     missing = sorted(required_columns - set(existing.columns))
     if missing:
-        raise ValueError(
-            f"results CSV is missing required resume columns: {missing}"
-        )
+        raise ValueError(f"results CSV is missing required resume columns: {missing}")
 
     existing = existing.loc[existing["estimator"].astype(str) == ESTIMATOR_NAME]
     if rerun_failed:
@@ -292,9 +303,7 @@ def _print_dry_run(
     print("Reports: automatic after successful run")
 
 
-def _result_to_row(
-    design: Design, result: EstimationResult
-) -> dict[str, object]:
+def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object]:
     bias = None
     absolute_error = None
     squared_error = None
@@ -417,9 +426,7 @@ def _run_batch(
         ]
     else:
         rows = []
-        with ProcessPoolExecutor(
-            max_workers=min(n_jobs, len(designs))
-        ) as executor:
+        with ProcessPoolExecutor(max_workers=min(n_jobs, len(designs))) as executor:
             futures = {
                 executor.submit(
                     _run_one,
@@ -452,7 +459,11 @@ def _run_batch(
 def _write_manifest(
     path: Path | None,
     args: argparse.Namespace,
-    designs: list[Design],
+    *,
+    total_designs: int,
+    chunk_designs: int,
+    pending_designs: int,
+    designs_in_run: int,
     alphas: np.ndarray,
 ) -> None:
     if path is None:
@@ -461,7 +472,11 @@ def _write_manifest(
     payload: dict[str, Any] = {
         "timestamp": datetime.now(UTC).isoformat(),
         "parameters": vars(args),
-        "designs_in_run": len(designs),
+        "resume_signature": _resume_signature(args),
+        "total_designs": total_designs,
+        "chunk_designs": chunk_designs,
+        "pending_designs": pending_designs,
+        "designs_in_run": designs_in_run,
         "estimator": ESTIMATOR_NAME,
         "alpha_grid": [float(value) for value in alphas],
     }
@@ -490,11 +505,12 @@ def main() -> None:
         reps=args.reps,
         base_seed=args.base_seed,
     )
-    designs = select_design_chunk(
+    chunk_designs = select_design_chunk(
         all_designs,
         args.chunk_index,
         args.num_chunks,
     )
+    designs = chunk_designs
     if args.max_designs is not None:
         designs = designs[: args.max_designs]
 
@@ -510,6 +526,8 @@ def main() -> None:
 
     output_path = args.output
     _validate_output_path(output_path, resume=args.resume)
+    if args.resume:
+        _validate_resume_manifest(args.manifest, args)
     if args.rerun_failed and not args.resume:
         print("--rerun-failed has no effect without --resume.")
 
@@ -518,20 +536,26 @@ def main() -> None:
             output_path,
             rerun_failed=args.rerun_failed,
         )
-        all_designs = [
+        pending_designs = [
             design
-            for design in all_designs
+            for design in chunk_designs
             if _design_key(design) not in completed_keys
         ]
-    designs = select_design_chunk(
-        all_designs,
-        args.chunk_index,
-        args.num_chunks,
-    )
+    else:
+        pending_designs = chunk_designs
+    designs = pending_designs
     if args.max_designs is not None:
         designs = designs[: args.max_designs]
 
-    _write_manifest(args.manifest, args, designs, alphas)
+    _write_manifest(
+        args.manifest,
+        args,
+        total_designs=len(all_designs),
+        chunk_designs=len(chunk_designs),
+        pending_designs=len(pending_designs),
+        designs_in_run=len(designs),
+        alphas=alphas,
+    )
 
     start = time.perf_counter()
     completed = 0
@@ -553,14 +577,12 @@ def main() -> None:
         )
         completed += len(batch)
         elapsed = time.perf_counter() - start
-        print(
-            f"Completed {completed}/{len(designs)} designs "
-            f"in {elapsed:.2f} seconds"
-        )
+        print(f"Completed {completed}/{len(designs)} designs in {elapsed:.2f} seconds")
 
     _make_reports(args)
     print("Mode: full-control IVQR benchmark")
     print(f"Completed designs: {completed}")
+    print(f"Pending before max-designs: {len(pending_designs)}")
     print(f"Output: {output_path}")
     print(f"Final row count: {_count_rows(output_path)}")
 

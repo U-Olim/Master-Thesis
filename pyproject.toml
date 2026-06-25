@@ -19,7 +19,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "--basetemp=.pytest_tmp -p no:ddtrace"
 markers = [
-    "slow: long-running simulation or subprocess smoke tests",
+    "slow: long-running simulation, multiprocessing, or subprocess smoke tests",
 ]
 
 [tool.pixi.workspace]

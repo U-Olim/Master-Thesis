@@ -22,6 +22,12 @@ R_FULL_CONTROL_BENCHMARK: int = 500
 FAST_OUTPUT: str = "results/raw/fast_mode_results.csv"
 FULL_OUTPUT: str = "results/raw/full_mode_results.csv"
 DEFAULT_OUTPUT: str = FULL_OUTPUT
+FAST_SUMMARY_OUTPUT: str = "results/summary/fast_mode_summary.csv"
+FULL_SUMMARY_OUTPUT: str = "results/summary/full_mode_summary.csv"
+FAST_TABLES_DIR: str = "results/tables/fast"
+FULL_TABLES_DIR: str = "results/tables/full"
+FAST_FIGURES_DIR: str = "results/figures/fast"
+FULL_FIGURES_DIR: str = "results/figures/full"
 
 # A coarse nine-point alpha grid keeps the Monte Carlo runtime manageable.
 DEFAULT_ALPHA_GRID_SIZE: int = 9
@@ -60,6 +66,12 @@ __all__ = [
     "FAST_OUTPUT",
     "FULL_OUTPUT",
     "DEFAULT_OUTPUT",
+    "FAST_SUMMARY_OUTPUT",
+    "FULL_SUMMARY_OUTPUT",
+    "FAST_TABLES_DIR",
+    "FULL_TABLES_DIR",
+    "FAST_FIGURES_DIR",
+    "FULL_FIGURES_DIR",
     "DEFAULT_ALPHA_GRID_SIZE",
     "DEFAULT_DML_K_FOLDS",
     "DEFAULT_N_JOBS",

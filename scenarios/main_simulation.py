@@ -30,6 +30,7 @@ from reporting.summaries import aggregate_results_file  # noqa: E402
 from reporting.tables import write_tables  # noqa: E402
 from simulation.batching import filter_completed_designs, run_simulation_batch  # noqa: E402
 from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa: E402
+from simulation._validation import validate_output_file_path  # noqa: E402
 from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_BATCH_SIZE,
@@ -37,8 +38,14 @@ from simulation.config import (  # noqa: E402
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
+    FAST_FIGURES_DIR,
     FAST_OUTPUT,
+    FAST_SUMMARY_OUTPUT,
+    FAST_TABLES_DIR,
+    FULL_FIGURES_DIR,
     FULL_OUTPUT,
+    FULL_SUMMARY_OUTPUT,
+    FULL_TABLES_DIR,
     N_VALUES,
     P_VALUES,
     PI_VALUES,
@@ -80,9 +87,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--alpha-max", type=float, default=3.0)
     parser.add_argument("--alpha-grid-size", type=int, default=None)
     parser.add_argument("--dml-k-folds", type=int, default=DEFAULT_DML_K_FOLDS)
-    parser.add_argument("--quantreg-max-iter", type=int, default=DEFAULT_QUANTREG_MAX_ITER)
+    parser.add_argument(
+        "--quantreg-max-iter", type=int, default=DEFAULT_QUANTREG_MAX_ITER
+    )
     parser.add_argument("--show-quantreg-warnings", action="store_true")
-    parser.add_argument("--estimators", nargs="+", choices=VALID_ESTIMATORS, default=None)
+    parser.add_argument(
+        "--estimators", nargs="+", choices=VALID_ESTIMATORS, default=None
+    )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--rerun-failed", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -102,13 +113,17 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _apply_mode_defaults(args: argparse.Namespace) -> None:
-    args.estimators = list(MAIN_ESTIMATORS) if args.estimators is None else args.estimators
+    args.estimators = (
+        list(MAIN_ESTIMATORS) if args.estimators is None else args.estimators
+    )
     args.dgps = list(DGPS) if args.dgps is None else args.dgps
     args.n_values = list(N_VALUES) if args.n_values is None else args.n_values
     args.p_values = list(P_VALUES) if args.p_values is None else args.p_values
     args.pi_values = list(PI_VALUES) if args.pi_values is None else args.pi_values
     args.taus = list(TAUS) if args.taus is None else args.taus
-    args.reps = (R_FAST if args.mode == "fast" else R_MAIN) if args.reps is None else args.reps
+    args.reps = (
+        (R_FAST if args.mode == "fast" else R_MAIN) if args.reps is None else args.reps
+    )
     args.alpha_grid_size = (
         DEFAULT_ALPHA_GRID_SIZE
         if args.alpha_grid_size is None
@@ -120,11 +135,17 @@ def _apply_mode_defaults(args: argparse.Namespace) -> None:
         else Path(args.output)
     )
     if args.summary_output is None:
-        args.summary_output = Path("results/summary/main_simulation_summary.csv")
+        args.summary_output = Path(
+            FAST_SUMMARY_OUTPUT if args.mode == "fast" else FULL_SUMMARY_OUTPUT
+        )
     if args.tables_dir is None:
-        args.tables_dir = Path("results/tables/main")
+        args.tables_dir = Path(
+            FAST_TABLES_DIR if args.mode == "fast" else FULL_TABLES_DIR
+        )
     if args.figures_dir is None:
-        args.figures_dir = Path("results/figures/main")
+        args.figures_dir = Path(
+            FAST_FIGURES_DIR if args.mode == "fast" else FULL_FIGURES_DIR
+        )
 
 
 def _validate_args(args: argparse.Namespace) -> None:
@@ -150,9 +171,10 @@ def _validate_args(args: argparse.Namespace) -> None:
 
 
 def _validate_output_path(output_path: Path, *, resume: bool) -> None:
-    if output_path.exists() and not resume:
+    validated = validate_output_file_path(output_path)
+    if validated.exists() and not resume:
         raise FileExistsError(
-            f"Output file already exists: {output_path}. "
+            f"Output file already exists: {validated}. "
             "Use --resume to continue, pass --output to choose a new file, "
             "or delete the existing file manually."
         )
@@ -165,6 +187,44 @@ def _count_rows(path: Path) -> int | None:
         return len(pd.read_csv(path, usecols=["estimator"]))
     except (ValueError, pd.errors.EmptyDataError):
         return None
+
+
+def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
+    return {
+        "mode": args.mode,
+        "dgps": list(args.dgps),
+        "n_values": list(args.n_values),
+        "p_values": list(args.p_values),
+        "pi_values": list(args.pi_values),
+        "taus": list(args.taus),
+        "reps": args.reps,
+        "base_seed": args.base_seed,
+        "alpha_min": args.alpha_min,
+        "alpha_max": args.alpha_max,
+        "alpha_grid_size": args.alpha_grid_size,
+        "estimators": list(args.estimators),
+        "dml_k_folds": args.dml_k_folds,
+        "quantreg_max_iter": args.quantreg_max_iter,
+    }
+
+
+def _validate_resume_manifest(
+    manifest_path: str | Path | None,
+    args: argparse.Namespace,
+) -> None:
+    if manifest_path is None:
+        return
+    path = Path(manifest_path)
+    if not path.exists():
+        return
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    previous = payload.get("resume_signature")
+    current = _resume_signature(args)
+    if previous is not None and previous != current:
+        raise ValueError(
+            "Manifest resume signature does not match current run settings. "
+            "Use a different output/manifest path or rerun from scratch."
+        )
 
 
 def _make_reports(args: argparse.Namespace) -> None:
@@ -202,6 +262,7 @@ def _write_manifest(
     args: argparse.Namespace,
     *,
     total_designs: int,
+    chunk_designs: int,
     pending_designs: int,
     designs_in_run: int,
     estimators: tuple[str, ...],
@@ -214,7 +275,9 @@ def _write_manifest(
     payload = {
         "timestamp": datetime.now(UTC).isoformat(),
         "parameters": vars(args),
+        "resume_signature": _resume_signature(args),
         "total_designs": total_designs,
+        "chunk_designs": chunk_designs,
         "pending_designs": pending_designs,
         "designs_in_run": designs_in_run,
         "estimators": list(estimators),
@@ -238,7 +301,7 @@ def main() -> None:
 
     estimators = tuple(args.estimators)
     alphas = np.linspace(args.alpha_min, args.alpha_max, args.alpha_grid_size)
-    designs = make_simulation_grid(
+    all_designs = make_simulation_grid(
         dgps=tuple(args.dgps),
         n_values=tuple(args.n_values),
         p_values=tuple(args.p_values),
@@ -247,7 +310,12 @@ def main() -> None:
         reps=args.reps,
         base_seed=args.base_seed,
     )
-    designs_to_run = select_design_chunk(designs, args.chunk_index, args.num_chunks)
+    chunk_designs = select_design_chunk(
+        all_designs,
+        args.chunk_index,
+        args.num_chunks,
+    )
+    designs_to_run = chunk_designs
     if args.max_designs is not None:
         designs_to_run = designs_to_run[: args.max_designs]
 
@@ -267,26 +335,27 @@ def main() -> None:
 
     output_path = Path(args.output)
     _validate_output_path(output_path, resume=args.resume)
+    if args.resume:
+        _validate_resume_manifest(args.manifest, args)
     pending_designs = (
         filter_completed_designs(
-            designs,
+            chunk_designs,
             output_path,
             estimators=estimators,
             rerun_failed=args.rerun_failed,
         )
         if args.resume
-        else designs
+        else chunk_designs
     )
-    designs_to_run = select_design_chunk(
-        pending_designs, args.chunk_index, args.num_chunks
-    )
+    designs_to_run = pending_designs
     if args.max_designs is not None:
         designs_to_run = designs_to_run[: args.max_designs]
 
     _write_manifest(
         args.manifest,
         args,
-        total_designs=len(designs),
+        total_designs=len(all_designs),
+        chunk_designs=len(chunk_designs),
         pending_designs=len(pending_designs),
         designs_in_run=len(designs_to_run),
         estimators=estimators,
@@ -320,6 +389,7 @@ def main() -> None:
     _make_reports(args)
     print(f"Mode: {args.mode}")
     print(f"Completed designs: {completed}")
+    print(f"Pending before max-designs: {len(pending_designs)}")
     print(f"Output: {output_path}")
     print(
         f"Final row count: {final_rows}"

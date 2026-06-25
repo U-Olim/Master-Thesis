@@ -10,7 +10,10 @@ from simulation.config import (
     DEFAULT_N_JOBS,
     DEFAULT_OUTPUT,
     DEFAULT_QUANTREG_MAX_ITER,
+    FAST_FIGURES_DIR,
     FAST_OUTPUT,
+    FAST_SUMMARY_OUTPUT,
+    FAST_TABLES_DIR,
     FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
     FULL_CONTROL_BENCHMARK_DGPS,
     FULL_CONTROL_BENCHMARK_ESTIMATOR,
@@ -19,7 +22,10 @@ from simulation.config import (
     FULL_CONTROL_BENCHMARK_PI_VALUES,
     FULL_CONTROL_BENCHMARK_P_VALUES,
     FULL_CONTROL_BENCHMARK_TAUS,
+    FULL_FIGURES_DIR,
     FULL_OUTPUT,
+    FULL_SUMMARY_OUTPUT,
+    FULL_TABLES_DIR,
     DGPS,
     K_FOLDS,
     MAIN_ESTIMATORS,
@@ -49,6 +55,19 @@ def test_mode_output_paths_are_separate_and_consistent() -> None:
     assert FULL_OUTPUT == "results/raw/full_mode_results.csv"
     assert DEFAULT_OUTPUT == FULL_OUTPUT
     assert FAST_OUTPUT != FULL_OUTPUT
+
+
+def test_mode_report_paths_are_separate() -> None:
+    assert FAST_SUMMARY_OUTPUT == "results/summary/fast_mode_summary.csv"
+    assert FULL_SUMMARY_OUTPUT == "results/summary/full_mode_summary.csv"
+    assert FAST_TABLES_DIR == "results/tables/fast"
+    assert FULL_TABLES_DIR == "results/tables/full"
+    assert FAST_FIGURES_DIR == "results/figures/fast"
+    assert FULL_FIGURES_DIR == "results/figures/full"
+
+    assert FAST_SUMMARY_OUTPUT != FULL_SUMMARY_OUTPUT
+    assert FAST_TABLES_DIR != FULL_TABLES_DIR
+    assert FAST_FIGURES_DIR != FULL_FIGURES_DIR
 
 
 def test_full_control_output_path_is_defined() -> None:

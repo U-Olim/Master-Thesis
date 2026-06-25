@@ -123,9 +123,9 @@ def test_full_simulation_fast_mode_defaults_exclude_full_control() -> None:
     assert args.reps == 10
     assert args.alpha_grid_size == 9
     assert args.output == Path("results/raw/fast_mode_results.csv")
-    assert args.summary_output == Path("results/summary/main_simulation_summary.csv")
-    assert args.tables_dir == Path("results/tables/main")
-    assert args.figures_dir == Path("results/figures/main")
+    assert args.summary_output == Path("results/summary/fast_mode_summary.csv")
+    assert args.tables_dir == Path("results/tables/fast")
+    assert args.figures_dir == Path("results/figures/fast")
 
 
 def test_full_simulation_full_mode_defaults_use_500_reps() -> None:
@@ -156,7 +156,9 @@ def test_full_simulation_full_mode_defaults_use_500_reps() -> None:
     assert args.reps == 500
     assert args.alpha_grid_size == 9
     assert args.output == Path("results/raw/full_mode_results.csv")
-    assert args.summary_output == Path("results/summary/main_simulation_summary.csv")
+    assert args.summary_output == Path("results/summary/full_mode_summary.csv")
+    assert args.tables_dir == Path("results/tables/full")
+    assert args.figures_dir == Path("results/figures/full")
 
 
 def test_full_simulation_mode_defaults_respect_explicit_overrides() -> None:
@@ -349,5 +351,3 @@ def test_manual_oracle_uses_single_scenario_defaults() -> None:
     assert args.dgps == ["dgp1", "dgp2", "dgp3"]
     assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
-
-
