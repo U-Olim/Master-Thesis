@@ -1,18 +1,25 @@
-results/
 .pixi/
 
+# Python caches
 __pycache__/
 **/__pycache__/
 **pycache**/
-*.pyc
+*.py[cod]
 *.pyo
 
+# Test/tool caches
 .pytest_cache/
 .pytest_tmp/
-.mypy_cache/
 .ruff_cache/
+.mypy_cache/
 .coverage
 htmlcov/
+
+# Local agent/tooling folders
+.agents/
+
+# Generated simulation outputs
+results/
 
 *.log
 *.tmp

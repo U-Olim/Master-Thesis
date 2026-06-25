@@ -24,9 +24,9 @@ def _prepend_sys_path(path: Path) -> None:
         sys.path.insert(0, resolved)
 
 
-_prepend_sys_path(SRC_DIR)
-
-
 def pytest_sessionstart(session: object) -> None:
     """Ensure the isolated Matplotlib cache exists after pytest initializes."""
     MPL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+_prepend_sys_path(SRC_DIR)
