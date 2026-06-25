@@ -7,11 +7,18 @@ from dgp.designs import Design
 from dgp.true_parameters import get_oracle_control_indices
 from estimators.base import EstimationResult
 from simulation import runner as runner_module
+from simulation._validation import (
+    row_design_key,
+    validate_design,
+    validate_designs,
+    validate_dgps,
+    validate_estimators,
+    validate_k_folds_for_designs,
+    validate_output_file_path,
+)
 from simulation.runner import (
     DESIGN_KEY_COLUMNS,
     RESULT_COLUMNS,
-    _validate_dgps,
-    _validate_estimators,
     make_simulation_grid,
     run_single_replication,
     run_small_simulation,
@@ -275,13 +282,13 @@ def test_run_single_replication_accepts_oracle_estimator() -> None:
 )
 def test_validate_estimators_rejects_invalid_sequences(estimators) -> None:
     with pytest.raises(ValueError):
-        _validate_estimators(estimators)
+        validate_estimators(estimators)
 
 
 @pytest.mark.parametrize("dgps", ["dgp1", ("dgp1", "dgp1"), ()])
 def test_validate_dgps_rejects_invalid_sequences(dgps) -> None:
     with pytest.raises(ValueError):
-        _validate_dgps(dgps)
+        validate_dgps(dgps)
 
 
 @pytest.mark.parametrize(
@@ -409,6 +416,130 @@ def test_run_single_replication_rejects_invalid_runtime_parameters(kwargs) -> No
             design,
             np.linspace(0.0, 2.0, 5),
             **kwargs,
+        )
+
+
+@pytest.mark.parametrize(
+    "design",
+    [
+        object(),
+        Design("bad", 80, 5, 1.0, 0.5, 0, 123),
+        Design("dgp1", 0, 5, 1.0, 0.5, 0, 123),
+        Design("dgp1", 80, 0, 1.0, 0.5, 0, 123),
+        Design("dgp1", 80, 5, -0.1, 0.5, 0, 123),
+        Design("dgp1", 80, 5, 1.0, 1.0, 0, 123),
+        Design("dgp1", 80, 5, 1.0, 0.5, -1, 123),
+        Design("dgp1", 80, 5, 1.0, 0.5, 0, -1),
+    ],
+)
+def test_validate_design_rejects_invalid_designs(design) -> None:
+    with pytest.raises(ValueError):
+        validate_design(design)
+
+
+@pytest.mark.parametrize(
+    "designs",
+    [
+        "design",
+        1,
+        [object()],
+        [Design("dgp1", 0, 5, 1.0, 0.5, 0, 123)],
+    ],
+)
+def test_validate_designs_rejects_invalid_inputs(designs) -> None:
+    with pytest.raises(ValueError):
+        validate_designs(designs)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("n", 80.5),
+        ("p", 5.2),
+        ("rep", 0.5),
+        ("seed", 123.4),
+        ("pi", np.inf),
+        ("tau", np.nan),
+        ("n", "invalid"),
+    ],
+)
+def test_row_design_key_rejects_invalid_values(field, value) -> None:
+    row = {
+        "dgp": "dgp1",
+        "n": 80,
+        "p": 5,
+        "pi": 1.0,
+        "tau": 0.5,
+        "rep": 0,
+        "seed": 123,
+    }
+    row[field] = value
+
+    with pytest.raises(ValueError, match="invalid design-key values"):
+        row_design_key(runner_module.pd.Series(row))
+
+
+def test_validate_k_folds_for_designs_rejects_invalid_values() -> None:
+    designs = [
+        Design("dgp1", 80, 5, 1.0, 0.5, 0, 123),
+        Design("dgp1", 40, 5, 1.0, 0.5, 1, 124),
+    ]
+
+    with pytest.raises(ValueError, match="at least 2"):
+        validate_k_folds_for_designs(1, designs)
+    with pytest.raises(ValueError, match="integer"):
+        validate_k_folds_for_designs(True, designs)
+    with pytest.raises(ValueError, match="smallest design n"):
+        validate_k_folds_for_designs(41, designs)
+
+
+def test_validate_output_file_path_rejects_invalid_paths(tmp_path) -> None:
+    with pytest.raises(ValueError, match="file path"):
+        validate_output_file_path(tmp_path)
+
+    parent_file = tmp_path / "parent"
+    parent_file.write_text("not a directory")
+    with pytest.raises(ValueError, match="parent must be a directory"):
+        validate_output_file_path(parent_file / "results.csv")
+
+
+def test_run_single_replication_validates_design_before_data_generation(
+    monkeypatch,
+) -> None:
+    generated = False
+
+    def fake_generate_data(design):
+        nonlocal generated
+        generated = True
+
+    monkeypatch.setattr(runner_module, "generate_data", fake_generate_data)
+
+    with pytest.raises(ValueError):
+        run_single_replication(
+            Design("bad", 80, 5, 1.0, 0.5, 0, 123),
+            np.linspace(0.0, 2.0, 5),
+        )
+    assert generated is False
+
+
+@pytest.mark.parametrize("dml_k_folds", [1, 81])
+def test_run_single_replication_rejects_infeasible_dml_folds(dml_k_folds) -> None:
+    with pytest.raises(ValueError, match="dml_k_folds"):
+        run_single_replication(
+            Design("dgp1", 80, 5, 1.0, 0.5, 0, 123),
+            np.linspace(0.0, 2.0, 5),
+            dml_k_folds=dml_k_folds,
+        )
+
+
+def test_run_small_simulation_rejects_infeasible_dml_folds() -> None:
+    with pytest.raises(ValueError, match="at least 2"):
+        run_small_simulation(
+            n=80,
+            p=5,
+            reps=1,
+            alphas=np.linspace(0.0, 2.0, 5),
+            dml_k_folds=1,
         )
 
 

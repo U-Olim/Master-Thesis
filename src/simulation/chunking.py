@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TypeVar
 
 
@@ -28,12 +29,18 @@ def validate_chunk_args(chunk_index: int | None, num_chunks: int | None) -> None
 
 
 def select_design_chunk(
-    designs: list[T],
+    designs: Iterable[T],
     chunk_index: int | None,
     num_chunks: int | None,
 ) -> list[T]:
     """Select one deterministic strided chunk of designs."""
+    if isinstance(designs, (str, bytes)):
+        raise ValueError("designs must be an iterable of design objects")
+    try:
+        design_list = list(designs)
+    except TypeError as exc:
+        raise ValueError("designs must be an iterable of design objects") from exc
     validate_chunk_args(chunk_index, num_chunks)
     if chunk_index is None or num_chunks is None:
-        return list(designs)
-    return list(designs[chunk_index::num_chunks])
+        return design_list
+    return design_list[chunk_index::num_chunks]

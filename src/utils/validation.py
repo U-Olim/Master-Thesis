@@ -8,10 +8,25 @@ from typing import Any, overload
 import numpy as np
 
 
+__all__ = [
+    "check_finite",
+    "validate_1d_array",
+    "validate_2d_array",
+    "validate_alpha_grid",
+    "validate_data_arrays",
+    "validate_k_folds",
+    "validate_nonempty_sequence",
+    "validate_positive_int",
+    "validate_tau",
+]
+
+
 def validate_tau(tau: float) -> float:
     """Validate and return a quantile level in the open unit interval."""
+    if isinstance(tau, bool):
+        raise ValueError("tau must satisfy 0 < tau < 1")
     tau = float(tau)
-    if not 0 < tau < 1:
+    if not np.isfinite(tau) or not 0 < tau < 1:
         raise ValueError("tau must satisfy 0 < tau < 1")
     return tau
 
@@ -116,6 +131,8 @@ def validate_positive_int(name: str, value: int) -> int:
 
 def validate_k_folds(k_folds: int, n: int) -> int:
     """Validate K-fold count for a sample of size n."""
+    k_folds = validate_positive_int("k_folds", k_folds)
+    n = validate_positive_int("n", n)
     if n <= 1:
         raise ValueError("n must be greater than 1")
     if k_folds < 2 or k_folds > n:
@@ -125,6 +142,11 @@ def validate_k_folds(k_folds: int, n: int) -> int:
 
 def validate_nonempty_sequence(name: str, value: Sequence[Any]) -> Sequence[Any]:
     """Validate that a sequence is nonempty."""
-    if len(value) == 0:
-        raise ValueError(f"{name} must be nonempty")
+    if isinstance(value, (str, bytes)):
+        raise ValueError(f"{name} must be a nonempty sequence")
+    try:
+        if len(value) == 0:
+            raise ValueError(f"{name} must be nonempty")
+    except TypeError as exc:
+        raise ValueError(f"{name} must be a sequence") from exc
     return value

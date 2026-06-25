@@ -10,6 +10,20 @@ import numpy as np
 import pandas as pd
 
 from dgp.designs import Design
+from simulation._validation import (
+    design_key,
+    parse_explicit_bool,
+    row_design_key,
+    validate_alpha_candidates,
+    validate_bool,
+    validate_designs,
+    validate_estimators,
+    validate_k_folds_for_designs,
+    validate_nonnegative_float,
+    validate_optional_nonnegative_int,
+    validate_output_file_path,
+    validate_positive_int,
+)
 from simulation.config import DEFAULT_N_JOBS
 from simulation.runner import (
     DEFAULT_SIMULATION_ESTIMATORS,
@@ -18,8 +32,7 @@ from simulation.runner import (
     DEFAULT_QUANTREG_MAX_ITER,
     ESTIMATOR_OUTPUT_NAMES,
     RESULT_COLUMNS,
-    _failure_rows_for_design,
-    _validate_estimators,
+    failure_rows_for_design,
     run_single_replication,
 )
 
@@ -68,84 +81,15 @@ def _run_design_worker(args: SimulationWorkerArgs) -> list[dict[str, object]]:
 
 
 def _as_bool(value: object) -> bool:
-    if isinstance(value, (bool, np.bool_)):
-        return bool(value)
-    if isinstance(value, (int, float, np.integer, np.floating)):
-        if not np.isfinite(float(value)):
-            return False
-        if float(value) == 1.0:
-            return True
-        if float(value) == 0.0:
-            return False
-        return False
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"true", "1", "yes"}:
-            return True
-        if normalized in {"false", "0", "no"}:
-            return False
-    return False
+    return parse_explicit_bool(value)
 
 
 def _design_key(design: Design) -> tuple[object, ...]:
-    return (
-        design.dgp,
-        design.n,
-        design.p,
-        design.pi,
-        design.tau,
-        design.rep,
-        design.seed,
-    )
+    return design_key(design)
 
 
 def _row_design_key(row: pd.Series) -> tuple[object, ...]:
-    try:
-        return (
-            row["dgp"],
-            int(row["n"]),
-            int(row["p"]),
-            float(row["pi"]),
-            float(row["tau"]),
-            int(row["rep"]),
-            int(row["seed"]),
-        )
-    except Exception as exc:
-        raise ValueError("results CSV contains invalid design-key values") from exc
-
-
-def _validate_positive_int(name: str, value: int) -> int:
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise ValueError(f"{name} must be an integer")
-    if value <= 0:
-        raise ValueError(f"{name} must be positive")
-    return value
-
-
-def _validate_nonnegative_float(name: str, value: float) -> float:
-    if isinstance(value, bool):
-        raise ValueError(f"{name} must be finite and nonnegative")
-    value = float(value)
-    if not np.isfinite(value) or value < 0:
-        raise ValueError(f"{name} must be finite and nonnegative")
-    return value
-
-
-def _validate_bool(name: str, value: bool) -> bool:
-    if not isinstance(value, bool):
-        raise ValueError(f"{name} must be a boolean")
-    return value
-
-
-def _validate_alpha_candidates(alphas: np.ndarray) -> np.ndarray:
-    alphas = np.asarray(alphas, dtype=float)
-    if alphas.ndim != 1 or alphas.size == 0:
-        raise ValueError("alphas must be a nonempty one-dimensional array")
-    if not np.all(np.isfinite(alphas)):
-        raise ValueError("alphas must be finite")
-    if not np.all(np.diff(alphas) > 0):
-        raise ValueError("alphas must be strictly increasing")
-    return alphas
+    return row_design_key(row)
 
 
 def _row_sort_key(row: dict[str, object]) -> tuple[object, ...]:
@@ -179,38 +123,31 @@ def run_simulation_batch(
     show_quantreg_warnings: bool = False,
 ) -> pd.DataFrame:
     """Run a batch of simulation designs and optionally persist it to CSV."""
-    if isinstance(designs, (str, bytes)):
-        raise ValueError("designs must be an iterable of Design objects")
-    try:
-        designs = list(designs)
-    except TypeError as exc:
-        raise ValueError("designs must be an iterable of Design objects") from exc
-    if any(not isinstance(design, Design) for design in designs):
-        raise ValueError("designs must contain only Design objects")
-    estimators = _validate_estimators(estimators)
-    if not isinstance(n_jobs, int) or isinstance(n_jobs, bool):
-        raise ValueError("n_jobs must be an integer")
-    if n_jobs < 1:
-        raise ValueError("n_jobs must be at least 1")
-    quantreg_max_iter = _validate_positive_int("quantreg_max_iter", quantreg_max_iter)
-    selection_cv = _validate_positive_int("selection_cv", selection_cv)
-    selection_max_iter = _validate_positive_int("selection_max_iter", selection_max_iter)
-    dml_k_folds = _validate_positive_int("dml_k_folds", dml_k_folds)
-    dml_quantile_penalty = _validate_nonnegative_float(
+    designs = validate_designs(designs)
+    estimators = validate_estimators(estimators)
+    n_jobs = validate_positive_int("n_jobs", n_jobs)
+    quantreg_max_iter = validate_positive_int("quantreg_max_iter", quantreg_max_iter)
+    selection_cv = validate_positive_int("selection_cv", selection_cv)
+    selection_max_iter = validate_positive_int("selection_max_iter", selection_max_iter)
+    dml_k_folds = validate_k_folds_for_designs(dml_k_folds, designs)
+    dml_quantile_penalty = validate_nonnegative_float(
         "dml_quantile_penalty", dml_quantile_penalty
     )
-    dml_ridge_alpha = _validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
-    gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
-    append = _validate_bool("append", append)
-    show_quantreg_warnings = _validate_bool(
+    dml_ridge_alpha = validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
+    gmm_ridge = validate_nonnegative_float("gmm_ridge", gmm_ridge)
+    append = validate_bool("append", append)
+    show_quantreg_warnings = validate_bool(
         "show_quantreg_warnings", show_quantreg_warnings
     )
-    if dml_fold_random_state is not None and (
-        not isinstance(dml_fold_random_state, int)
-        or isinstance(dml_fold_random_state, bool)
-    ):
-        raise ValueError("dml_fold_random_state must be an integer or None")
-    alphas = _validate_alpha_candidates(alphas)
+    dml_fold_random_state = validate_optional_nonnegative_int(
+        "dml_fold_random_state", dml_fold_random_state
+    )
+    alphas = validate_alpha_candidates(alphas)
+    path = (
+        validate_output_file_path(output_path)
+        if output_path is not None
+        else None
+    )
 
     rows: list[dict[str, object]] = []
     worker_args = [
@@ -237,7 +174,7 @@ def run_simulation_batch(
                 rows.extend(_run_design_worker(args))
             except Exception as exc:
                 rows.extend(
-                    _failure_rows_for_design(args.design, estimators, alphas, exc)
+                    failure_rows_for_design(args.design, estimators, alphas, exc)
                 )
     else:
         max_workers = min(n_jobs, len(worker_args))
@@ -251,13 +188,12 @@ def run_simulation_batch(
                 try:
                     rows.extend(future.result())
                 except Exception as exc:
-                    rows.extend(_failure_rows_for_design(design, estimators, alphas, exc))
+                    rows.extend(failure_rows_for_design(design, estimators, alphas, exc))
 
     if n_jobs > 1:
         rows.sort(key=_row_sort_key)
     results = pd.DataFrame(rows, columns=RESULT_COLUMNS)
-    if output_path is not None:
-        path = Path(output_path)
+    if path is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         write_header = not (append and path.exists())
         results.to_csv(
@@ -271,6 +207,8 @@ def observed_design_keys(results_path: str | Path) -> set[tuple[object, ...]]:
     path = Path(results_path)
     if not path.exists():
         return set()
+    if path.is_dir():
+        raise ValueError("results_path must be a file")
 
     try:
         existing = pd.read_csv(path, usecols=list(DESIGN_KEY_COLUMNS))
@@ -294,10 +232,14 @@ def filter_completed_designs(
     rerun_failed: bool = False,
 ) -> list[Design]:
     """Return designs that do not yet have all requested estimator rows."""
-    estimators = _validate_estimators(estimators)
+    designs = validate_designs(designs)
+    estimators = validate_estimators(estimators)
+    rerun_failed = validate_bool("rerun_failed", rerun_failed)
     path = Path(results_path)
     if not path.exists():
         return designs
+    if path.is_dir():
+        raise ValueError("results_path must be a file")
 
     required_columns = list(DESIGN_KEY_COLUMNS) + ["estimator"]
     if rerun_failed:

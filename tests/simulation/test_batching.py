@@ -153,7 +153,7 @@ def test_run_simulation_batch_serial_and_parallel_are_equivalent() -> None:
 
 
 def test_run_simulation_batch_rejects_invalid_n_jobs() -> None:
-    with pytest.raises(ValueError, match="n_jobs must be at least 1"):
+    with pytest.raises(ValueError, match="n_jobs must be positive"):
         run_simulation_batch(
             [Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)],
             np.linspace(0.0, 2.0, 5),
@@ -657,5 +657,97 @@ def test_validate_chunk_args_rejects_bool_and_noninteger_values(
 ) -> None:
     with pytest.raises(ValueError):
         validate_chunk_args(chunk_index, num_chunks)
+
+
+def test_run_simulation_batch_rejects_invalid_design_without_output() -> None:
+    with pytest.raises(ValueError, match="design must be a Design object"):
+        run_simulation_batch([object()], np.linspace(0.0, 2.0, 5), n_jobs=1)
+
+
+@pytest.mark.parametrize("dml_k_folds", [1, 81])
+def test_run_simulation_batch_rejects_infeasible_dml_folds(dml_k_folds) -> None:
+    with pytest.raises(ValueError, match="dml_k_folds"):
+        run_simulation_batch(
+            [Design("dgp1", 80, 5, 1.0, 0.5, 0, 123)],
+            np.linspace(0.0, 2.0, 5),
+            dml_k_folds=dml_k_folds,
+            n_jobs=1,
+        )
+
+
+def test_run_simulation_batch_rejects_invalid_output_paths(tmp_path: Path) -> None:
+    design = Design("dgp1", 80, 5, 1.0, 0.5, 0, 123)
+
+    with pytest.raises(ValueError, match="file path"):
+        run_simulation_batch(
+            [design],
+            np.linspace(0.0, 2.0, 5),
+            estimators=("post_selection",),
+            output_path=tmp_path,
+            n_jobs=1,
+        )
+
+    parent_file = tmp_path / "parent"
+    parent_file.write_text("not a directory")
+    with pytest.raises(ValueError, match="parent must be a directory"):
+        run_simulation_batch(
+            [design],
+            np.linspace(0.0, 2.0, 5),
+            estimators=("post_selection",),
+            output_path=parent_file / "results.csv",
+            n_jobs=1,
+        )
+
+
+def test_resume_helpers_reject_directory_paths(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="results_path must be a file"):
+        observed_design_keys(tmp_path)
+    with pytest.raises(ValueError, match="results_path must be a file"):
+        filter_completed_designs(
+            [],
+            tmp_path,
+            estimators=("post_selection",),
+        )
+
+
+def test_filter_completed_designs_rejects_nonboolean_rerun_failed(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="rerun_failed must be a boolean"):
+        filter_completed_designs(
+            [],
+            tmp_path / "missing.csv",
+            estimators=("post_selection",),
+            rerun_failed="yes",
+        )
+
+
+def test_resume_key_parsing_rejects_decimal_integer_fields(tmp_path: Path) -> None:
+    output_path = tmp_path / "invalid_keys.csv"
+    pd.DataFrame(
+        [{
+            "dgp": "dgp1",
+            "n": 80.5,
+            "p": 5,
+            "pi": 1.0,
+            "tau": 0.5,
+            "rep": 0,
+            "seed": 123,
+        }]
+    ).to_csv(output_path, index=False)
+
+    with pytest.raises(ValueError, match="invalid design-key values"):
+        observed_design_keys(output_path)
+
+
+def test_select_design_chunk_rejects_invalid_design_iterables() -> None:
+    with pytest.raises(ValueError, match="iterable"):
+        select_design_chunk("abc", 0, 1)
+    with pytest.raises(ValueError, match="iterable"):
+        select_design_chunk(1, 0, 1)
+
+
+def test_select_design_chunk_accepts_generator() -> None:
+    assert select_design_chunk((value for value in range(5)), 1, 2) == [1, 3]
 
 

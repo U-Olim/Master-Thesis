@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+import utils.validation as validation_module
 from utils.validation import (
     check_finite,
     validate_1d_array,
@@ -123,7 +124,7 @@ def test_validate_k_folds() -> None:
     assert validate_k_folds(5, 10) == 5
     with pytest.raises(ValueError, match="greater than 1"):
         validate_k_folds(2, 1)
-    with pytest.raises(ValueError, match="2 <= k_folds <= n"):
+    with pytest.raises(ValueError, match="positive"):
         validate_k_folds(0, 10)
     with pytest.raises(ValueError, match="2 <= k_folds <= n"):
         validate_k_folds(1, 10)
@@ -136,3 +137,37 @@ def test_validate_nonempty_sequence() -> None:
     assert validate_nonempty_sequence("items", value) is value
     with pytest.raises(ValueError, match="nonempty"):
         validate_nonempty_sequence("items", [])
+
+
+@pytest.mark.parametrize("tau", [True, np.nan, np.inf])
+def test_validate_tau_rejects_bool_and_nonfinite(tau) -> None:
+    with pytest.raises(ValueError, match="tau must satisfy"):
+        validate_tau(tau)
+
+
+@pytest.mark.parametrize(
+    ("k_folds", "n"),
+    [(True, 10), (3.5, 10), (3, True)],
+)
+def test_validate_k_folds_rejects_noninteger_inputs(k_folds, n) -> None:
+    with pytest.raises(ValueError):
+        validate_k_folds(k_folds, n)
+
+
+def test_validate_nonempty_sequence_rejects_string() -> None:
+    with pytest.raises(ValueError, match="nonempty sequence"):
+        validate_nonempty_sequence("items", "abc")
+
+
+def test_validation_all_contains_only_public_names() -> None:
+    assert validation_module.__all__ == [
+        "check_finite",
+        "validate_1d_array",
+        "validate_2d_array",
+        "validate_alpha_grid",
+        "validate_data_arrays",
+        "validate_k_folds",
+        "validate_nonempty_sequence",
+        "validate_positive_int",
+        "validate_tau",
+    ]
