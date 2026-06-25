@@ -26,6 +26,15 @@ class CliRun:
     stderr: str
 
 
+def _system_exit_code(exc: SystemExit) -> int:
+    code = exc.code
+    if code is None:
+        return 0
+    if isinstance(code, int) and not isinstance(code, bool):
+        return code
+    raise AssertionError(f"Expected integer SystemExit code, got {code!r}")
+
+
 @pytest.fixture(scope="module")
 def main_cli():
     return load_main_simulation_cli()
@@ -57,10 +66,11 @@ def _run_cli_in_process(
     with pytest.raises(SystemExit) as exc_info:
         module.main()
 
-    assert exc_info.value.code == expected_exit
+    exit_code = _system_exit_code(exc_info.value)
+    assert exit_code == expected_exit
     captured = capsys.readouterr()
     return CliRun(
-        returncode=int(exc_info.value.code),
+        returncode=exit_code,
         stdout=captured.out,
         stderr=captured.err,
     )

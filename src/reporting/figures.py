@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
-from typing import TypeAlias
+from typing import TypeAlias, cast
 
 import matplotlib
 
@@ -13,6 +13,8 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 from reporting.tables import ESTIMATOR_LABELS
 
@@ -135,8 +137,8 @@ def make_metric_figure(
     pivot = pivot.loc[:, _ordered_estimator_columns(pivot.columns)]
 
     fig_width = max(9.0, min(24.0, 0.45 * len(pivot.index) + 6.0))
-    ax = pivot.plot(kind="bar", figsize=(fig_width, 5.5))
-    fig = ax.get_figure()
+    ax = cast(Axes, pivot.plot(kind="bar", figsize=(fig_width, 5.5)))
+    fig = cast(Figure, ax.get_figure())
     ax.set_title(title or metric)
     ax.set_xlabel("Scenario")
     ax.set_ylabel(title or metric)

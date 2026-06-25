@@ -1,14 +1,39 @@
 """Tests for the CH inverse-IVQR estimator."""
 
+from typing import cast
+
 import numpy as np
 import pytest
 import warnings
 from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp import generate_data
-from dgp.designs import Design
+from dgp.designs import Design, SimData
 from estimators import ch_inverse_ivqr
 from estimators.ch_inverse_ivqr import add_intercept
+
+
+def _call_failed_ch_ivqr_result_with_objects(
+    *,
+    data: object,
+    tau: object,
+    estimator: object,
+    message: object,
+    runtime_seconds: object,
+    alpha_grid_size: object = None,
+    failed_alpha_count: object = None,
+    selected_controls: object = None,
+):
+    return ch_inverse_ivqr.failed_ch_ivqr_result(
+        data=cast(SimData, data),
+        tau=cast(float, tau),
+        estimator=cast(str, estimator),
+        message=cast(str, message),
+        runtime_seconds=cast(float, runtime_seconds),
+        alpha_grid_size=cast(int | None, alpha_grid_size),
+        failed_alpha_count=cast(int | None, failed_alpha_count),
+        selected_controls=cast(int | None, selected_controls),
+    )
 
 
 def test_add_intercept_prepends_ones() -> None:
@@ -89,7 +114,7 @@ def test_failed_ch_ivqr_result_rejects_invalid_diagnostics(
     arguments.update(diagnostics)
 
     with pytest.raises(ValueError, match=message):
-        ch_inverse_ivqr.failed_ch_ivqr_result(**arguments)
+        _call_failed_ch_ivqr_result_with_objects(**arguments)
 
 
 def test_evaluate_full_control_ivqr_alpha_returns_finite_statistic() -> None:

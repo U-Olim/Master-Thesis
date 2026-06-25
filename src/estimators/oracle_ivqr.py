@@ -103,12 +103,17 @@ def estimate_oracle_ivqr(
         u=data.u,
         v=data.v,
     )
+    alphas = (
+        None
+        if alpha_candidates is None
+        else validate_1d_array("alphas", alpha_candidates)
+    )
     result = estimate_ch_ivqr_controls(
         oracle_data,
         tau=tau,
         x_controls=oracle_data.x,
         estimator_name="oracle",
-        alphas=alpha_candidates,
+        alphas=alphas,
         selected_controls=int(indices.size),
         **kwargs,
     )

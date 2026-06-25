@@ -1,13 +1,17 @@
 """Tests for the DML-IVQR estimator."""
 
+from typing import cast
+
 import numpy as np
 import pytest
 
 from dgp import generate_data
-from dgp.designs import Design
+from dgp.designs import Design, SimData
 from estimators.dml_ivqr import (
+    QuantileSolver,
     _build_dml_fold_cache,
     _evaluate_dml_ivqr_alpha_uncached,
+    _failed_result,
     estimate_dml_ivqr,
     evaluate_dml_ivqr_alpha,
     fit_instrument_residualizer,
@@ -15,6 +19,93 @@ from estimators.dml_ivqr import (
     make_folds,
     standardize_train_test,
 )
+
+
+def _call_failed_result_with_objects(
+    *,
+    data: object,
+    tau: object,
+    message: object,
+    runtime_seconds: object,
+    alpha_grid_size: object = None,
+    failed_alpha_count: object = None,
+):
+    return _failed_result(
+        data=cast(SimData, data),
+        tau=cast(float, tau),
+        message=cast(str, message),
+        runtime_seconds=cast(float, runtime_seconds),
+        alpha_grid_size=cast(int | None, alpha_grid_size),
+        failed_alpha_count=cast(int | None, failed_alpha_count),
+    )
+
+
+def _call_evaluate_dml_ivqr_alpha_with_objects(
+    y: object,
+    d: object,
+    z: object,
+    x: object,
+    *,
+    alpha_value: object,
+    tau: object,
+    k_folds: object = 5,
+    fold_random_state: object = 123,
+    quantile_penalty: object = 0.01,
+    ridge_alpha: object = 1.0,
+    quantile_solver: object = "highs",
+    gmm_ridge: object = 1e-8,
+    use_cache: object = True,
+):
+    return evaluate_dml_ivqr_alpha(
+        y=cast(np.ndarray, y),
+        d=cast(np.ndarray, d),
+        z=cast(np.ndarray, z),
+        x=cast(np.ndarray, x),
+        alpha_value=cast(float, alpha_value),
+        tau=cast(float, tau),
+        k_folds=cast(int, k_folds),
+        fold_random_state=cast(int | None, fold_random_state),
+        quantile_penalty=cast(float, quantile_penalty),
+        ridge_alpha=cast(float, ridge_alpha),
+        quantile_solver=cast(QuantileSolver, quantile_solver),
+        gmm_ridge=cast(float, gmm_ridge),
+        use_cache=cast(bool, use_cache),
+    )
+
+
+def _call_estimate_dml_ivqr_with_objects(
+    data: object,
+    *,
+    tau: object,
+    alphas: object = None,
+    alpha_min: object = -2.0,
+    alpha_max: object = 4.0,
+    alpha_step: object = 0.05,
+    confidence_level: object = 0.95,
+    k_folds: object = 5,
+    fold_random_state: object = 123,
+    quantile_penalty: object = 0.01,
+    ridge_alpha: object = 1.0,
+    quantile_solver: object = "highs",
+    gmm_ridge: object = 1e-8,
+    use_cache: object = True,
+):
+    return estimate_dml_ivqr(
+        data=cast(SimData, data),
+        tau=cast(float, tau),
+        alphas=cast(np.ndarray | None, alphas),
+        alpha_min=cast(float, alpha_min),
+        alpha_max=cast(float, alpha_max),
+        alpha_step=cast(float, alpha_step),
+        confidence_level=cast(float, confidence_level),
+        k_folds=cast(int, k_folds),
+        fold_random_state=cast(int | None, fold_random_state),
+        quantile_penalty=cast(float, quantile_penalty),
+        ridge_alpha=cast(float, ridge_alpha),
+        quantile_solver=cast(QuantileSolver, quantile_solver),
+        gmm_ridge=cast(float, gmm_ridge),
+        use_cache=cast(bool, use_cache),
+    )
 
 
 def test_make_folds_covers_each_observation_once() -> None:
@@ -120,7 +211,7 @@ def test_evaluate_dml_ivqr_alpha_rejects_nonfinite_alpha(
     )
 
     with pytest.raises(ValueError, match="alpha_value must be finite"):
-        evaluate_dml_ivqr_alpha(
+        _call_evaluate_dml_ivqr_alpha_with_objects(
             data.y,
             data.d,
             data.z,
@@ -154,7 +245,7 @@ def test_evaluate_dml_ivqr_alpha_rejects_invalid_penalties(
     )
 
     with pytest.raises(ValueError, match=f"{argument} must"):
-        evaluate_dml_ivqr_alpha(
+        _call_evaluate_dml_ivqr_alpha_with_objects(
             data.y,
             data.d,
             data.z,
@@ -173,7 +264,7 @@ def test_evaluate_dml_ivqr_alpha_rejects_invalid_solver(solver: str) -> None:
     )
 
     with pytest.raises(ValueError, match="Unknown quantile solver"):
-        evaluate_dml_ivqr_alpha(
+        _call_evaluate_dml_ivqr_alpha_with_objects(
             data.y,
             data.d,
             data.z,
@@ -253,7 +344,7 @@ def test_evaluate_dml_ivqr_rejects_nonboolean_use_cache(
     )
 
     with pytest.raises(ValueError, match="use_cache must be a boolean"):
-        evaluate_dml_ivqr_alpha(
+        _call_evaluate_dml_ivqr_alpha_with_objects(
             data.y,
             data.d,
             data.z,
@@ -387,7 +478,7 @@ def test_estimate_dml_ivqr_rejects_invalid_alpha_grid_bounds(
     )
 
     with pytest.raises(ValueError, match=message):
-        estimate_dml_ivqr(
+        _call_estimate_dml_ivqr_with_objects(
             data,
             tau=0.5,
             k_folds=3,
@@ -404,7 +495,7 @@ def test_estimate_dml_ivqr_rejects_nonboolean_use_cache(
     )
 
     with pytest.raises(ValueError, match="use_cache must be a boolean"):
-        estimate_dml_ivqr(
+        _call_estimate_dml_ivqr_with_objects(
             data,
             tau=0.5,
             alphas=np.linspace(0.0, 2.0, 3),
@@ -425,7 +516,7 @@ def test_estimate_dml_ivqr_rejects_invalid_fold_random_state(
         ValueError,
         match="fold_random_state must be an integer or None",
     ):
-        estimate_dml_ivqr(
+        _call_estimate_dml_ivqr_with_objects(
             data,
             tau=0.5,
             alphas=np.linspace(0.0, 2.0, 3),
@@ -535,8 +626,6 @@ def test_dml_failed_result_rejects_invalid_diagnostics(
     diagnostics: dict[str, int | float],
     message: str,
 ) -> None:
-    import estimators.dml_ivqr as dml_module
-
     data = generate_data(
         Design("dgp1", n=20, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     )
@@ -551,7 +640,7 @@ def test_dml_failed_result_rejects_invalid_diagnostics(
     arguments.update(diagnostics)
 
     with pytest.raises(ValueError, match=message):
-        dml_module._failed_result(**arguments)
+        _call_failed_result_with_objects(**arguments)
 
 
 def test_estimate_dml_ivqr_all_alpha_points_fail_cleanly(

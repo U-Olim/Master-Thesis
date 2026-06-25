@@ -1,14 +1,41 @@
 """Tests for the full-control IVQR estimator."""
 
+from typing import cast
+
 import numpy as np
 import pytest
 import warnings
 
 from dgp import generate_data
-from dgp.designs import Design
+from dgp.designs import Design, SimData
 from estimators import ch_inverse_ivqr
 from estimators.base import EstimationResult
 from estimators.full_control_ivqr import estimate_full_control_ivqr
+
+
+def _call_estimate_full_control_ivqr_with_objects(
+    *,
+    data: object,
+    tau: object = 0.5,
+    alphas: object = None,
+    alpha_min: object = -2.0,
+    alpha_max: object = 4.0,
+    alpha_step: object = 0.05,
+    confidence_level: object = 0.95,
+    max_iter: object = 1000,
+    gmm_ridge: object = 1e-8,
+):
+    return estimate_full_control_ivqr(
+        data=cast(SimData, data),
+        tau=cast(float, tau),
+        alphas=cast(np.ndarray | None, alphas),
+        alpha_min=cast(float, alpha_min),
+        alpha_max=cast(float, alpha_max),
+        alpha_step=cast(float, alpha_step),
+        confidence_level=cast(float, confidence_level),
+        max_iter=cast(int, max_iter),
+        gmm_ridge=cast(float, gmm_ridge),
+    )
 
 
 def test_estimate_full_control_ivqr_returns_estimation_result() -> None:
@@ -184,8 +211,8 @@ def test_estimate_full_control_ivqr_invalid_max_iter_raises_value_error(
     data = generate_data(design)
 
     with pytest.raises(ValueError, match="max_iter must"):
-        estimate_full_control_ivqr(
-            data,
+        _call_estimate_full_control_ivqr_with_objects(
+            data=data,
             tau=0.5,
             alphas=np.linspace(0.0, 2.0, 5),
             max_iter=max_iter,
@@ -201,8 +228,8 @@ def test_estimate_full_control_ivqr_rejects_invalid_gmm_ridge(
     )
 
     with pytest.raises(ValueError, match="gmm_ridge must be finite and nonnegative"):
-        estimate_full_control_ivqr(
-            data,
+        _call_estimate_full_control_ivqr_with_objects(
+            data=data,
             tau=0.5,
             alphas=np.linspace(0.0, 2.0, 3),
             gmm_ridge=gmm_ridge,
@@ -224,8 +251,8 @@ def test_estimate_full_control_ivqr_rejects_invalid_confidence_level(
         ValueError,
         match="confidence_level must satisfy 0 < confidence_level < 1",
     ):
-        estimate_full_control_ivqr(
-            data,
+        _call_estimate_full_control_ivqr_with_objects(
+            data=data,
             tau=0.5,
             alphas=np.linspace(0.0, 2.0, 3),
             confidence_level=confidence_level,
@@ -258,8 +285,8 @@ def test_estimate_full_control_ivqr_rejects_invalid_alpha_grid_bounds(
     )
 
     with pytest.raises(ValueError, match=message):
-        estimate_full_control_ivqr(
-            data,
+        _call_estimate_full_control_ivqr_with_objects(
+            data=data,
             tau=0.5,
             **arguments,
         )

@@ -1,6 +1,8 @@
 """Tests for simulation batching, resume, and output planning."""
 
+from collections.abc import Iterable
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -37,6 +39,54 @@ STABLE_ROW_SORT_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep", "seed", "estimat
 
 def _sort_result_rows(results: pd.DataFrame) -> pd.DataFrame:
     return results.sort_values(STABLE_ROW_SORT_COLUMNS).reset_index(drop=True)
+
+
+def _call_run_simulation_batch_with_objects(
+    *,
+    designs: object,
+    alphas: object,
+    estimators: object = ("post_selection",),
+    output_path: object = None,
+    append: object = False,
+    dml_k_folds: object = 3,
+    n_jobs: object = 1,
+):
+    return run_simulation_batch(
+        designs=cast(list[Design], designs),
+        alphas=cast(np.ndarray, alphas),
+        estimators=cast(tuple[str, ...], estimators),
+        output_path=cast(str | Path | None, output_path),
+        append=cast(bool, append),
+        dml_k_folds=cast(int, dml_k_folds),
+        n_jobs=cast(int, n_jobs),
+    )
+
+
+def _call_filter_completed_designs_with_objects(
+    *,
+    designs: object,
+    results_path: object,
+    estimators: object = ("post_selection",),
+    rerun_failed: object = False,
+):
+    return filter_completed_designs(
+        designs=cast(list[Design], designs),
+        results_path=cast(str | Path, results_path),
+        estimators=cast(tuple[str, ...], estimators),
+        rerun_failed=cast(bool, rerun_failed),
+    )
+
+
+def _call_select_design_chunk_with_objects(
+    designs: object,
+    chunk_index: object,
+    num_chunks: object,
+):
+    return select_design_chunk(
+        cast(Iterable[object], designs),
+        cast(int | None, chunk_index),
+        cast(int | None, num_chunks),
+    )
 
 
 def test_run_small_simulation_does_not_write_files(tmp_path: Path, monkeypatch) -> None:
@@ -568,9 +618,9 @@ def test_full_control_dry_run_reports_default_output(
 @pytest.mark.parametrize("n_jobs", [True, 0, 1.5])
 def test_run_simulation_batch_rejects_strictly_invalid_n_jobs(n_jobs) -> None:
     with pytest.raises(ValueError):
-        run_simulation_batch(
-            [Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)],
-            np.linspace(0.0, 2.0, 5),
+        _call_run_simulation_batch_with_objects(
+            designs=[Design("dgp1", 80, 5, 1.0, 0.5, rep=0, seed=123)],
+            alphas=np.linspace(0.0, 2.0, 5),
             estimators=("post_selection",),
             n_jobs=n_jobs,
         )
@@ -578,9 +628,9 @@ def test_run_simulation_batch_rejects_strictly_invalid_n_jobs(n_jobs) -> None:
 
 def test_run_simulation_batch_rejects_nonboolean_append() -> None:
     with pytest.raises(ValueError, match="append must be a boolean"):
-        run_simulation_batch(
-            [],
-            np.linspace(0.0, 2.0, 5),
+        _call_run_simulation_batch_with_objects(
+            designs=[],
+            alphas=np.linspace(0.0, 2.0, 5),
             append="yes",
         )
 
@@ -667,7 +717,11 @@ def test_validate_chunk_args_rejects_bool_and_noninteger_values(
 
 def test_run_simulation_batch_rejects_invalid_design_without_output() -> None:
     with pytest.raises(ValueError, match="design must be a Design object"):
-        run_simulation_batch([object()], np.linspace(0.0, 2.0, 5), n_jobs=1)
+        _call_run_simulation_batch_with_objects(
+            designs=[object()],
+            alphas=np.linspace(0.0, 2.0, 5),
+            n_jobs=1,
+        )
 
 
 @pytest.mark.parametrize("dml_k_folds", [1, 81])
@@ -720,9 +774,9 @@ def test_filter_completed_designs_rejects_nonboolean_rerun_failed(
     tmp_path: Path,
 ) -> None:
     with pytest.raises(ValueError, match="rerun_failed must be a boolean"):
-        filter_completed_designs(
-            [],
-            tmp_path / "missing.csv",
+        _call_filter_completed_designs_with_objects(
+            designs=[],
+            results_path=tmp_path / "missing.csv",
             estimators=("post_selection",),
             rerun_failed="yes",
         )
@@ -752,7 +806,7 @@ def test_select_design_chunk_rejects_invalid_design_iterables() -> None:
     with pytest.raises(ValueError, match="iterable"):
         select_design_chunk("abc", 0, 1)
     with pytest.raises(ValueError, match="iterable"):
-        select_design_chunk(1, 0, 1)
+        _call_select_design_chunk_with_objects(1, 0, 1)
 
 
 def test_select_design_chunk_accepts_generator() -> None:

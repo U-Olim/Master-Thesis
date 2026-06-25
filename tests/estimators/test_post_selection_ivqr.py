@@ -1,16 +1,40 @@
 """Tests for the post-selection IVQR estimator."""
 
+from typing import cast
+
 import numpy as np
 import pytest
 
 from dgp import generate_data
-from dgp.designs import Design
+from dgp.designs import Design, SimData
 from estimators import ch_inverse_ivqr
+import estimators.post_selection_ivqr as post_module
 from estimators.post_selection_ivqr import (
     estimate_post_selection_ivqr,
     evaluate_post_selection_alpha,
     select_controls_lasso,
 )
+
+
+def _call_failed_result_with_objects(
+    *,
+    data: object,
+    tau: object,
+    message: object,
+    selected_controls: object = None,
+    runtime_seconds: object = 0.0,
+    alpha_grid_size: object = None,
+    failed_alpha_count: object = None,
+):
+    return post_module._failed_result(
+        data=cast(SimData, data),
+        tau=cast(float, tau),
+        message=cast(str, message),
+        selected_controls=cast(int | None, selected_controls),
+        runtime_seconds=cast(float, runtime_seconds),
+        alpha_grid_size=cast(int | None, alpha_grid_size),
+        failed_alpha_count=cast(int | None, failed_alpha_count),
+    )
 
 
 def test_select_controls_lasso_returns_valid_indices() -> None:
@@ -237,8 +261,6 @@ def test_post_selection_failed_result_rejects_invalid_diagnostics(
     diagnostics: dict[str, int | float],
     message: str,
 ) -> None:
-    import estimators.post_selection_ivqr as post_module
-
     data = generate_data(
         Design("dgp1", n=20, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
     )
@@ -254,7 +276,7 @@ def test_post_selection_failed_result_rejects_invalid_diagnostics(
     arguments.update(diagnostics)
 
     with pytest.raises(ValueError, match=message):
-        post_module._failed_result(**arguments)
+        _call_failed_result_with_objects(**arguments)
 
 
 def test_post_selection_qr_feasibility_counts_instruments(

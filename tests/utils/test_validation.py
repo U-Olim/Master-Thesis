@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Any, cast
+
 import numpy as np
 import pytest
 
@@ -199,8 +202,9 @@ def test_validate_nonempty_sequence_rejects_bytes() -> None:
 
 
 def test_validate_nonempty_sequence_rejects_generator() -> None:
+    generator = (item for item in [1])
     with pytest.raises(ValueError, match="sequence"):
-        validate_nonempty_sequence("items", (item for item in [1]))
+        validate_nonempty_sequence("items", cast(Sequence[Any], generator))
 
 
 def test_validation_all_contains_only_public_names() -> None:

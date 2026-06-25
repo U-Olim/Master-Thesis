@@ -308,6 +308,8 @@ def test_invert_score_test_interpolates_off_grid_coverage() -> None:
     region = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=0.95)
 
     assert region.selected_grid.tolist() == [1.0]
+    assert region.lower is not None
+    assert region.upper is not None
     assert region.lower < 0.95 < region.upper
     assert region.covers_true is True
 

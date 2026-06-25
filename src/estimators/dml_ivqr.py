@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 from sklearn.linear_model import QuantileRegressor, Ridge
@@ -52,13 +52,13 @@ QuantileSolver = Literal[
     "interior-point",
     "revised simplex",
 ]
-_VALID_QUANTILE_SOLVERS = {
+_VALID_QUANTILE_SOLVERS: tuple[QuantileSolver, ...] = (
     "highs-ds",
     "highs-ipm",
     "highs",
     "interior-point",
     "revised simplex",
-}
+)
 
 
 def _validate_nonnegative_float(name: str, value: float) -> float:
@@ -120,10 +120,10 @@ def _validate_alpha_grid_bounds(
     return alpha_min, alpha_max, alpha_step
 
 
-def _validate_quantile_solver(solver: str) -> str:
+def _validate_quantile_solver(solver: str) -> QuantileSolver:
     if solver not in _VALID_QUANTILE_SOLVERS:
         raise ValueError(f"Unknown quantile solver: {solver}")
-    return solver
+    return cast(QuantileSolver, solver)
 
 
 def _validate_scalar_instrument(

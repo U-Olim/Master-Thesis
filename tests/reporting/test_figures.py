@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import cast
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -6,6 +7,7 @@ import pytest
 
 from reporting.figures import (
     DEFAULT_FIGURE_METRICS,
+    FigureMetricSpec,
     make_metric_figure,
     write_figures,
 )
@@ -119,7 +121,11 @@ def test_write_figures_accepts_custom_specs(tmp_path: Path) -> None:
 def test_write_figures_rejects_invalid_metric_specs(metrics, tmp_path: Path) -> None:
     expected = TypeError if isinstance(metrics, list) else ValueError
     with pytest.raises(expected):
-        write_figures(make_summary(), tmp_path, metrics=metrics)
+        write_figures(
+            make_summary(),
+            tmp_path,
+            metrics=cast(dict[str, FigureMetricSpec] | None, metrics),
+        )
 
 def test_make_metric_figure_closes_figure(tmp_path: Path) -> None:
     before = set(plt.get_fignums())
