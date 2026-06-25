@@ -1,11 +1,20 @@
-"""Shared pytest configuration."""
+"""Shared pytest configuration for local and CI test runs."""
 
-from pathlib import Path
+from __future__ import annotations
+
 import sys
+from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_DIR = PROJECT_ROOT / "src"
 
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+
+def _prepend_sys_path(path: Path) -> None:
+    resolved = str(path.resolve())
+    existing = {str(Path(entry).resolve()) for entry in sys.path if entry}
+    if resolved not in existing:
+        sys.path.insert(0, resolved)
+
+
+_prepend_sys_path(SRC_DIR)

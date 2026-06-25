@@ -1,10 +1,7 @@
-"""Tests for DGP formulas, coefficients, generated data, and true parameters."""
-
-from math import sqrt
+from __future__ import annotations
 
 import numpy as np
 import pytest
-from scipy.stats import norm, t
 
 from dgp import (
     generate_coefficients,
@@ -13,33 +10,8 @@ from dgp import (
     generate_x,
     make_covariance_matrix,
 )
-from dgp.designs import Design
 from dgp.generators import _structural_outcome, _treatment_from_latent_index
-from dgp.true_parameters import true_alpha
-from dgp.true_parameters import get_oracle_control_count, get_oracle_control_indices
-def test_get_oracle_control_indices_returns_true_active_support() -> None:
-    np.testing.assert_array_equal(
-        get_oracle_control_indices("dgp1", p=100),
-        np.arange(10),
-    )
-    np.testing.assert_array_equal(
-        get_oracle_control_indices("dgp2", p=100),
-        np.arange(20),
-    )
-    np.testing.assert_array_equal(
-        get_oracle_control_indices("dgp3", p=100),
-        np.arange(10),
-    )
-    assert get_oracle_control_count("dgp2", p=100) == 20
-
-
-def test_get_oracle_control_indices_rejects_invalid_inputs() -> None:
-    with pytest.raises(ValueError, match="Unknown DGP"):
-        get_oracle_control_indices("bad_dgp", p=100)
-    with pytest.raises(ValueError, match="requires at least 10 controls"):
-        get_oracle_control_indices("dgp1", p=9)
-    with pytest.raises(ValueError, match="requires at least 20 controls"):
-        get_oracle_control_indices("dgp2", p=19)
+from tests.dgp.helpers import design
 
 
 def test_covariance_matrix_shape_and_values() -> None:
@@ -75,12 +47,8 @@ def test_dgp2_is_denser_than_dgp1() -> None:
 
     assert np.count_nonzero(dgp2_coefs["beta"]) == 20
     assert np.count_nonzero(dgp2_coefs["gamma"]) == 20
-    assert np.count_nonzero(dgp2_coefs["beta"]) > np.count_nonzero(
-        dgp1_coefs["beta"]
-    )
-    assert np.count_nonzero(dgp2_coefs["gamma"]) > np.count_nonzero(
-        dgp1_coefs["gamma"]
-    )
+    assert np.count_nonzero(dgp2_coefs["beta"]) > np.count_nonzero(dgp1_coefs["beta"])
+    assert np.count_nonzero(dgp2_coefs["gamma"]) > np.count_nonzero(dgp1_coefs["gamma"])
 
 
 def test_dgp2_coefficients_match_denser_sparse_design() -> None:
@@ -140,8 +108,8 @@ def test_dgp3_errors_are_finite() -> None:
 
 
 def test_dgp3_uses_heavy_tailed_marginals() -> None:
-    design_dgp1 = Design(dgp="dgp1", n=20_000, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
-    design_dgp3 = Design(dgp="dgp3", n=20_000, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
+    design_dgp1 = design(n=20_000)
+    design_dgp3 = design(dgp="dgp3", n=20_000)
 
     data_dgp1 = generate_data(design_dgp1)
     data_dgp3 = generate_data(design_dgp3)
@@ -161,9 +129,9 @@ def test_dgp3_uses_heavy_tailed_marginals() -> None:
 
 
 def test_full_data_generation_shapes() -> None:
-    design = Design(dgp="dgp1", n=100, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
+    design_obj = design()
 
-    data = generate_data(design)
+    data = generate_data(design_obj)
 
     assert data.x.shape == (100, 20)
     assert data.y.shape == (100,)
@@ -177,27 +145,27 @@ def test_full_data_generation_shapes() -> None:
 
 
 def test_binary_treatment() -> None:
-    design = Design(dgp="dgp1", n=100, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
-    data = generate_data(design)
+    design_obj = design()
+    data = generate_data(design_obj)
 
     assert set(np.unique(data.d)).issubset({0, 1})
 
 
 @pytest.mark.parametrize("pi", [1.0, 0.5, 0.25, 0.10])
 def test_treatment_share_is_nondegenerate_for_dgp1(pi: float) -> None:
-    design = Design(dgp="dgp1", n=2000, p=50, pi=pi, tau=0.5, rep=0, seed=123)
+    design_obj = design(n=2000, p=50, pi=pi)
 
-    data = generate_data(design)
+    data = generate_data(design_obj)
     share = data.d.mean()
 
     assert 0.10 < share < 0.90
 
 
 def test_generate_data_is_reproducible() -> None:
-    design = Design(dgp="dgp1", n=100, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
+    design_obj = design()
 
-    data1 = generate_data(design)
-    data2 = generate_data(design)
+    data1 = generate_data(design_obj)
+    data2 = generate_data(design_obj)
 
     assert np.allclose(data1.y, data2.y)
     assert np.allclose(data1.d, data2.d)
@@ -206,8 +174,8 @@ def test_generate_data_is_reproducible() -> None:
 
 
 def test_different_seed_gives_different_data() -> None:
-    design1 = Design(dgp="dgp1", n=100, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
-    design2 = Design(dgp="dgp1", n=100, p=20, pi=0.5, tau=0.5, rep=0, seed=456)
+    design1 = design()
+    design2 = design(seed=456)
 
     data1 = generate_data(design1)
     data2 = generate_data(design2)
@@ -216,17 +184,17 @@ def test_different_seed_gives_different_data() -> None:
 
 
 def test_median_true_alpha_is_one() -> None:
-    design = Design(dgp="dgp1", n=100, p=20, pi=0.5, tau=0.5, rep=0, seed=123)
+    design_obj = design()
 
-    data = generate_data(design)
+    data = generate_data(design_obj)
 
     assert data.alpha_true == pytest.approx(1.0)
 
 
 def test_data_arrays_are_invariant_to_tau_for_same_seed() -> None:
-    design_25 = Design(dgp="dgp1", n=500, p=50, pi=0.5, tau=0.25, rep=0, seed=123)
-    design_50 = Design(dgp="dgp1", n=500, p=50, pi=0.5, tau=0.50, rep=0, seed=123)
-    design_75 = Design(dgp="dgp1", n=500, p=50, pi=0.5, tau=0.75, rep=0, seed=123)
+    design_25 = design(n=500, p=50, tau=0.25)
+    design_50 = design(n=500, p=50, tau=0.50)
+    design_75 = design(n=500, p=50, tau=0.75)
 
     data_25 = generate_data(design_25)
     data_50 = generate_data(design_50)
@@ -283,9 +251,9 @@ def test_treatment_formula_matches_latent_index() -> None:
 
 
 def test_dgp3_outcome_is_invariant_to_tau_for_same_seed() -> None:
-    design_25 = Design(dgp="dgp3", n=500, p=50, pi=0.5, tau=0.25, rep=0, seed=123)
-    design_50 = Design(dgp="dgp3", n=500, p=50, pi=0.5, tau=0.50, rep=0, seed=123)
-    design_75 = Design(dgp="dgp3", n=500, p=50, pi=0.5, tau=0.75, rep=0, seed=123)
+    design_25 = design(dgp="dgp3", n=500, p=50, tau=0.25)
+    design_50 = design(dgp="dgp3", n=500, p=50, tau=0.50)
+    design_75 = design(dgp="dgp3", n=500, p=50, tau=0.75)
 
     data_25 = generate_data(design_25)
     data_50 = generate_data(design_50)
@@ -355,82 +323,8 @@ def test_invalid_df_for_dgp3_raises_value_error(df: int) -> None:
 
 def test_generate_data_invalid_design_values_raise_value_error() -> None:
     with pytest.raises(ValueError):
-        generate_data(Design(dgp="dgp1", n=0, p=20, pi=0.5, tau=0.5, rep=0, seed=123))
+        generate_data(design(n=0))
     with pytest.raises(ValueError):
-        generate_data(Design(dgp="dgp1", n=100, p=0, pi=0.5, tau=0.5, rep=0, seed=123))
+        generate_data(design(p=0))
     with pytest.raises(ValueError):
-        generate_data(
-            Design(dgp="dgp1", n=100, p=20, pi=-0.1, tau=0.5, rep=0, seed=123)
-        )
-
-
-def test_design_can_be_instantiated() -> None:
-    design = Design(dgp="dgp1", n=250, p=200, pi=1.0, tau=0.5, rep=0, seed=123)
-
-    assert design.dgp == "dgp1"
-    assert design.n == 250
-    assert design.p == 200
-    assert design.pi == 1.0
-    assert design.tau == 0.5
-    assert design.rep == 0
-    assert design.seed == 123
-
-
-def test_median_effects_equal_one() -> None:
-    assert true_alpha(0.5, "dgp1") == pytest.approx(1.0)
-    assert true_alpha(0.5, "dgp2") == pytest.approx(1.0)
-    assert true_alpha(0.5, "dgp3") == pytest.approx(1.0)
-
-
-def test_dgp2_true_alpha_equals_dgp1() -> None:
-    for tau in [0.25, 0.5, 0.75]:
-        assert true_alpha(tau, "dgp1") == pytest.approx(true_alpha(tau, "dgp2"))
-
-
-def test_dgp1_true_alpha_formula() -> None:
-    assert true_alpha(0.25, "dgp1") == pytest.approx(1.0 + norm.ppf(0.25))
-    assert true_alpha(0.75, "dgp1") == pytest.approx(1.0 + norm.ppf(0.75))
-
-
-def test_dgp3_true_alpha_uses_scaled_student_t() -> None:
-    scale = sqrt((5 - 2) / 5)
-
-    assert true_alpha(0.25, "dgp3", df=5) == pytest.approx(
-        1.0 + scale * t.ppf(0.25, df=5)
-    )
-    assert true_alpha(0.75, "dgp3", df=5) == pytest.approx(
-        1.0 + scale * t.ppf(0.75, df=5)
-    )
-
-
-def test_dgp_names_are_case_insensitive() -> None:
-    assert true_alpha(0.5, "DGP1") == pytest.approx(1.0)
-    assert true_alpha(0.5, "Dgp3") == pytest.approx(1.0)
-
-
-@pytest.mark.parametrize("tau", [0.0, 1.0, -0.1, 1.1])
-def test_invalid_tau_raises_value_error(tau: float) -> None:
-    with pytest.raises(ValueError):
-        true_alpha(tau, "dgp1")
-
-
-def test_true_alpha_invalid_dgp_raises_value_error() -> None:
-    with pytest.raises(ValueError):
-        true_alpha(0.5, "wrong_dgp")
-
-
-@pytest.mark.parametrize("dgp", [None, 123])
-def test_true_alpha_non_string_dgp_raises_value_error(dgp: object) -> None:
-    with pytest.raises(ValueError):
-        true_alpha(0.5, dgp)  # type: ignore[arg-type]
-
-
-@pytest.mark.parametrize("df", [2, 1])
-def test_invalid_student_t_degrees_of_freedom_raise_value_error(df: int) -> None:
-    with pytest.raises(ValueError):
-        true_alpha(0.5, "dgp3", df=df)
-
-
-def test_true_alpha_returns_python_float() -> None:
-    assert isinstance(true_alpha(0.25, "dgp1"), float)
-    assert isinstance(true_alpha(0.25, "dgp3"), float)
+        generate_data(design(pi=-0.1))

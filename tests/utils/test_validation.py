@@ -1,4 +1,4 @@
-# Consolidated tests for validation utilities.
+from __future__ import annotations
 
 import numpy as np
 import pytest
@@ -50,6 +50,11 @@ def test_validate_alpha_grid_rejects_invalid_grids(alphas: object) -> None:
         validate_alpha_grid(alphas)
 
 
+def test_validate_alpha_grid_rejects_infinite_values() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        validate_alpha_grid([0.0, np.inf])
+
+
 def test_validate_1d_array_returns_finite_float_array() -> None:
     array = validate_1d_array("x", [1, 2, 3], length=3)
 
@@ -66,6 +71,11 @@ def test_validate_1d_array_rejects_wrong_shape_length_and_nonfinite() -> None:
         validate_1d_array("x", [1.0, np.inf])
 
 
+def test_validate_1d_array_rejects_nonconvertible_values() -> None:
+    with pytest.raises((TypeError, ValueError)):
+        validate_1d_array("x", ["not-a-number"])
+
+
 def test_validate_2d_array_returns_finite_float_matrix() -> None:
     matrix = validate_2d_array("x", [[1, 2], [3, 4]], n_rows=2)
 
@@ -80,6 +90,11 @@ def test_validate_2d_array_rejects_wrong_shape_rows_and_nonfinite() -> None:
         validate_2d_array("x", [[1.0]], n_rows=2)
     with pytest.raises(ValueError, match="finite"):
         validate_2d_array("x", [[1.0, np.nan]])
+
+
+def test_validate_2d_array_rejects_nonconvertible_values() -> None:
+    with pytest.raises((TypeError, ValueError)):
+        validate_2d_array("x", [["not-a-number"]])
 
 
 def test_validate_data_arrays_without_instrument_checks_lengths() -> None:
@@ -99,6 +114,20 @@ def test_validate_data_arrays_with_instrument_checks_lengths() -> None:
     assert x.shape == (2, 1)
 
 
+def test_validate_data_arrays_with_instrument_return_order_is_y_d_z_x() -> None:
+    y, d, z, x = validate_data_arrays(
+        [1.0, 2.0],
+        [0.0, 1.0],
+        [[1.0], [2.0]],
+        [0.5, -0.5],
+    )
+
+    assert np.allclose(y, [1.0, 2.0])
+    assert np.allclose(d, [0.0, 1.0])
+    assert np.allclose(z, [0.5, -0.5])
+    assert np.allclose(x, [[1.0], [2.0]])
+
+
 def test_validate_data_arrays_rejects_mismatched_lengths() -> None:
     with pytest.raises(ValueError, match="consistent row counts"):
         validate_data_arrays([1, 2], [0, 1], [[1]])
@@ -109,6 +138,11 @@ def test_validate_data_arrays_rejects_mismatched_lengths() -> None:
 def test_check_finite_rejects_nonfinite_values() -> None:
     with pytest.raises(ValueError, match="finite"):
         check_finite("x", np.array([1.0, np.nan]))
+
+
+def test_check_finite_returns_original_array() -> None:
+    array = np.array([1.0, 2.0])
+    assert check_finite("x", array) is array
 
 
 def test_validate_positive_int() -> None:
@@ -159,8 +193,18 @@ def test_validate_nonempty_sequence_rejects_string() -> None:
         validate_nonempty_sequence("items", "abc")
 
 
+def test_validate_nonempty_sequence_rejects_bytes() -> None:
+    with pytest.raises(ValueError, match="nonempty sequence"):
+        validate_nonempty_sequence("items", b"abc")
+
+
+def test_validate_nonempty_sequence_rejects_generator() -> None:
+    with pytest.raises(ValueError, match="sequence"):
+        validate_nonempty_sequence("items", (item for item in [1]))
+
+
 def test_validation_all_contains_only_public_names() -> None:
-    assert validation_module.__all__ == [
+    expected = {
         "check_finite",
         "validate_1d_array",
         "validate_2d_array",
@@ -170,4 +214,9 @@ def test_validation_all_contains_only_public_names() -> None:
         "validate_nonempty_sequence",
         "validate_positive_int",
         "validate_tau",
-    ]
+    }
+
+    assert set(validation_module.__all__) == expected
+    assert all(not name.startswith("_") for name in validation_module.__all__)
+    for name in validation_module.__all__:
+        assert hasattr(validation_module, name)
