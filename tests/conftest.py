@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = PROJECT_ROOT / "src"
+TEST_CACHE_DIR = PROJECT_ROOT / ".pytest_tmp"
+MPL_CACHE_DIR = TEST_CACHE_DIR / "matplotlib"
+
+
+os.environ.setdefault("MPLBACKEND", "Agg")
+MPL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("MPLCONFIGDIR", str(MPL_CACHE_DIR))
 
 
 def _prepend_sys_path(path: Path) -> None:
@@ -18,3 +28,12 @@ def _prepend_sys_path(path: Path) -> None:
 
 
 _prepend_sys_path(SRC_DIR)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_configure(config: pytest.Config) -> None:
+    """Create the Matplotlib cache after pytest initializes and clears basetemp."""
+    tmp_path_factory = getattr(config, "_tmp_path_factory", None)
+    if tmp_path_factory is not None:
+        tmp_path_factory.getbasetemp()
+    MPL_CACHE_DIR.mkdir(parents=True, exist_ok=True)

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -45,3 +46,9 @@ def test_cli_loader_helpers_return_modules_with_main() -> None:
 
     assert callable(main_cli.main)
     assert callable(full_control_cli.main)
+
+
+def test_matplotlib_test_cache_is_isolated() -> None:
+    assert os.environ["MPLBACKEND"] == "Agg"
+    assert ".pytest_tmp" in os.environ["MPLCONFIGDIR"]
+    assert Path(os.environ["MPLCONFIGDIR"]).exists()

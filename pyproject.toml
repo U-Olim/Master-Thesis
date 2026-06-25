@@ -17,7 +17,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "--basetemp=.pytest_tmp"
+addopts = "--basetemp=.pytest_tmp -p no:ddtrace"
 markers = [
     "slow: long-running simulation or subprocess smoke tests",
 ]
