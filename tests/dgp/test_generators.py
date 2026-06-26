@@ -161,16 +161,19 @@ def test_treatment_share_is_nondegenerate_for_dgp1(pi: float) -> None:
     assert 0.10 < share < 0.90
 
 
-def test_generate_data_is_reproducible() -> None:
-    design_obj = design()
+@pytest.mark.parametrize("dgp", ["dgp1", "dgp2", "dgp3"])
+def test_generate_data_is_reproducible_for_same_seed(dgp: str) -> None:
+    design_obj = design(dgp=dgp, n=100, p=20, pi=0.5, tau=0.25, seed=12345)
 
     data1 = generate_data(design_obj)
     data2 = generate_data(design_obj)
 
-    assert np.allclose(data1.y, data2.y)
-    assert np.allclose(data1.d, data2.d)
-    assert np.allclose(data1.z, data2.z)
-    assert np.allclose(data1.x, data2.x)
+    np.testing.assert_array_equal(data1.y, data2.y)
+    np.testing.assert_array_equal(data1.d, data2.d)
+    np.testing.assert_array_equal(data1.x, data2.x)
+    np.testing.assert_array_equal(data1.z, data2.z)
+    np.testing.assert_array_equal(data1.u, data2.u)
+    np.testing.assert_array_equal(data1.v, data2.v)
 
 
 def test_different_seed_gives_different_data() -> None:

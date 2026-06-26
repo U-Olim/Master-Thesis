@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import config
+import pytest
 import simulation.config as sim_config
 from simulation.config import (
+    DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_GRID_SIZE,
+    DEFAULT_ALPHA_MIN,
     DEFAULT_BATCH_SIZE,
-    DEFAULT_CHUNK_COUNT,
     DEFAULT_DML_K_FOLDS,
     DEFAULT_N_JOBS,
     DEFAULT_OUTPUT,
@@ -27,7 +29,6 @@ from simulation.config import (
     FULL_SUMMARY_OUTPUT,
     FULL_TABLES_DIR,
     DGPS,
-    K_FOLDS,
     MAIN_ESTIMATORS,
     N_VALUES,
     PI_VALUES,
@@ -39,9 +40,14 @@ from simulation.config import (
 )
 
 
-def test_default_alpha_grid_size_is_nine() -> None:
-    assert DEFAULT_ALPHA_GRID_SIZE == 9
-    assert FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE == 9
+def test_default_alpha_grid_is_81_points_on_minus_one_to_three() -> None:
+    assert DEFAULT_ALPHA_MIN == -1.0
+    assert DEFAULT_ALPHA_MAX == 3.0
+    assert DEFAULT_ALPHA_GRID_SIZE == 81
+    assert FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE == 81
+    assert (DEFAULT_ALPHA_MAX - DEFAULT_ALPHA_MIN) / (
+        DEFAULT_ALPHA_GRID_SIZE - 1
+    ) == pytest.approx(0.05)
 
 
 def test_simulation_replication_defaults() -> None:
@@ -96,11 +102,9 @@ def test_output_paths_are_nonempty_csv_paths() -> None:
 def test_estimation_execution_defaults_are_positive_integers() -> None:
     defaults = {
         "DEFAULT_DML_K_FOLDS": DEFAULT_DML_K_FOLDS,
-        "K_FOLDS": K_FOLDS,
         "DEFAULT_QUANTREG_MAX_ITER": DEFAULT_QUANTREG_MAX_ITER,
         "DEFAULT_N_JOBS": DEFAULT_N_JOBS,
         "DEFAULT_BATCH_SIZE": DEFAULT_BATCH_SIZE,
-        "DEFAULT_CHUNK_COUNT": DEFAULT_CHUNK_COUNT,
     }
 
     for name, value in defaults.items():
@@ -108,7 +112,7 @@ def test_estimation_execution_defaults_are_positive_integers() -> None:
         assert not isinstance(value, bool), name
         assert value > 0, name
 
-    assert K_FOLDS == DEFAULT_DML_K_FOLDS
+    assert DEFAULT_DML_K_FOLDS == 3
 
 
 def test_full_control_benchmark_design_constants() -> None:

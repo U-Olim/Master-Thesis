@@ -7,9 +7,7 @@ from .confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
-    is_disconnected_region,
     sanitize_grid_statistics,
-    summarize_region,
 )
 
 __all__ = [
@@ -19,7 +17,5 @@ __all__ = [
     "argmin_grid",
     "critical_value_chi_square",
     "invert_score_test",
-    "is_disconnected_region",
     "sanitize_grid_statistics",
-    "summarize_region",
 ]

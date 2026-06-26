@@ -24,7 +24,7 @@ ESTIMATOR_LABELS = MappingProxyType(
         "oracle_ivqr": "Oracle IVQR",
         "oracle": "Oracle IVQR",
         "post_selection_ivqr": "Post-selection IVQR",
-        "dml_ivqr": "DML-IVQR",
+        "dml_ivqr": "DML-style IVQR",
         "full_control_ivqr": "Full-control IVQR",
     }
 )

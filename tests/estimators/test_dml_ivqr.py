@@ -1,4 +1,4 @@
-"""Tests for the DML-IVQR estimator."""
+"""Tests for the DML-style IVQR estimator."""
 
 from typing import cast
 
@@ -304,7 +304,7 @@ def test_evaluate_dml_ivqr_rejects_multiple_instruments() -> None:
 
     with pytest.raises(
         ValueError,
-        match="DML-IVQR currently supports exactly one excluded instrument",
+        match="DML-style IVQR currently supports exactly one excluded instrument",
     ):
         evaluate_dml_ivqr_alpha(
             data.y,
@@ -322,7 +322,7 @@ def test_evaluate_dml_ivqr_rejects_zero_control_matrix() -> None:
 
     with pytest.raises(
         ValueError,
-        match="DML-IVQR requires at least one control column",
+        match="DML-style IVQR requires at least one control column",
     ):
         evaluate_dml_ivqr_alpha(
             np.ones(n),

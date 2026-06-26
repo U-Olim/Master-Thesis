@@ -152,6 +152,52 @@ def test_dml_k_folds_is_passed_to_dml_estimator(monkeypatch) -> None:
     assert captured["k_folds"] == 5
 
 
+def test_runner_passes_design_seed_to_post_selection_random_state(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_post_selection_estimator(data, tau, alphas, **kwargs):
+        captured.update(kwargs)
+        return EstimationResult(
+            estimator="post_selection_ivqr",
+            alpha_hat=1.0,
+            alpha_true=data.alpha_true,
+            tau=tau,
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(alphas),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=1,
+            runtime_seconds=0.0,
+        )
+
+    monkeypatch.setattr(
+        runner_module,
+        "estimate_post_selection_ivqr",
+        fake_post_selection_estimator,
+    )
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=98765)
+
+    rows = run_single_replication(
+        design,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("post_selection",),
+    )
+
+    assert len(rows) == 1
+    assert captured["selection_random_state"] == design.seed
+
+
 def test_make_simulation_grid_size_and_unique_seeds() -> None:
     designs = make_simulation_grid(
         dgps=("dgp1",),

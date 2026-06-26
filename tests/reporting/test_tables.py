@@ -133,7 +133,9 @@ def test_make_comparison_table_contains_metrics_labels_and_rounded_values() -> N
         "rmse",
     ]
     assert table.iloc[0]["estimator_label"] == "Post-selection IVQR"
-    assert table.loc[table["estimator_label"] == "DML-IVQR", "bias"].iloc[0] == pytest.approx(
+    assert table.loc[table["estimator_label"] == "DML-style IVQR", "bias"].iloc[
+        0
+    ] == pytest.approx(
         0.12
     )
 

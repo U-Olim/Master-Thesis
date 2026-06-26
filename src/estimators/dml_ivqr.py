@@ -1,4 +1,4 @@
-"""DML-style residualized IVQR estimator.
+"""DML-style residualized IVQR estimator with cross-fitting.
 
 For each structural alpha candidate, this estimator cross-fits a penalized
 quantile nuisance regression of Y - D*alpha on X and residualizes the scalar
@@ -9,9 +9,10 @@ these moments with the weighted GMM statistic
 ``n * gbar' Sigma^(-1) gbar`` and constructs a weak-identification-robust
 confidence region by absolute score-test inversion.
 
-The current implementation supports one excluded instrument. It is a
-DML-style residualized-IVQR procedure, not the density-weighted
-Chen-Huang-Tien DML-IVQR implementation.
+This is a DML-style residualized IVQR procedure: it residualizes treatment and
+instrument components using machine-learning nuisance fits and uses
+cross-fitting. It is not the exact density-weighted Chen-Huang-Tien DML-IVQR
+implementation. The current implementation supports one excluded instrument.
 """
 
 from __future__ import annotations
@@ -134,12 +135,12 @@ def _validate_scalar_instrument(
     if z_array.ndim == 2:
         if z_array.shape[1] != 1:
             raise ValueError(
-                "DML-IVQR currently supports exactly one excluded instrument"
+                "DML-style IVQR currently supports exactly one excluded instrument"
             )
         z_array = z_array[:, 0]
     elif z_array.ndim != 1:
         raise ValueError(
-            "DML-IVQR currently supports exactly one excluded instrument"
+            "DML-style IVQR currently supports exactly one excluded instrument"
         )
     z_array = validate_1d_array("z", z_array)
     if n is not None and len(z_array) != n:
@@ -155,14 +156,14 @@ def _validate_dml_data_arrays(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     y_array, d_array, x_array = validate_data_arrays(y, d, x)
     if x_array.shape[1] == 0:
-        raise ValueError("DML-IVQR requires at least one control column")
+        raise ValueError("DML-style IVQR requires at least one control column")
     z_array = _validate_scalar_instrument(z, n=len(y_array))
     return y_array, d_array, z_array, x_array
 
 
 @dataclass(frozen=True)
 class DMLFoldCache:
-    """Alpha-independent fold state reused across DML-IVQR grid evaluations."""
+    """Alpha-independent fold state reused across DML-style IVQR grid evaluations."""
 
     train_idx: np.ndarray
     test_idx: np.ndarray
@@ -425,7 +426,7 @@ def _evaluate_dml_ivqr_alpha_uncached(
     quantile_solver: QuantileSolver = "highs",
     gmm_ridge: float = 1e-8,
 ) -> tuple[float, bool, str]:
-    """Evaluate DML-IVQR alpha with the original uncached fold setup."""
+    """Evaluate a DML-style IVQR alpha with the original uncached fold setup."""
     y, d, z, x = _validate_dml_data_arrays(y, d, z, x)
     validate_tau(tau)
     alpha_value = _validate_finite_alpha(alpha_value)
@@ -476,7 +477,7 @@ def evaluate_dml_ivqr_alpha(
     gmm_ridge: float = 1e-8,
     use_cache: bool = True,
 ) -> tuple[float, bool, str]:
-    """Evaluate the weighted cross-fitted scalar DML-IVQR statistic."""
+    """Evaluate the weighted cross-fitted scalar DML-style IVQR statistic."""
     if not isinstance(use_cache, bool):
         raise ValueError("use_cache must be a boolean")
     fold_random_state = _validate_optional_random_state(fold_random_state)
@@ -544,7 +545,7 @@ def estimate_dml_ivqr(
     gmm_ridge: float = 1e-8,
     use_cache: bool = True,
 ) -> EstimationResult:
-    """Estimate DML-IVQR by cross-fitted weighted score inversion.
+    """Estimate DML-style IVQR by cross-fitted weighted score inversion.
 
     use_cache controls whether alpha-independent fold computations are reused
     across alpha values. Setting it to False is mainly for regression tests.

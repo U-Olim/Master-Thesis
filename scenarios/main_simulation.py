@@ -21,17 +21,24 @@ import numpy as np
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SCENARIOS_PATH = PROJECT_ROOT / "scenarios"
 SRC_PATH = PROJECT_ROOT / "src"
+if str(SCENARIOS_PATH) not in sys.path:
+    sys.path.insert(0, str(SCENARIOS_PATH))
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from reporting.figures import write_figures  # noqa: E402
-from reporting.summaries import aggregate_results_file  # noqa: E402
-from reporting.tables import write_tables  # noqa: E402
+from _common import (  # noqa: E402
+    make_reports as _make_reports,
+    print_dry_run_common,
+    validate_output_path as _validate_output_path,
+    validate_resume_manifest,
+)
 from simulation.batching import filter_completed_designs, run_simulation_batch  # noqa: E402
 from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa: E402
-from simulation._validation import validate_output_file_path  # noqa: E402
 from simulation.config import (  # noqa: E402
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_BATCH_SIZE,
     DEFAULT_DML_K_FOLDS,
@@ -83,8 +90,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS)
     parser.add_argument("--base-seed", type=int, default=12345)
-    parser.add_argument("--alpha-min", type=float, default=-1.0)
-    parser.add_argument("--alpha-max", type=float, default=3.0)
+    parser.add_argument("--alpha-min", type=float, default=DEFAULT_ALPHA_MIN)
+    parser.add_argument("--alpha-max", type=float, default=DEFAULT_ALPHA_MAX)
     parser.add_argument("--alpha-grid-size", type=int, default=None)
     parser.add_argument("--dml-k-folds", type=int, default=DEFAULT_DML_K_FOLDS)
     parser.add_argument(
@@ -170,16 +177,6 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("Main runner only allows oracle, post_selection, and dml.")
 
 
-def _validate_output_path(output_path: Path, *, resume: bool) -> None:
-    validated = validate_output_file_path(output_path)
-    if validated.exists() and not resume:
-        raise FileExistsError(
-            f"Output file already exists: {validated}. "
-            "Use --resume to continue, pass --output to choose a new file, "
-            "or delete the existing file manually."
-        )
-
-
 def _count_rows(path: Path) -> int | None:
     if not path.exists():
         return None
@@ -212,34 +209,7 @@ def _validate_resume_manifest(
     manifest_path: str | Path | None,
     args: argparse.Namespace,
 ) -> None:
-    if manifest_path is None:
-        return
-    path = Path(manifest_path)
-    if not path.exists():
-        return
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    previous = payload.get("resume_signature")
-    current = _resume_signature(args)
-    if previous is not None and previous != current:
-        raise ValueError(
-            "Manifest resume signature does not match current run settings. "
-            "Use a different output/manifest path or rerun from scratch."
-        )
-
-
-def _make_reports(args: argparse.Namespace) -> None:
-    summary = aggregate_results_file(
-        args.output,
-        args.summary_output,
-        expected_replications=args.reps,
-    )
-    tables = write_tables(summary, args.tables_dir)
-    figures = write_figures(summary, args.figures_dir)
-    print(f"Summary: {args.summary_output}")
-    for name, path in tables.items():
-        print(f"Table ({name}): {path}")
-    for name, path in figures.items():
-        print(f"Figure ({name}): {path}")
+    validate_resume_manifest(manifest_path, _resume_signature(args))
 
 
 def _print_dry_run(
@@ -248,13 +218,16 @@ def _print_dry_run(
     number_of_designs: int,
     alpha_grid_size: int,
 ) -> None:
-    print(f"Mode: {args.mode}")
-    print(f"Designs: {number_of_designs}")
-    print(f"Replications per design: {args.reps}")
-    print(f"Alpha grid size: {alpha_grid_size}")
-    print(f"Output: {args.output}")
-    print(f"Resume: {str(args.resume).lower()}")
-    print("Reports: automatic after successful run")
+    print_dry_run_common(
+        mode=args.mode,
+        number_of_designs=number_of_designs,
+        reps=args.reps,
+        alpha_min=args.alpha_min,
+        alpha_max=args.alpha_max,
+        alpha_grid_size=alpha_grid_size,
+        output=args.output,
+        resume=args.resume,
+    )
 
 
 def _write_manifest(

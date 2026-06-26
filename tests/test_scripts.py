@@ -198,7 +198,10 @@ def test_main_simulation_fast_dry_run_excludes_full_control(
     assert result.returncode == 0
     assert "Mode: fast" in result.stdout
     assert "Replications per design: 1" in result.stdout
-    assert "Alpha grid size: 9" in result.stdout
+    assert "alpha_min = -1.0" in result.stdout
+    assert "alpha_max = 3.0" in result.stdout
+    assert "alpha_grid_size = 81" in result.stdout
+    assert "alpha_grid_step = 0.05" in result.stdout
     assert str(output) in result.stdout
     assert "Reports: automatic after successful run" in result.stdout
     assert "full-control IVQR benchmark" not in result.stdout
@@ -239,7 +242,10 @@ def test_main_simulation_full_dry_run_uses_500_reps(
     assert result.returncode == 0
     assert "Mode: full" in result.stdout
     assert "Replications per design: 500" in result.stdout
-    assert "Alpha grid size: 9" in result.stdout
+    assert "alpha_min = -1.0" in result.stdout
+    assert "alpha_max = 3.0" in result.stdout
+    assert "alpha_grid_size = 81" in result.stdout
+    assert "alpha_grid_step = 0.05" in result.stdout
     assert str(output) in result.stdout
     assert "Reports: automatic after successful run" in result.stdout
     assert not output.exists()
@@ -330,7 +336,10 @@ def test_full_control_script_dry_run_uses_limited_design(
     assert result.returncode == 0
     assert "Mode: full-control IVQR benchmark" in result.stdout
     assert "Replications per design: 500" in result.stdout
-    assert "Alpha grid size: 9" in result.stdout
+    assert "alpha_min = -1.0" in result.stdout
+    assert "alpha_max = 3.0" in result.stdout
+    assert "alpha_grid_size = 81" in result.stdout
+    assert "alpha_grid_step = 0.05" in result.stdout
     assert str(output) in result.stdout
     assert "Reports: automatic after successful run" in result.stdout
     assert not output.exists()

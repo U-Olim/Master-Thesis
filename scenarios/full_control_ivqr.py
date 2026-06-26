@@ -20,7 +20,10 @@ import numpy as np
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SCENARIOS_PATH = PROJECT_ROOT / "scenarios"
 SRC_PATH = PROJECT_ROOT / "src"
+if str(SCENARIOS_PATH) not in sys.path:
+    sys.path.insert(0, str(SCENARIOS_PATH))
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
@@ -29,17 +32,21 @@ from dgp.generators import generate_data  # noqa: E402
 from dgp.true_parameters import true_alpha  # noqa: E402
 from estimators.base import EstimationResult  # noqa: E402
 from estimators.full_control_ivqr import estimate_full_control_ivqr  # noqa: E402
-from reporting.figures import write_figures  # noqa: E402
-from reporting.summaries import aggregate_results_file  # noqa: E402
-from reporting.tables import write_tables  # noqa: E402
+from _common import (  # noqa: E402
+    make_reports as _make_reports,
+    print_dry_run_common,
+    validate_output_path as _validate_output_path,
+    validate_resume_manifest,
+)
 from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa: E402
 from simulation._validation import (  # noqa: E402
     design_key,
     parse_explicit_bool,
     row_design_key,
-    validate_output_file_path,
 )
 from simulation.config import (  # noqa: E402
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
     FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
@@ -83,8 +90,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=5)
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS)
     parser.add_argument("--base-seed", type=int, default=54321)
-    parser.add_argument("--alpha-min", type=float, default=-1.0)
-    parser.add_argument("--alpha-max", type=float, default=3.0)
+    parser.add_argument("--alpha-min", type=float, default=DEFAULT_ALPHA_MIN)
+    parser.add_argument("--alpha-max", type=float, default=DEFAULT_ALPHA_MAX)
     parser.add_argument(
         "--alpha-grid-size",
         type=int,
@@ -172,16 +179,6 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--alpha-max must exceed --alpha-min")
 
 
-def _validate_output_path(output_path: Path, *, resume: bool) -> None:
-    validated = validate_output_file_path(output_path)
-    if validated.exists() and not resume:
-        raise FileExistsError(
-            f"Output file already exists: {validated}. "
-            "Use --resume to continue, pass --output to choose a new file, "
-            "or delete the existing file manually."
-        )
-
-
 def _configure_warnings(show_quantreg_warnings: bool) -> None:
     if show_quantreg_warnings:
         return
@@ -218,16 +215,7 @@ def _validate_resume_manifest(
     manifest_path: Path | None,
     args: argparse.Namespace,
 ) -> None:
-    if manifest_path is None or not manifest_path.exists():
-        return
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    previous = payload.get("resume_signature")
-    current = _resume_signature(args)
-    if previous is not None and previous != current:
-        raise ValueError(
-            "Manifest resume signature does not match current run settings. "
-            "Use a different output/manifest path or rerun from scratch."
-        )
+    validate_resume_manifest(manifest_path, _resume_signature(args))
 
 
 def _design_key(design: Design) -> tuple[object, ...]:
@@ -273,34 +261,22 @@ def _completed_design_keys(
     return {_row_design_key(row) for _, row in existing.iterrows()}
 
 
-def _make_reports(args: argparse.Namespace) -> None:
-    summary = aggregate_results_file(
-        args.output,
-        args.summary_output,
-        expected_replications=args.reps,
-    )
-    tables = write_tables(summary, args.tables_dir)
-    figures = write_figures(summary, args.figures_dir)
-    print(f"Summary: {args.summary_output}")
-    for name, path in tables.items():
-        print(f"Table ({name}): {path}")
-    for name, path in figures.items():
-        print(f"Figure ({name}): {path}")
-
-
 def _print_dry_run(
     args: argparse.Namespace,
     *,
     number_of_designs: int,
 ) -> None:
-    print("Mode: full-control IVQR benchmark")
-    print(f"Designs: {number_of_designs}")
-    print(f"Replications per design: {args.reps}")
-    print(f"Alpha grid size: {args.alpha_grid_size}")
-    print(f"Output: {args.output}")
-    print(f"Resume: {str(args.resume).lower()}")
-    print(f"Rerun failed: {str(args.rerun_failed).lower()}")
-    print("Reports: automatic after successful run")
+    print_dry_run_common(
+        mode="full-control IVQR benchmark",
+        number_of_designs=number_of_designs,
+        reps=args.reps,
+        alpha_min=args.alpha_min,
+        alpha_max=args.alpha_max,
+        alpha_grid_size=args.alpha_grid_size,
+        output=args.output,
+        resume=args.resume,
+        extra_lines=(f"Rerun failed: {str(args.rerun_failed).lower()}",),
+    )
 
 
 def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object]:

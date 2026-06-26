@@ -33,6 +33,8 @@ from simulation._validation import (
     validate_unique_sequence,
 )
 from simulation.config import (
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_DML_K_FOLDS,
     DEFAULT_QUANTREG_MAX_ITER,
@@ -363,6 +365,7 @@ def run_single_replication(
                         selection_cv=selection_cv,
                         selection_max_iter=selection_max_iter,
                         quantreg_max_iter=quantreg_max_iter,
+                        selection_random_state=design.seed,
                     )
                 elif estimator_name == "dml":
                     fold_random_state = (
@@ -410,8 +413,8 @@ def run_small_simulation(
     alphas: np.ndarray | None = None,
     estimators: tuple[str, ...] = DEFAULT_SIMULATION_ESTIMATORS,
     alpha_grid_size: int = DEFAULT_ALPHA_GRID_SIZE,
-    alpha_min: float = -1.0,
-    alpha_max: float = 3.0,
+    alpha_min: float = DEFAULT_ALPHA_MIN,
+    alpha_max: float = DEFAULT_ALPHA_MAX,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     selection_cv: int = 3,
     selection_max_iter: int = 10000,

@@ -8,9 +8,7 @@ from inference.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
-    is_disconnected_region,
     sanitize_grid_statistics,
-    summarize_region,
 )
 
 
@@ -174,27 +172,6 @@ def test_invert_score_test_sorts_unsorted_alpha_grid_with_aligned_statistics() -
     assert region.covers_true is True
 
 
-def test_invert_score_test_can_use_profiled_statistic_difference() -> None:
-    alphas = np.array([0.0, 1.0, 2.0])
-    stats = np.array([10.0, 6.0, 10.0])
-
-    absolute = invert_score_test(alphas, stats, critical_value=2.0, alpha_true=1.0)
-    profiled = invert_score_test(
-        alphas,
-        stats,
-        critical_value=2.0,
-        alpha_true=1.0,
-        statistic_reference=6.0,
-        inversion_type="qlr",
-    )
-
-    assert absolute.empty is True
-    assert profiled.empty is False
-    assert profiled.blocks == ((0.5, 1.5),)
-    assert profiled.covers_true is True
-    assert profiled.statistic_reference == pytest.approx(6.0)
-
-
 def test_invert_score_test_absolute_ignores_statistic_reference() -> None:
     alphas = np.array([0.0, 1.0, 2.0])
     stats = np.array([10.0, 1.0, 10.0])
@@ -227,55 +204,15 @@ def test_invert_score_test_absolute_accepts_statistics_at_or_below_critical_valu
     assert region.statistic_reference == pytest.approx(0.0)
 
 
-def test_invert_score_test_qlr_defaults_to_minimum_statistic() -> None:
+def test_invert_score_test_rejects_unsupported_inversion_type() -> None:
     alphas = np.array([0.0, 1.0, 2.0])
     stats = np.array([10.0, 6.0, 10.0])
 
-    default = invert_score_test(
-        alphas,
-        stats,
-        critical_value=2.0,
-        inversion_type="qlr",
-    )
-    explicit = invert_score_test(
-        alphas,
-        stats,
-        critical_value=2.0,
-        statistic_reference=6.0,
-        inversion_type="qlr",
-    )
-
-    assert default.statistic_reference == pytest.approx(6.0)
-    assert default.selected_grid.tolist() == explicit.selected_grid.tolist() == [1.0]
-    assert default.blocks == explicit.blocks
-
-
-@pytest.mark.parametrize("statistic_reference", [True, np.nan, np.inf])
-def test_invert_score_test_qlr_rejects_invalid_statistic_reference(
-    statistic_reference: float,
-) -> None:
-    with pytest.raises(ValueError):
-        invert_score_test(
-            np.array([0.0, 1.0, 2.0]),
-            np.array([10.0, 6.0, 10.0]),
-            critical_value=2.0,
-            statistic_reference=statistic_reference,
-            inversion_type="qlr",
-        )
-
-
-def test_invert_score_test_qlr_rejects_reference_above_minimum() -> None:
     with pytest.raises(
         ValueError,
-        match="statistic_reference cannot exceed the minimum statistic",
+        match="Only absolute confidence-region inversion is supported",
     ):
-        invert_score_test(
-            np.array([0.0, 1.0, 2.0]),
-            np.array([10.0, 6.0, 10.0]),
-            critical_value=2.0,
-            statistic_reference=6.1,
-            inversion_type="qlr",
-        )
+        invert_score_test(alphas, stats, critical_value=2.0, inversion_type="qlr")
 
 
 def test_invert_score_test_selected_grid_is_read_only() -> None:
@@ -329,14 +266,6 @@ def test_invert_score_test_rejects_nonfinite_statistics() -> None:
 
     with pytest.raises(ValueError):
         invert_score_test(alphas, stats, critical_value=3.0)
-
-
-def test_is_disconnected_region_examples() -> None:
-    full_grid = np.array([0, 1, 2, 3, 4], dtype=float)
-
-    assert is_disconnected_region(np.array([0, 1, 4], dtype=float), full_grid) is True
-    assert is_disconnected_region(np.array([1, 2, 3], dtype=float), full_grid) is False
-    assert is_disconnected_region(np.array([], dtype=float), full_grid) is False
 
 
 @pytest.mark.parametrize(
@@ -437,20 +366,4 @@ def test_sanitize_grid_statistics_rejects_invalid_failed_value(
             failed_value=failed_value,
         )
 
-
-def test_summarize_region_returns_estimation_result_fields() -> None:
-    alphas = np.array([-2, -1, 0, 1, 2], dtype=float)
-    stats = np.array([10, 4, 1, 4, 10], dtype=float)
-    region = invert_score_test(alphas, stats, critical_value=4.0, alpha_true=0.0)
-
-    summary = summarize_region(region)
-
-    assert summary == {
-        "cr_lower": pytest.approx(-1.0),
-        "cr_upper": pytest.approx(1.0),
-        "cr_length": pytest.approx(2.0),
-        "cr_empty": False,
-        "cr_disconnected": False,
-        "cr_covers_true": True,
-    }
 

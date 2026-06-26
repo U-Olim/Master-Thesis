@@ -93,7 +93,7 @@ def _ordered_estimator_columns(columns: pd.Index) -> list[str]:
     preferred = [
         ESTIMATOR_LABELS.get("oracle", "Oracle IVQR"),
         ESTIMATOR_LABELS.get("post_selection_ivqr", "Post-selection IVQR"),
-        ESTIMATOR_LABELS.get("dml_ivqr", "DML-IVQR"),
+        ESTIMATOR_LABELS.get("dml_ivqr", "DML-style IVQR"),
         ESTIMATOR_LABELS.get("full_control_ivqr", "Full-control IVQR"),
     ]
     existing = [label for label in preferred if label in columns]

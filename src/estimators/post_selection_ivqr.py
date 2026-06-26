@@ -4,7 +4,7 @@ This estimator first selects controls by LassoCV from the reduced-form
 relations Y ~ X and D ~ X, then applies the Chernozhukov-Hansen
 inverse-IVQR estimator using only the selected controls.
 
-It is a feasible Monte Carlo benchmark. It is not the DML-IVQR estimator
+It is a feasible Monte Carlo benchmark. It is not the DML-style IVQR estimator
 and does not implement the full orthogonal double-selection IV procedure.
 """
 

@@ -6,21 +6,26 @@ This repository contains the code for a master thesis Monte Carlo study:
 
 The project studies finite-sample performance of instrumental variable quantile regression estimators in high-dimensional designs with weak instruments.
 
-The main simulation compares:
+## Estimators
 
 - **Oracle IVQR**: infeasible benchmark using the true active control set.
 - **Post-selection IVQR**: feasible sparse-control benchmark using Lasso-based control selection.
-- **DML-style IVQR**: residualized, cross-fitted IVQR estimator for high-dimensional controls.
+- **DML-style residualized IVQR**: cross-fitted residualized IVQR estimator for high-dimensional controls.
+- **Full-control IVQR benchmark**: separate benchmark that uses all controls directly.
 
-A separate **full-control IVQR** benchmark is kept outside the main simulation because it uses all controls directly and becomes slow or unstable in high-dimensional settings.
+The full-control benchmark is kept outside the main simulation because it is slow and can be unstable in high-dimensional settings.
 
----
+## Methodological Caveat
 
-## Repository structure
+The reported DML estimator is a DML-style residualized IVQR estimator with cross-fitting. It should not be interpreted as an exact density-weighted Chen-Huang-Tien DML-IVQR implementation. The implementation is designed for the one-instrument simulation setting used in this thesis.
+
+Alpha-grid resolution matters for alpha estimates, bias, RMSE, coverage, and confidence-region length. All default simulation modes use an 81-point alpha grid on [-1, 3], giving grid step 0.05. CLI options can override the default grid.
+
+## Repository Structure
 
 ```text
 src/
-  config.py                 Compatibility import surface for project constants.
+  config.py                 Compatibility import surface; simulation.config is canonical.
   dgp/                      Data-generating processes and true parameters.
   estimators/               Oracle, post-selection, DML-style, and full-control IVQR estimators.
   inference/                Alpha grids, moments, metrics, and confidence-region utilities.
@@ -31,6 +36,7 @@ src/
 scenarios/
   main_simulation.py        Main fast/full simulation runner.
   full_control_ivqr.py      Separate full-control IVQR benchmark runner.
+  _common.py                Shared scenario-script helpers.
 
 tests/
   config/                   Project-configuration tests.
@@ -43,43 +49,25 @@ tests/
   test_scripts.py           CLI and end-to-end smoke tests.
 ```
 
----
+## Environment Setup
 
-## Environment
-
-Pixi is the official environment manager for this project.
-
-Install Pixi:
+Pixi is the project environment manager.
 
 ```bash
 curl -fsSL https://pixi.sh/install.sh | bash
 ```
 
-Then clone and install the project.
-
-Check imports:
+After cloning the repository, use Pixi from the project root:
 
 ```bash
 pixi run import_check
-```
-
-Run the normal non-slow test suite:
-
-```bash
 pixi run test_project
-```
-
-Run slow smoke/integration tests separately:
-
-```bash
 pixi run test_slow
 ```
 
----
+## Simulation Design
 
-## Simulation design
-
-The main simulation varies sample size, control dimension, instrument strength, quantile index, and DGP.
+Main simulation defaults are shared by fast and full mode except for the number of replications.
 
 ```text
 DGPs:                 dgp1, dgp2, dgp3
@@ -87,32 +75,162 @@ Sample sizes:         n = 500, 1000
 Control dimensions:   p = 200, 500
 Instrument strengths: pi = 1.0, 0.5, 0.25, 0.10
 Quantiles:            tau = 0.25, 0.50, 0.75
-Replications:         R = 10 in fast mode; R = 500 in full mode
-Alpha grid:           9 points on [-1, 3]
-DML folds:            K = 3
+Fast replications:    R = 10
+Full replications:    R = 500
+Alpha grid:           81 points on [-1, 3], step 0.05
 Estimators:           oracle, post_selection, dml
+DML folds:            K = 3
+Main base seed:       12345
 ```
 
-The 9-point alpha grid is a computational design choice. It keeps the IVQR grid-search Monte Carlo feasible while covering all true treatment effects in the implemented DGPs.
+Full-control benchmark defaults:
 
----
+```text
+DGPs:                 dgp1
+Sample sizes:         n = 500, 1000
+Control dimensions:   p = 20, 50, 100
+Instrument strengths: pi = 1.0
+Quantiles:            tau = 0.25, 0.5, 0.75
+Replications:         R = 500
+Alpha grid:           81 points on [-1, 3], step 0.05
+Estimator:            full_control_ivqr
+Base seed:            54321
+```
 
-## Main workflow
-
-Fast diagnostic run:
+## Main Commands
 
 ```bash
+pixi run import_check
+pixi run test_project
+pixi run test_slow
 pixi run fast_mode
-```
-
-Main thesis simulation:
-
-```bash
 pixi run full_mode
+pixi run full_control
 ```
 
-Separate full-control benchmark:
+## Dry Runs
+
+Use dry runs to inspect resolved defaults without writing results.
 
 ```bash
-pixi run full_control
+python scenarios/main_simulation.py --mode fast --dry-run
+python scenarios/main_simulation.py --mode full --dry-run
+python scenarios/full_control_ivqr.py --dry-run
+```
+
+The dry-run output includes `alpha_min`, `alpha_max`, `alpha_grid_size`, and the implied `alpha_grid_step`.
+
+## Output Locations
+
+Default raw outputs:
+
+```text
+Fast mode:       results/raw/fast_mode_results.csv
+Full mode:       results/raw/full_mode_results.csv
+Full-control:    results/raw/full_control_ivqr_results.csv
+```
+
+Default summary outputs:
+
+```text
+Fast mode:       results/summary/fast_mode_summary.csv
+Full mode:       results/summary/full_mode_summary.csv
+Full-control:    results/summary/full_control_ivqr_summary.csv
+```
+
+Default table directories:
+
+```text
+Fast mode:       results/tables/fast
+Full mode:       results/tables/full
+Full-control:    results/tables/full_control
+```
+
+Default figure directories:
+
+```text
+Fast mode:       results/figures/fast
+Full mode:       results/figures/full
+Full-control:    results/figures/full_control
+```
+
+No default manifest path is set. A manifest is written only when `--manifest PATH` is supplied.
+
+## Generated Tables and Figures
+
+Standard table files:
+
+```text
+comparison_table.csv
+diagnostic_table.csv
+bias_wide.csv
+rmse_wide.csv
+mae_wide.csv
+coverage_wide.csv
+cr_length_wide.csv
+runtime_wide.csv
+failure_rate_wide.csv
+```
+
+Standard figure files:
+
+```text
+fig_bias.png
+fig_rmse.png
+fig_coverage.png
+fig_cr_length.png
+fig_failure_rate.png
+```
+
+## Resume, Failed Rows, Chunking, and Manifests
+
+Use `--resume` to append to an existing results CSV while skipping design keys that already have the required estimator rows. In the main simulation, a design is considered complete when all requested estimator rows are present. In the full-control benchmark, completion is checked for the `full_control_ivqr` estimator.
+
+Use `--rerun-failed` with `--resume` to ignore failed prior rows when deciding whether a design is complete, so failed designs can be rerun. Without `--resume`, `--rerun-failed` has no effect.
+
+Use `--num-chunks N --chunk-index I` to run one deterministic strided chunk of the design grid, with `0 <= I < N`. Both options must be supplied together. Chunking is applied before resume filtering.
+
+Use `--manifest PATH` to write a JSON manifest containing run parameters, counts, alpha-grid information, and a resume signature. When resuming with a manifest, the stored resume signature must match the current run settings; otherwise the run is rejected.
+
+## Reproducibility
+
+Simulation design seeds are deterministic. The main simulation uses base seed `12345`; the full-control benchmark uses base seed `54321`. The design seed is a deterministic function of DGP, `n`, `p`, `pi`, `tau`, and replication index.
+
+DML fold splits use the design seed by default. Post-selection LassoCV selection randomness also uses the design seed in simulation runs. Parallel batch execution sorts result rows after worker completion, so serial and parallel output ordering is deterministic for the same design set.
+
+Direct estimator calls still expose their own default random-state parameters. The simulation runner ties estimator-level randomness to the design seed.
+
+## Testing
+
+Normal tests exclude slow smoke/integration tests:
+
+```bash
+pixi run test_project
+```
+
+Slow tests are run separately:
+
+```bash
+pixi run test_slow
+```
+
+Import checks are available through:
+
+```bash
+pixi run import_check
+```
+
+## Generated and Ignored Folders
+
+The repository ignores generated outputs and local tooling caches, including:
+
+```text
+results/
+.pytest_tmp/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+.agents/
+.pixi/
 ```

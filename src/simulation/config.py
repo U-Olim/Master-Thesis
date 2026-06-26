@@ -1,7 +1,8 @@
 """Project-wide simulation configuration constants.
 
-The main simulation compares oracle IVQR, post-selection IVQR, and DML-IVQR
-over the thesis DGPs, sample sizes, instrument strengths, and quantiles.
+The main simulation compares oracle IVQR, post-selection IVQR, and DML-style
+residualized IVQR over the thesis DGPs, sample sizes, instrument strengths,
+and quantiles.
 
 The full-control IVQR benchmark is intentionally separated because it uses all
 controls without selection or regularization and is computationally expensive
@@ -29,14 +30,13 @@ FULL_TABLES_DIR: str = "results/tables/full"
 FAST_FIGURES_DIR: str = "results/figures/fast"
 FULL_FIGURES_DIR: str = "results/figures/full"
 
-# A coarse nine-point alpha grid keeps the Monte Carlo runtime manageable.
-DEFAULT_ALPHA_GRID_SIZE: int = 9
+DEFAULT_ALPHA_MIN: float = -1.0
+DEFAULT_ALPHA_MAX: float = 3.0
+DEFAULT_ALPHA_GRID_SIZE: int = 81
 DEFAULT_DML_K_FOLDS: int = 3
 DEFAULT_N_JOBS: int = 6
 DEFAULT_BATCH_SIZE: int = 10
-DEFAULT_CHUNK_COUNT: int = 1
 DEFAULT_QUANTREG_MAX_ITER: int = 1000
-K_FOLDS: int = DEFAULT_DML_K_FOLDS
 
 RHO_X: float = 0.5
 RHO_UV: float = 0.5
@@ -50,7 +50,7 @@ FULL_CONTROL_BENCHMARK_P_VALUES: tuple[int, ...] = (20, 50, 100)
 FULL_CONTROL_BENCHMARK_PI_VALUES: tuple[float, ...] = (1.0,)
 FULL_CONTROL_BENCHMARK_TAUS: tuple[float, ...] = (0.25, 0.5, 0.75)
 FULL_CONTROL_BENCHMARK_OUTPUT: str = "results/raw/full_control_ivqr_results.csv"
-FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE: int = 9
+FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE: int = DEFAULT_ALPHA_GRID_SIZE
 
 
 __all__ = [
@@ -72,13 +72,13 @@ __all__ = [
     "FULL_TABLES_DIR",
     "FAST_FIGURES_DIR",
     "FULL_FIGURES_DIR",
+    "DEFAULT_ALPHA_MIN",
+    "DEFAULT_ALPHA_MAX",
     "DEFAULT_ALPHA_GRID_SIZE",
     "DEFAULT_DML_K_FOLDS",
     "DEFAULT_N_JOBS",
     "DEFAULT_BATCH_SIZE",
-    "DEFAULT_CHUNK_COUNT",
     "DEFAULT_QUANTREG_MAX_ITER",
-    "K_FOLDS",
     "RHO_X",
     "RHO_UV",
     "DF_T",

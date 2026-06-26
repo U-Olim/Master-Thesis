@@ -2,7 +2,7 @@
 
 This estimator applies the Chernozhukov-Hansen inverse-IVQR procedure
 using every observed control column in X. It is included as a benchmark
-against oracle, post-selection, and DML-IVQR estimators.
+against oracle, post-selection, and DML-style residualized IVQR estimators.
 
 Because it uses all controls without selection or regularization, it can be
 computationally slow, numerically unstable, or infeasible when the number of

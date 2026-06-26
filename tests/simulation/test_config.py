@@ -14,7 +14,12 @@ from simulation.runner import (
     quantreg_iteration_warning_filter,
     run_small_simulation,
 )
-from simulation.config import DEFAULT_N_JOBS
+from simulation.config import (
+    DEFAULT_ALPHA_GRID_SIZE,
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
+    DEFAULT_N_JOBS,
+)
 from tests.helpers import load_full_control_cli, load_main_simulation_cli
 
 full_simulation_cli = load_main_simulation_cli()
@@ -24,7 +29,7 @@ full_control_cli = load_full_control_cli()
 full_control_main = full_control_cli.main
 
 
-def test_run_small_simulation_default_grid_has_9_points() -> None:
+def test_run_small_simulation_default_grid_has_81_points() -> None:
     results = run_small_simulation(
         dgp="dgp1",
         n=80,
@@ -36,7 +41,12 @@ def test_run_small_simulation_default_grid_has_9_points() -> None:
         alphas=None,
     )
 
-    assert results["alpha_grid_size"].dropna().unique().tolist() == [9]
+    assert results["alpha_grid_size"].dropna().unique().tolist() == [81]
+    assert DEFAULT_ALPHA_MIN == -1.0
+    assert DEFAULT_ALPHA_MAX == 3.0
+    assert (DEFAULT_ALPHA_MAX - DEFAULT_ALPHA_MIN) / (
+        DEFAULT_ALPHA_GRID_SIZE - 1
+    ) == pytest.approx(0.05)
 
 
 def test_run_small_simulation_explicit_grid_size_has_17_points() -> None:
@@ -121,7 +131,7 @@ def test_full_simulation_fast_mode_defaults_exclude_full_control() -> None:
     assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 10
-    assert args.alpha_grid_size == 9
+    assert args.alpha_grid_size == 81
     assert args.output == Path("results/raw/fast_mode_results.csv")
     assert args.summary_output == Path("results/summary/fast_mode_summary.csv")
     assert args.tables_dir == Path("results/tables/fast")
@@ -154,7 +164,7 @@ def test_full_simulation_full_mode_defaults_use_500_reps() -> None:
     assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 500
-    assert args.alpha_grid_size == 9
+    assert args.alpha_grid_size == 81
     assert args.output == Path("results/raw/full_mode_results.csv")
     assert args.summary_output == Path("results/summary/full_mode_summary.csv")
     assert args.tables_dir == Path("results/tables/full")
@@ -217,6 +227,62 @@ def test_full_simulation_main_mode_respects_alpha_grid_override() -> None:
     assert args.alpha_grid_size == 13
 
 
+def test_full_simulation_parser_respects_alpha_grid_overrides(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "main_simulation.py",
+            "--alpha-min",
+            "-0.5",
+            "--alpha-max",
+            "2.5",
+            "--alpha-grid-size",
+            "41",
+        ],
+    )
+
+    args = full_simulation_cli._parse_args()
+    full_simulation_cli._apply_mode_defaults(args)
+
+    assert args.alpha_min == -0.5
+    assert args.alpha_max == 2.5
+    assert args.alpha_grid_size == 41
+
+
+def test_full_control_parser_uses_default_alpha_grid(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["full_control_ivqr.py"])
+
+    args = full_control_cli._parse_args()
+
+    assert args.alpha_min == -1.0
+    assert args.alpha_max == 3.0
+    assert args.alpha_grid_size == 81
+    assert (args.alpha_max - args.alpha_min) / (
+        args.alpha_grid_size - 1
+    ) == pytest.approx(0.05)
+
+
+def test_full_control_parser_respects_alpha_grid_overrides(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "full_control_ivqr.py",
+            "--alpha-min",
+            "-0.5",
+            "--alpha-max",
+            "2.5",
+            "--alpha-grid-size",
+            "41",
+        ],
+    )
+
+    args = full_control_cli._parse_args()
+
+    assert args.alpha_min == -0.5
+    assert args.alpha_max == 2.5
+    assert args.alpha_grid_size == 41
+
+
 def test_full_simulation_parser_dml_k_folds_default_and_override(monkeypatch) -> None:
     monkeypatch.setattr("sys.argv", ["main_simulation.py"])
     args = full_simulation_cli._parse_args()
@@ -228,6 +294,21 @@ def test_full_simulation_parser_dml_k_folds_default_and_override(monkeypatch) ->
     )
     args = full_simulation_cli._parse_args()
     assert args.dml_k_folds == 5
+
+
+def test_full_simulation_parser_chunking_defaults_and_overrides(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["main_simulation.py"])
+    args = full_simulation_cli._parse_args()
+    assert args.chunk_index is None
+    assert args.num_chunks is None
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["main_simulation.py", "--chunk-index", "1", "--num-chunks", "3"],
+    )
+    args = full_simulation_cli._parse_args()
+    assert args.chunk_index == 1
+    assert args.num_chunks == 3
 
 
 def test_full_simulation_parser_n_jobs_default_and_override(monkeypatch) -> None:

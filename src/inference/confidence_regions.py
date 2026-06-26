@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
 
 import numpy as np
 from scipy.stats import chi2
@@ -16,11 +15,9 @@ __all__ = [
     "FAILED_ALPHA_STATISTIC",
     "ConfidenceRegion",
     "invert_score_test",
-    "is_disconnected_region",
     "critical_value_chi_square",
     "sanitize_grid_statistics",
     "argmin_grid",
-    "summarize_region",
 ]
 
 
@@ -245,7 +242,7 @@ def invert_score_test(
     critical_value: float,
     alpha_true: float | None = None,
     statistic_reference: float | None = None,
-    inversion_type: Literal["absolute", "qlr"] = "absolute",
+    inversion_type: str = "absolute",
 ) -> ConfidenceRegion:
     """Invert a grid-evaluated score test into a confidence region.
 
@@ -259,20 +256,10 @@ def invert_score_test(
         sort_alphas=True,
     )
     critical_value = _validate_critical_value(critical_value)
-    if inversion_type not in {"absolute", "qlr"}:
-        raise ValueError("inversion_type must be 'absolute' or 'qlr'")
-    if inversion_type == "absolute":
-        statistic_reference = 0.0
-    elif statistic_reference is None:
-        statistic_reference = float(np.min(statistics))
+    if inversion_type != "absolute":
+        raise ValueError("Only absolute confidence-region inversion is supported.")
+    statistic_reference = 0.0
     statistic_reference = _validate_statistic_reference(statistic_reference)
-    if (
-        inversion_type == "qlr"
-        and statistic_reference > float(np.min(statistics)) + 1e-10
-    ):
-        raise ValueError(
-            "statistic_reference cannot exceed the minimum statistic for qlr inversion"
-        )
 
     statistic_values = statistics - statistic_reference
     accepted_mask = statistic_values <= critical_value
@@ -322,32 +309,6 @@ def invert_score_test(
         critical_value=critical_value,
         statistic_reference=statistic_reference,
     )
-
-
-def is_disconnected_region(
-    accepted_grid: np.ndarray,
-    full_grid: np.ndarray,
-) -> bool:
-    """Return True if accepted grid points form separated blocks."""
-    full_grid = _as_1d_array(full_grid, "full grid")
-    _validate_strictly_increasing(full_grid)
-
-    accepted_grid = np.asarray(accepted_grid, dtype=float)
-    if accepted_grid.ndim != 1:
-        raise ValueError("accepted grid must be one-dimensional")
-    if accepted_grid.size == 0:
-        return False
-    if not np.all(np.isfinite(accepted_grid)):
-        raise ValueError("accepted grid must contain only finite values")
-    if accepted_grid.size == 1:
-        return False
-
-    indices = np.searchsorted(full_grid, accepted_grid)
-    if np.any(indices >= full_grid.size) or not np.all(full_grid[indices] == accepted_grid):
-        raise ValueError("accepted grid points must be contained in the full grid")
-
-    indices = np.sort(indices)
-    return bool(np.any(np.diff(indices) > 1))
 
 
 def critical_value_chi_square(
@@ -422,15 +383,3 @@ def argmin_grid(
     at_boundary = min_index == 0 or min_index == alphas.size - 1
 
     return alpha_hat, min_statistic, bool(at_boundary)
-
-
-def summarize_region(region: ConfidenceRegion) -> dict[str, object]:
-    """Return ConfidenceRegion fields in EstimationResult-compatible names."""
-    return {
-        "cr_lower": region.lower,
-        "cr_upper": region.upper,
-        "cr_length": region.length,
-        "cr_empty": region.empty,
-        "cr_disconnected": region.disconnected,
-        "cr_covers_true": region.covers_true,
-    }
