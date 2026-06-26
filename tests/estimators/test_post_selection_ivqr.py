@@ -14,6 +14,11 @@ from estimators.post_selection_ivqr import (
     evaluate_post_selection_alpha,
     select_controls_lasso,
 )
+from inference.alpha_grid import (
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
+    DEFAULT_ALPHA_STEP,
+)
 
 
 def _call_failed_result_with_objects(
@@ -76,6 +81,72 @@ def test_select_controls_lasso_handles_no_signal_artificial_data() -> None:
     assert np.issubdtype(selected.dtype, np.integer)
     assert selected.size <= x.shape[1]
     assert isinstance(message, str)
+
+
+def test_post_selection_fallback_grid_uses_project_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
+    fallback_grid = np.array([-1.0, 0.0, 3.0])
+    captured: dict[str, object] = {}
+
+    def fake_alpha_grid(alpha_min: float, alpha_max: float, step: float) -> np.ndarray:
+        captured["alpha_min"] = alpha_min
+        captured["alpha_max"] = alpha_max
+        captured["step"] = step
+        return fallback_grid
+
+    monkeypatch.setattr(post_module, "alpha_grid", fake_alpha_grid)
+    monkeypatch.setattr(
+        post_module,
+        "select_controls_lasso",
+        lambda **kwargs: (np.array([], dtype=int), "selected_union=0"),
+    )
+    monkeypatch.setattr(
+        post_module,
+        "evaluate_post_selection_alpha",
+        lambda **kwargs: (abs(float(kwargs["alpha"])), True, "ok"),
+    )
+
+    result = estimate_post_selection_ivqr(data, tau=0.5, selection_cv=3)
+
+    assert captured == {
+        "alpha_min": DEFAULT_ALPHA_MIN,
+        "alpha_max": DEFAULT_ALPHA_MAX,
+        "step": DEFAULT_ALPHA_STEP,
+    }
+    assert result.alpha_grid_size == len(fallback_grid)
+
+
+def test_post_selection_explicit_alphas_override_fallback_grid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
+    explicit_alphas = np.array([-0.25, 0.0, 0.25])
+
+    def fail_alpha_grid(*args, **kwargs):
+        raise AssertionError("fallback alpha grid should not be constructed")
+
+    monkeypatch.setattr(post_module, "alpha_grid", fail_alpha_grid)
+    monkeypatch.setattr(
+        post_module,
+        "select_controls_lasso",
+        lambda **kwargs: (np.array([], dtype=int), "selected_union=0"),
+    )
+    monkeypatch.setattr(
+        post_module,
+        "evaluate_post_selection_alpha",
+        lambda **kwargs: (abs(float(kwargs["alpha"])), True, "ok"),
+    )
+
+    result = estimate_post_selection_ivqr(
+        data,
+        tau=0.5,
+        alphas=explicit_alphas,
+        selection_cv=3,
+    )
+
+    assert result.alpha_grid_size == len(explicit_alphas)
 
 
 @pytest.mark.parametrize("cv", [1, 41, True])

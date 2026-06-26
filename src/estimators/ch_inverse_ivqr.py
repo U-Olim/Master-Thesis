@@ -17,7 +17,12 @@ from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp.designs import SimData
 from estimators.base import EstimationResult
-from inference.alpha_grid import alpha_grid
+from inference.alpha_grid import (
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
+    DEFAULT_ALPHA_STEP,
+    alpha_grid,
+)
 from inference.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
@@ -264,9 +269,9 @@ def estimate_ch_ivqr_controls(
     x_controls: np.ndarray,
     estimator_name: str,
     alphas: np.ndarray | None = None,
-    alpha_min: float = -2.0,
-    alpha_max: float = 4.0,
-    alpha_step: float = 0.05,
+    alpha_min: float = DEFAULT_ALPHA_MIN,
+    alpha_max: float = DEFAULT_ALPHA_MAX,
+    alpha_step: float = DEFAULT_ALPHA_STEP,
     confidence_level: float = 0.95,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     selected_controls: int | None = None,

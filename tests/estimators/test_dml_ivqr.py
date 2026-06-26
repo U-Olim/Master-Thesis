@@ -7,6 +7,7 @@ import pytest
 
 from dgp import generate_data
 from dgp.designs import Design, SimData
+import estimators.dml_ivqr as dml_module
 from estimators.dml_ivqr import (
     QuantileSolver,
     _build_dml_fold_cache,
@@ -18,6 +19,11 @@ from estimators.dml_ivqr import (
     fit_quantile_nuisance,
     make_folds,
     standardize_train_test,
+)
+from inference.alpha_grid import (
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
+    DEFAULT_ALPHA_STEP,
 )
 
 
@@ -78,9 +84,9 @@ def _call_estimate_dml_ivqr_with_objects(
     *,
     tau: object,
     alphas: object = None,
-    alpha_min: object = -2.0,
-    alpha_max: object = 4.0,
-    alpha_step: object = 0.05,
+    alpha_min: object = DEFAULT_ALPHA_MIN,
+    alpha_max: object = DEFAULT_ALPHA_MAX,
+    alpha_step: object = DEFAULT_ALPHA_STEP,
     confidence_level: object = 0.95,
     k_folds: object = 5,
     fold_random_state: object = 123,
@@ -106,6 +112,59 @@ def _call_estimate_dml_ivqr_with_objects(
         gmm_ridge=cast(float, gmm_ridge),
         use_cache=cast(bool, use_cache),
     )
+
+
+def test_estimate_dml_ivqr_fallback_grid_uses_project_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
+    fallback_grid = np.array([-1.0, 0.0, 3.0])
+    captured: dict[str, object] = {}
+
+    def fake_alpha_grid(alpha_min: float, alpha_max: float, step: float) -> np.ndarray:
+        captured["alpha_min"] = alpha_min
+        captured["alpha_max"] = alpha_max
+        captured["step"] = step
+        return fallback_grid
+
+    monkeypatch.setattr(dml_module, "alpha_grid", fake_alpha_grid)
+    monkeypatch.setattr(dml_module, "_build_dml_fold_cache", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        dml_module,
+        "_evaluate_dml_ivqr_alpha_with_cache",
+        lambda **kwargs: (abs(float(kwargs["alpha_value"])), True, "ok"),
+    )
+
+    result = estimate_dml_ivqr(data, tau=0.5)
+
+    assert captured == {
+        "alpha_min": DEFAULT_ALPHA_MIN,
+        "alpha_max": DEFAULT_ALPHA_MAX,
+        "step": DEFAULT_ALPHA_STEP,
+    }
+    assert result.alpha_grid_size == len(fallback_grid)
+
+
+def test_estimate_dml_ivqr_explicit_alphas_override_fallback_grid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
+    explicit_alphas = np.array([-0.25, 0.0, 0.25])
+
+    def fail_alpha_grid(*args, **kwargs):
+        raise AssertionError("fallback alpha grid should not be constructed")
+
+    monkeypatch.setattr(dml_module, "alpha_grid", fail_alpha_grid)
+    monkeypatch.setattr(dml_module, "_build_dml_fold_cache", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        dml_module,
+        "_evaluate_dml_ivqr_alpha_with_cache",
+        lambda **kwargs: (abs(float(kwargs["alpha_value"])), True, "ok"),
+    )
+
+    result = estimate_dml_ivqr(data, tau=0.5, alphas=explicit_alphas)
+
+    assert result.alpha_grid_size == len(explicit_alphas)
 
 
 def test_make_folds_covers_each_observation_once() -> None:

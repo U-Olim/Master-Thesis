@@ -11,6 +11,11 @@ from dgp import generate_data
 from dgp.designs import Design, SimData
 from estimators import ch_inverse_ivqr
 from estimators.ch_inverse_ivqr import add_intercept
+from inference.alpha_grid import (
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
+    DEFAULT_ALPHA_STEP,
+)
 
 
 def _call_failed_ch_ivqr_result_with_objects(
@@ -234,5 +239,81 @@ def test_ch_ivqr_evaluator_marks_iteration_limit_as_nonconverged(
     assert np.all(np.isnan(evaluation.gamma_hat))
     assert np.all(np.isnan(evaluation.cov_gamma))
     assert evaluation.message == "QuantReg reached iteration limit"
+
+
+def test_ch_ivqr_controls_fallback_grid_uses_project_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
+    fallback_grid = np.array([-1.0, 0.0, 3.0])
+    captured: dict[str, object] = {}
+
+    def fake_alpha_grid(alpha_min: float, alpha_max: float, step: float) -> np.ndarray:
+        captured["alpha_min"] = alpha_min
+        captured["alpha_max"] = alpha_max
+        captured["step"] = step
+        return fallback_grid
+
+    monkeypatch.setattr(ch_inverse_ivqr, "alpha_grid", fake_alpha_grid)
+    monkeypatch.setattr(
+        ch_inverse_ivqr,
+        "evaluate_alpha_ch_ivqr",
+        lambda **kwargs: ch_inverse_ivqr.AlphaEvaluation(
+            statistic=abs(float(kwargs["alpha"])),
+            gamma_hat=np.zeros(1),
+            cov_gamma=np.eye(1),
+            dim_z=1,
+            converged=True,
+            message="ok",
+        ),
+    )
+
+    result = ch_inverse_ivqr.estimate_ch_ivqr_controls(
+        data=data,
+        tau=0.5,
+        x_controls=data.x[:, :1],
+        estimator_name="test",
+    )
+
+    assert captured == {
+        "alpha_min": DEFAULT_ALPHA_MIN,
+        "alpha_max": DEFAULT_ALPHA_MAX,
+        "step": DEFAULT_ALPHA_STEP,
+    }
+    assert result.alpha_grid_size == len(fallback_grid)
+
+
+def test_ch_ivqr_controls_explicit_alphas_override_fallback_grid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
+    explicit_alphas = np.array([-0.25, 0.0, 0.25])
+
+    def fail_alpha_grid(*args, **kwargs):
+        raise AssertionError("fallback alpha grid should not be constructed")
+
+    monkeypatch.setattr(ch_inverse_ivqr, "alpha_grid", fail_alpha_grid)
+    monkeypatch.setattr(
+        ch_inverse_ivqr,
+        "evaluate_alpha_ch_ivqr",
+        lambda **kwargs: ch_inverse_ivqr.AlphaEvaluation(
+            statistic=abs(float(kwargs["alpha"])),
+            gamma_hat=np.zeros(1),
+            cov_gamma=np.eye(1),
+            dim_z=1,
+            converged=True,
+            message="ok",
+        ),
+    )
+
+    result = ch_inverse_ivqr.estimate_ch_ivqr_controls(
+        data=data,
+        tau=0.5,
+        x_controls=data.x[:, :1],
+        estimator_name="test",
+        alphas=explicit_alphas,
+    )
+
+    assert result.alpha_grid_size == len(explicit_alphas)
 
 

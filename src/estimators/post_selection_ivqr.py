@@ -23,7 +23,12 @@ from estimators.ch_inverse_ivqr import (
     as_2d_instruments,
     evaluate_alpha_ch_ivqr as _evaluate_alpha_ch_ivqr,
 )
-from inference.alpha_grid import alpha_grid
+from inference.alpha_grid import (
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
+    DEFAULT_ALPHA_STEP,
+    alpha_grid,
+)
 from inference.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
@@ -172,9 +177,9 @@ def estimate_post_selection_ivqr(
     data: SimData,
     tau: float,
     alphas: np.ndarray | None = None,
-    alpha_min: float = -2.0,
-    alpha_max: float = 4.0,
-    alpha_step: float = 0.05,
+    alpha_min: float = DEFAULT_ALPHA_MIN,
+    alpha_max: float = DEFAULT_ALPHA_MAX,
+    alpha_step: float = DEFAULT_ALPHA_STEP,
     confidence_level: float = 0.95,
     selection_random_state: int | None = 123,
     selection_cv: int = 5,

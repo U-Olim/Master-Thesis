@@ -11,6 +11,11 @@ from dgp.designs import Design, SimData
 from estimators import ch_inverse_ivqr
 from estimators.base import EstimationResult
 from estimators.full_control_ivqr import estimate_full_control_ivqr
+from inference.alpha_grid import (
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
+    DEFAULT_ALPHA_STEP,
+)
 
 
 def _call_estimate_full_control_ivqr_with_objects(
@@ -18,9 +23,9 @@ def _call_estimate_full_control_ivqr_with_objects(
     data: object,
     tau: object = 0.5,
     alphas: object = None,
-    alpha_min: object = -2.0,
-    alpha_max: object = 4.0,
-    alpha_step: object = 0.05,
+    alpha_min: object = DEFAULT_ALPHA_MIN,
+    alpha_max: object = DEFAULT_ALPHA_MAX,
+    alpha_step: object = DEFAULT_ALPHA_STEP,
     confidence_level: object = 0.95,
     max_iter: object = 1000,
     gmm_ridge: object = 1e-8,
@@ -123,6 +128,54 @@ def test_full_control_delegates_all_controls_to_ch(
     assert captured["max_iter"] == 2000
     assert captured["selected_controls"] == data.x.shape[1]
     assert result.selected_controls == data.x.shape[1]
+
+
+def test_full_control_fallback_grid_delegates_project_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import estimators.full_control_ivqr as full_control_module
+
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    captured: dict[str, object] = {}
+
+    def fake_ch_estimator(**kwargs):
+        captured.update(kwargs)
+        return EstimationResult(
+            estimator=kwargs["estimator_name"],
+            alpha_hat=1.0,
+            alpha_true=kwargs["data"].alpha_true,
+            tau=kwargs["tau"],
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=None,
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=kwargs["selected_controls"],
+            runtime_seconds=0.0,
+        )
+
+    monkeypatch.setattr(
+        full_control_module,
+        "estimate_ch_ivqr_controls",
+        fake_ch_estimator,
+    )
+
+    estimate_full_control_ivqr(data, tau=0.5)
+
+    assert captured["alphas"] is None
+    assert captured["alpha_min"] == DEFAULT_ALPHA_MIN
+    assert captured["alpha_max"] == DEFAULT_ALPHA_MAX
+    assert captured["alpha_step"] == DEFAULT_ALPHA_STEP
 
 
 def test_estimate_full_control_ivqr_infeasible_high_dimensional_case_fails_cleanly() -> None:

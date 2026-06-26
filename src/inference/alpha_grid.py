@@ -5,7 +5,18 @@ from __future__ import annotations
 import numpy as np
 
 
-__all__ = ["alpha_grid"]
+DEFAULT_ALPHA_MIN: float = -1.0
+DEFAULT_ALPHA_MAX: float = 3.0
+DEFAULT_ALPHA_STEP: float = 0.05
+
+
+__all__ = [
+    "DEFAULT_ALPHA_MIN",
+    "DEFAULT_ALPHA_MAX",
+    "DEFAULT_ALPHA_STEP",
+    "alpha_grid",
+    "default_alpha_grid",
+]
 
 
 def _validate_grid_scalar(name: str, value: float) -> float:
@@ -53,3 +64,8 @@ def alpha_grid(
         raise ValueError("alpha grid must be strictly increasing")
 
     return grid
+
+
+def default_alpha_grid() -> np.ndarray:
+    """Return the project-default direct-estimator fallback alpha grid."""
+    return alpha_grid(DEFAULT_ALPHA_MIN, DEFAULT_ALPHA_MAX, DEFAULT_ALPHA_STEP)

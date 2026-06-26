@@ -133,6 +133,55 @@ def test_estimate_oracle_ivqr_alphas_alias_still_works(
     np.testing.assert_array_equal(captured["alphas"], alphas)
 
 
+def test_estimate_oracle_ivqr_without_alphas_uses_common_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+    captured: dict[str, object] = {}
+
+    def fake_common_estimator(data, x_controls, estimator_name, **kwargs):
+        captured.update(kwargs)
+        return EstimationResult(
+            estimator=estimator_name,
+            alpha_hat=1.0,
+            alpha_true=data.alpha_true,
+            tau=kwargs["tau"],
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=None,
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=None,
+            runtime_seconds=0.0,
+        )
+
+    import estimators.oracle_ivqr as oracle_module
+
+    monkeypatch.setattr(
+        oracle_module,
+        "estimate_ch_ivqr_controls",
+        fake_common_estimator,
+    )
+
+    result = estimate_oracle_ivqr(data, tau=0.5, oracle_indices=np.arange(10))
+
+    assert result.estimator == "oracle"
+    assert captured["alphas"] is None
+    assert "alpha_min" not in captured
+    assert "alpha_max" not in captured
+    assert "alpha_step" not in captured
+
+
 def test_estimate_oracle_ivqr_uses_reduced_controls(monkeypatch: pytest.MonkeyPatch) -> None:
     data = generate_data(Design("dgp1", n=80, p=20, pi=1.0, tau=0.5, rep=0, seed=123))
     captured: dict[str, tuple[int, int]] = {}

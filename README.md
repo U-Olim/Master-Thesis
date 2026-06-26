@@ -19,7 +19,7 @@ The full-control benchmark is kept outside the main simulation because it is slo
 
 The reported DML estimator is a DML-style residualized IVQR estimator with cross-fitting. It should not be interpreted as an exact density-weighted Chen-Huang-Tien DML-IVQR implementation. The implementation is designed for the one-instrument simulation setting used in this thesis.
 
-Alpha-grid resolution matters for alpha estimates, bias, RMSE, coverage, and confidence-region length. All default simulation modes use an 81-point alpha grid on [-1, 3], giving grid step 0.05. CLI options can override the default grid.
+Alpha-grid resolution matters for alpha estimates, bias, RMSE, coverage, and confidence-region length. All default simulation modes use an 81-point alpha grid on [-1, 3], giving grid step 0.05. Direct estimator fallback grids use the same range and step when `alphas` is not supplied. CLI options or explicit `alphas` can override the default grid.
 
 ## Repository Structure
 

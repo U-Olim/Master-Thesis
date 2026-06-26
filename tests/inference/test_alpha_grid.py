@@ -3,7 +3,25 @@
 import numpy as np
 import pytest
 
-from inference.alpha_grid import alpha_grid
+from inference.alpha_grid import (
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
+    DEFAULT_ALPHA_STEP,
+    alpha_grid,
+    default_alpha_grid,
+)
+
+
+def test_default_alpha_grid_matches_project_simulation_grid() -> None:
+    grid = default_alpha_grid()
+
+    assert len(grid) == 81
+    assert grid[0] == pytest.approx(DEFAULT_ALPHA_MIN)
+    assert grid[-1] == pytest.approx(DEFAULT_ALPHA_MAX)
+    assert DEFAULT_ALPHA_MIN == -1.0
+    assert DEFAULT_ALPHA_MAX == 3.0
+    assert DEFAULT_ALPHA_STEP == pytest.approx(0.05)
+    assert np.allclose(np.diff(grid), DEFAULT_ALPHA_STEP)
 
 
 def test_alpha_grid_has_expected_length_and_endpoint() -> None:

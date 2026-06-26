@@ -16,6 +16,11 @@ import numpy as np
 from dgp.designs import SimData
 from estimators.base import EstimationResult
 from estimators.ch_inverse_ivqr import estimate_ch_ivqr_controls
+from inference.alpha_grid import (
+    DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN,
+    DEFAULT_ALPHA_STEP,
+)
 from simulation.config import DEFAULT_QUANTREG_MAX_ITER
 from utils.validation import validate_alpha_grid, validate_data_arrays, validate_tau
 
@@ -81,9 +86,9 @@ def estimate_full_control_ivqr(
     data: SimData,
     tau: float,
     alphas: np.ndarray | None = None,
-    alpha_min: float = -2.0,
-    alpha_max: float = 4.0,
-    alpha_step: float = 0.05,
+    alpha_min: float = DEFAULT_ALPHA_MIN,
+    alpha_max: float = DEFAULT_ALPHA_MAX,
+    alpha_step: float = DEFAULT_ALPHA_STEP,
     confidence_level: float = 0.95,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     gmm_ridge: float = 1e-8,
