@@ -18,8 +18,10 @@ from simulation.config import (
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN,
+    DEFAULT_BATCH_SIZE,
     DEFAULT_N_JOBS,
 )
+from simulation.estimators_config import normalize_estimator_names
 from tests.helpers import load_full_control_cli, load_main_simulation_cli
 
 full_simulation_cli = load_main_simulation_cli()
@@ -29,7 +31,7 @@ full_control_cli = load_full_control_cli()
 full_control_main = full_control_cli.main
 
 
-def test_run_small_simulation_default_grid_has_81_points() -> None:
+def test_run_small_simulation_default_grid_has_21_points() -> None:
     results = run_small_simulation(
         dgp="dgp1",
         n=80,
@@ -41,12 +43,12 @@ def test_run_small_simulation_default_grid_has_81_points() -> None:
         alphas=None,
     )
 
-    assert results["alpha_grid_size"].dropna().unique().tolist() == [81]
+    assert results["alpha_grid_size"].dropna().unique().tolist() == [21]
     assert DEFAULT_ALPHA_MIN == -1.0
     assert DEFAULT_ALPHA_MAX == 3.0
     assert (DEFAULT_ALPHA_MAX - DEFAULT_ALPHA_MIN) / (
         DEFAULT_ALPHA_GRID_SIZE - 1
-    ) == pytest.approx(0.05)
+    ) == pytest.approx(0.2)
 
 
 def test_run_small_simulation_explicit_grid_size_has_17_points() -> None:
@@ -70,15 +72,51 @@ def test_valid_estimators_includes_oracle() -> None:
 
 
 def test_default_simulation_estimators_are_main_estimators() -> None:
-    assert DEFAULT_SIMULATION_ESTIMATORS == ("oracle", "post_selection", "dml")
+    assert DEFAULT_SIMULATION_ESTIMATORS == ("oracle", "dml", "post_selection")
+
+
+def test_normalize_estimator_names_defaults_and_aliases() -> None:
+    assert normalize_estimator_names(None, scenario="main") == (
+        "oracle",
+        "dml",
+        "post_selection",
+    )
+    assert normalize_estimator_names(["oracle"], scenario="main") == ("oracle",)
+    assert normalize_estimator_names(["dml_ivqr"], scenario="main") == ("dml",)
+    assert normalize_estimator_names(["DML-IVQR"], scenario="main") == ("dml",)
+    assert normalize_estimator_names(["post-selection"], scenario="main") == (
+        "post_selection",
+    )
+    assert normalize_estimator_names(
+        ["oracle", "oracle", "post_selection_ivqr"],
+        scenario="main",
+    ) == ("oracle", "post_selection")
+
+
+def test_normalize_estimator_names_rejects_invalid_and_unsupported() -> None:
+    with pytest.raises(ValueError, match="Unknown estimator"):
+        normalize_estimator_names(["bad_name"], scenario="main")
+    with pytest.raises(ValueError, match="not supported"):
+        normalize_estimator_names(["full_control"], scenario="main")
+    with pytest.raises(ValueError, match="not supported"):
+        normalize_estimator_names(["dml"], scenario="full_control")
+    assert normalize_estimator_names(None, scenario="full_control") == ("full_control",)
+    assert normalize_estimator_names(
+        ["full_control_ivqr"],
+        scenario="full_control",
+    ) == ("full_control",)
 
 
 def test_default_dml_k_folds_is_three() -> None:
     assert DEFAULT_DML_K_FOLDS == 3
 
 
-def test_default_n_jobs_is_six() -> None:
-    assert DEFAULT_N_JOBS == 6
+def test_default_n_jobs_is_four() -> None:
+    assert DEFAULT_N_JOBS == 4
+
+
+def test_default_batch_size_is_ten() -> None:
+    assert DEFAULT_BATCH_SIZE == 10
 
 
 def test_default_quantreg_max_iter_is_1000() -> None:
@@ -123,7 +161,7 @@ def test_full_simulation_fast_mode_defaults_exclude_full_control() -> None:
 
     full_simulation_cli._apply_mode_defaults(args)
 
-    assert args.estimators == ["oracle", "post_selection", "dml"]
+    assert args.estimators == ("oracle", "dml", "post_selection")
     assert "full" not in args.estimators
     assert args.dgps == ["dgp1", "dgp2", "dgp3"]
     assert args.n_values == [500, 1000]
@@ -131,7 +169,7 @@ def test_full_simulation_fast_mode_defaults_exclude_full_control() -> None:
     assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 10
-    assert args.alpha_grid_size == 81
+    assert args.alpha_grid_size == 21
     assert args.output == Path("results/raw/fast_mode_results.csv")
     assert args.summary_output == Path("results/summary/fast_mode_summary.csv")
     assert args.tables_dir == Path("results/tables/fast")
@@ -157,14 +195,14 @@ def test_full_simulation_full_mode_defaults_use_500_reps() -> None:
 
     full_simulation_cli._apply_mode_defaults(args)
 
-    assert args.estimators == ["oracle", "post_selection", "dml"]
+    assert args.estimators == ("oracle", "dml", "post_selection")
     assert args.dgps == ["dgp1", "dgp2", "dgp3"]
     assert args.n_values == [500, 1000]
     assert args.p_values == [200, 500]
     assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]
     assert args.reps == 500
-    assert args.alpha_grid_size == 81
+    assert args.alpha_grid_size == 21
     assert args.output == Path("results/raw/full_mode_results.csv")
     assert args.summary_output == Path("results/summary/full_mode_summary.csv")
     assert args.tables_dir == Path("results/tables/full")
@@ -190,7 +228,7 @@ def test_full_simulation_mode_defaults_respect_explicit_overrides() -> None:
 
     full_simulation_cli._apply_mode_defaults(args)
 
-    assert args.estimators == ["oracle"]
+    assert args.estimators == ("oracle",)
     assert args.dgps == ["dgp1"]
     assert args.n_values == [500]
     assert args.p_values == [200]
@@ -223,7 +261,7 @@ def test_full_simulation_main_mode_respects_alpha_grid_override() -> None:
 
     full_simulation_cli._apply_mode_defaults(args)
 
-    assert args.estimators == ["oracle", "post_selection", "dml"]
+    assert args.estimators == ("oracle", "dml", "post_selection")
     assert args.alpha_grid_size == 13
 
 
@@ -249,6 +287,49 @@ def test_full_simulation_parser_respects_alpha_grid_overrides(monkeypatch) -> No
     assert args.alpha_grid_size == 41
 
 
+def test_full_simulation_parser_estimator_defaults_and_overrides(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["main_simulation.py"])
+    args = full_simulation_cli._parse_args()
+    full_simulation_cli._apply_mode_defaults(args)
+    assert args.estimators == ("oracle", "dml", "post_selection")
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["main_simulation.py", "--estimators", "oracle", "dml_ivqr"],
+    )
+    args = full_simulation_cli._parse_args()
+    full_simulation_cli._apply_mode_defaults(args)
+    assert args.estimators == ("oracle", "dml")
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["main_simulation.py", "--estimators", "bad_name"],
+    )
+    args = full_simulation_cli._parse_args()
+    with pytest.raises(ValueError, match="Unknown estimator"):
+        full_simulation_cli._apply_mode_defaults(args)
+
+
+def test_full_control_parser_estimator_defaults_and_validation(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["full_control_ivqr.py"])
+    args = full_control_cli._parse_args()
+    assert args.estimators == ("full_control",)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["full_control_ivqr.py", "--estimators", "full_control_ivqr"],
+    )
+    args = full_control_cli._parse_args()
+    assert args.estimators == ("full_control",)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["full_control_ivqr.py", "--estimators", "dml"],
+    )
+    with pytest.raises(ValueError, match="not supported"):
+        full_control_cli._parse_args()
+
+
 def test_full_control_parser_uses_default_alpha_grid(monkeypatch) -> None:
     monkeypatch.setattr("sys.argv", ["full_control_ivqr.py"])
 
@@ -256,10 +337,10 @@ def test_full_control_parser_uses_default_alpha_grid(monkeypatch) -> None:
 
     assert args.alpha_min == -1.0
     assert args.alpha_max == 3.0
-    assert args.alpha_grid_size == 81
+    assert args.alpha_grid_size == 21
     assert (args.alpha_max - args.alpha_min) / (
         args.alpha_grid_size - 1
-    ) == pytest.approx(0.05)
+    ) == pytest.approx(0.2)
 
 
 def test_full_control_parser_respects_alpha_grid_overrides(monkeypatch) -> None:
@@ -314,15 +395,43 @@ def test_full_simulation_parser_chunking_defaults_and_overrides(monkeypatch) -> 
 def test_full_simulation_parser_n_jobs_default_and_override(monkeypatch) -> None:
     monkeypatch.setattr("sys.argv", ["main_simulation.py"])
     args = full_simulation_cli._parse_args()
-    assert args.n_jobs == 6
+    assert args.n_jobs == 4
 
-    for n_jobs in (1, 4, 6):
+    for n_jobs in (1, 2, 4):
         monkeypatch.setattr(
             "sys.argv",
             ["main_simulation.py", "--mode", "full", "--n-jobs", str(n_jobs)],
         )
         args = full_simulation_cli._parse_args()
         assert args.n_jobs == n_jobs
+
+
+def test_full_simulation_parser_batch_size_default_and_override(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["main_simulation.py"])
+    args = full_simulation_cli._parse_args()
+    assert args.batch_size == 10
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["main_simulation.py", "--batch-size", "5"],
+    )
+    args = full_simulation_cli._parse_args()
+    assert args.batch_size == 5
+
+
+def test_full_control_parser_runtime_defaults_and_overrides(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["full_control_ivqr.py"])
+    args = full_control_cli._parse_args()
+    assert args.n_jobs == 4
+    assert args.batch_size == 10
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["full_control_ivqr.py", "--n-jobs", "2", "--batch-size", "5"],
+    )
+    args = full_control_cli._parse_args()
+    assert args.n_jobs == 2
+    assert args.batch_size == 5
 
 
 def test_full_simulation_parser_quantreg_max_iter_default_and_override(
@@ -356,6 +465,38 @@ def test_full_simulation_rejects_invalid_n_jobs(monkeypatch) -> None:
     )
     with pytest.raises(ValueError, match="--n-jobs must be at least 1"):
         full_simulation_main()
+
+
+def test_full_simulation_rejects_invalid_batch_size(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["main_simulation.py", "--dry-run", "--batch-size", "0"],
+    )
+    with pytest.raises(ValueError, match="--batch-size must be at least 1"):
+        full_simulation_main()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["main_simulation.py", "--dry-run", "--batch-size", "-1"],
+    )
+    with pytest.raises(ValueError, match="--batch-size must be at least 1"):
+        full_simulation_main()
+
+
+def test_full_control_rejects_invalid_runtime_defaults(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["full_control_ivqr.py", "--dry-run", "--n-jobs", "0"],
+    )
+    with pytest.raises(ValueError, match="--n-jobs must be at least 1"):
+        full_control_main()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["full_control_ivqr.py", "--dry-run", "--batch-size", "0"],
+    )
+    with pytest.raises(ValueError, match="--batch-size must be at least 1"):
+        full_control_main()
 
     monkeypatch.setattr(
         "sys.argv",
@@ -405,8 +546,8 @@ def test_main_runner_validation_rejects_full_control() -> None:
         max_designs=None,
     )
 
-    with pytest.raises(ValueError, match="Main runner only allows"):
-        full_simulation_cli._validate_args(args)
+    with pytest.raises(ValueError, match="Unknown estimator"):
+        full_simulation_cli._apply_mode_defaults(args)
 
 
 def test_manual_oracle_uses_single_scenario_defaults() -> None:
@@ -428,7 +569,7 @@ def test_manual_oracle_uses_single_scenario_defaults() -> None:
 
     full_simulation_cli._apply_mode_defaults(args)
 
-    assert args.estimators == ["oracle"]
+    assert args.estimators == ("oracle",)
     assert args.dgps == ["dgp1", "dgp2", "dgp3"]
     assert args.pi_values == [1.0, 0.5, 0.25, 0.10]
     assert args.taus == [0.25, 0.5, 0.75]

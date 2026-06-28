@@ -30,8 +30,10 @@ if str(SRC_PATH) not in sys.path:
 from dgp.designs import Design  # noqa: E402
 from dgp.generators import generate_data  # noqa: E402
 from dgp.true_parameters import true_alpha  # noqa: E402
-from estimators.base import EstimationResult  # noqa: E402
+from estimators.base import EstimationResult, POST_SELECTION_DIAGNOSTIC_FIELDS  # noqa: E402
 from estimators.full_control_ivqr import estimate_full_control_ivqr  # noqa: E402
+from estimators.post_selection_ivqr import empty_post_selection_diagnostics  # noqa: E402
+from inference.confidence_regions import summarize_alpha_grid_diagnostics  # noqa: E402
 from _common import (  # noqa: E402
     make_reports as _make_reports,
     print_dry_run_common,
@@ -47,6 +49,7 @@ from simulation._validation import (  # noqa: E402
 from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN,
+    DEFAULT_BATCH_SIZE,
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
     FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
@@ -58,6 +61,7 @@ from simulation.config import (  # noqa: E402
     FULL_CONTROL_BENCHMARK_TAUS,
     R_FULL_CONTROL_BENCHMARK,
 )
+from simulation.estimators_config import normalize_estimator_names  # noqa: E402
 from simulation.runner import (  # noqa: E402
     DESIGN_KEY_COLUMNS,
     RESULT_COLUMNS,
@@ -87,7 +91,7 @@ def _parse_args() -> argparse.Namespace:
         help="Path to save raw full-control benchmark results.",
     )
     parser.add_argument("--reps", type=int, default=R_FULL_CONTROL_BENCHMARK)
-    parser.add_argument("--batch-size", type=int, default=5)
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS)
     parser.add_argument("--base-seed", type=int, default=54321)
     parser.add_argument("--alpha-min", type=float, default=DEFAULT_ALPHA_MIN)
@@ -106,6 +110,12 @@ def _parse_args() -> argparse.Namespace:
         "--show-quantreg-warnings",
         action="store_true",
         help="Show quantile-regression iteration warnings instead of suppressing them.",
+    )
+    parser.add_argument(
+        "--estimators",
+        nargs="+",
+        default=None,
+        help="Subset of estimators to run. Default: all estimators for this scenario.",
     )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument(
@@ -158,7 +168,9 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("results/figures/full_control"),
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.estimators = normalize_estimator_names(args.estimators, scenario="full_control")
+    return args
 
 
 def _validate_args(args: argparse.Namespace) -> None:
@@ -204,9 +216,12 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
         "taus": list(args.taus),
         "reps": args.reps,
         "base_seed": args.base_seed,
+        "batch_size": args.batch_size,
+        "n_jobs": args.n_jobs,
         "alpha_min": args.alpha_min,
         "alpha_max": args.alpha_max,
         "alpha_grid_size": args.alpha_grid_size,
+        "estimators": list(args.estimators),
         "quantreg_max_iter": args.quantreg_max_iter,
     }
 
@@ -275,11 +290,101 @@ def _print_dry_run(
         alpha_grid_size=args.alpha_grid_size,
         output=args.output,
         resume=args.resume,
-        extra_lines=(f"Rerun failed: {str(args.rerun_failed).lower()}",),
+        extra_lines=(
+            f"Running estimators: {', '.join(args.estimators)}",
+            f"Rerun failed: {str(args.rerun_failed).lower()}",
+        ),
     )
 
 
-def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object]:
+def _diagnostic_value(
+    result: EstimationResult,
+    name: str,
+    fallback: object,
+) -> object:
+    value = getattr(result, name)
+    return fallback if value is None else value
+
+
+def _result_diagnostics(
+    result: EstimationResult,
+    alphas: np.ndarray,
+) -> dict[str, object]:
+    failed_alpha_count = result.failed_alpha_count
+    diagnostics = summarize_alpha_grid_diagnostics(
+        alpha_grid=alphas,
+        accepted_mask=None,
+        alpha_hat=result.alpha_hat,
+        failed_alpha_count=0 if failed_alpha_count is None else failed_alpha_count,
+    )
+    if failed_alpha_count is None:
+        diagnostics["failed_alpha_count"] = None
+        diagnostics["failed_alpha_rate"] = np.nan
+
+    for name in (
+        "alpha_grid_min",
+        "alpha_grid_max",
+        "alpha_grid_step",
+        "alpha_hat_at_lower_boundary",
+        "alpha_hat_at_upper_boundary",
+        "alpha_hat_at_any_boundary",
+        "cr_hits_lower_boundary",
+        "cr_hits_upper_boundary",
+        "cr_hits_any_boundary",
+        "cr_accepted_alpha_count",
+        "cr_acceptance_rate",
+        "cr_n_blocks",
+        "cr_hull_length",
+        "failed_alpha_rate",
+        "min_test_stat",
+        "max_test_stat",
+        "test_stat_at_alpha_hat",
+        "critical_value",
+    ):
+        diagnostics[name] = _diagnostic_value(result, name, diagnostics[name])
+
+    diagnostics["alpha_grid_size"] = _diagnostic_value(
+        result,
+        "alpha_grid_size",
+        diagnostics["alpha_grid_size"],
+    )
+    diagnostics["failed_alpha_count"] = _diagnostic_value(
+        result,
+        "failed_alpha_count",
+        diagnostics["failed_alpha_count"],
+    )
+    diagnostics["cr_lower"] = (
+        result.cr_lower if result.cr_lower is not None else diagnostics["cr_lower"]
+    )
+    diagnostics["cr_upper"] = (
+        result.cr_upper if result.cr_upper is not None else diagnostics["cr_upper"]
+    )
+    diagnostics["cr_length"] = (
+        result.cr_length if result.cr_length is not None else diagnostics["cr_length"]
+    )
+    diagnostics["cr_empty"] = result.cr_empty
+    diagnostics["cr_disconnected"] = (
+        result.cr_disconnected
+        if result.cr_disconnected is not None
+        else diagnostics["cr_disconnected"]
+    )
+    return diagnostics
+
+
+def _post_selection_diagnostics(result: EstimationResult) -> dict[str, object]:
+    diagnostics = empty_post_selection_diagnostics()
+    for name in POST_SELECTION_DIAGNOSTIC_FIELDS:
+        value = getattr(result, name)
+        if value is not None:
+            diagnostics[name] = value
+    return diagnostics
+
+
+def _result_to_row(
+    design: Design,
+    result: EstimationResult,
+    alphas: np.ndarray,
+) -> dict[str, object]:
     bias = None
     absolute_error = None
     squared_error = None
@@ -287,6 +392,8 @@ def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object
         bias = result.alpha_hat - result.alpha_true
         absolute_error = abs(bias)
         squared_error = bias**2
+    diagnostics = _result_diagnostics(result, alphas)
+    ps_diagnostics = _post_selection_diagnostics(result)
     return {
         "dgp": design.dgp,
         "n": design.n,
@@ -308,16 +415,35 @@ def _result_to_row(design: Design, result: EstimationResult) -> dict[str, object
         ),
         "failed": result.failed,
         "converged": result.converged,
-        "cr_lower": result.cr_lower,
-        "cr_upper": result.cr_upper,
-        "cr_length": result.cr_length,
-        "cr_empty": result.cr_empty,
-        "cr_disconnected": result.cr_disconnected,
+        "alpha_grid_min": diagnostics["alpha_grid_min"],
+        "alpha_grid_max": diagnostics["alpha_grid_max"],
+        "alpha_grid_size": diagnostics["alpha_grid_size"],
+        "alpha_grid_step": diagnostics["alpha_grid_step"],
+        "alpha_hat_at_lower_boundary": diagnostics["alpha_hat_at_lower_boundary"],
+        "alpha_hat_at_upper_boundary": diagnostics["alpha_hat_at_upper_boundary"],
+        "alpha_hat_at_any_boundary": diagnostics["alpha_hat_at_any_boundary"],
+        "cr_lower": diagnostics["cr_lower"],
+        "cr_upper": diagnostics["cr_upper"],
+        "cr_length": diagnostics["cr_length"],
+        "cr_hits_lower_boundary": diagnostics["cr_hits_lower_boundary"],
+        "cr_hits_upper_boundary": diagnostics["cr_hits_upper_boundary"],
+        "cr_hits_any_boundary": diagnostics["cr_hits_any_boundary"],
+        "cr_empty": diagnostics["cr_empty"],
+        "cr_accepted_alpha_count": diagnostics["cr_accepted_alpha_count"],
+        "cr_acceptance_rate": diagnostics["cr_acceptance_rate"],
+        "cr_n_blocks": diagnostics["cr_n_blocks"],
+        "cr_disconnected": diagnostics["cr_disconnected"],
+        "cr_hull_length": diagnostics["cr_hull_length"],
         "cr_covers_true": result.cr_covers_true,
         "selected_controls": result.selected_controls,
         "runtime_seconds": result.runtime_seconds,
-        "failed_alpha_count": result.failed_alpha_count,
-        "alpha_grid_size": result.alpha_grid_size,
+        "failed_alpha_count": diagnostics["failed_alpha_count"],
+        "failed_alpha_rate": diagnostics["failed_alpha_rate"],
+        "min_test_stat": diagnostics["min_test_stat"],
+        "max_test_stat": diagnostics["max_test_stat"],
+        "test_stat_at_alpha_hat": diagnostics["test_stat_at_alpha_hat"],
+        "critical_value": diagnostics["critical_value"],
+        **ps_diagnostics,
         "message": result.message,
     }
 
@@ -330,6 +456,15 @@ def _failure_row(
     except Exception:
         alpha_true = None
     message = f"{type(exc).__name__}: {str(exc)[:MAX_ERROR_MESSAGE_LENGTH]}"
+    diagnostics = summarize_alpha_grid_diagnostics(
+        alpha_grid=alphas,
+        accepted_mask=None,
+        alpha_hat=None,
+        failed_alpha_count=0,
+    )
+    diagnostics["failed_alpha_count"] = None
+    diagnostics["failed_alpha_rate"] = np.nan
+    ps_diagnostics = empty_post_selection_diagnostics()
     return {
         "dgp": design.dgp,
         "n": design.n,
@@ -349,16 +484,35 @@ def _failure_row(
         "error_message": str(exc)[:MAX_ERROR_MESSAGE_LENGTH],
         "failed": True,
         "converged": False,
-        "cr_lower": None,
-        "cr_upper": None,
-        "cr_length": None,
-        "cr_empty": True,
-        "cr_disconnected": None,
+        "alpha_grid_min": diagnostics["alpha_grid_min"],
+        "alpha_grid_max": diagnostics["alpha_grid_max"],
+        "alpha_grid_size": diagnostics["alpha_grid_size"],
+        "alpha_grid_step": diagnostics["alpha_grid_step"],
+        "alpha_hat_at_lower_boundary": diagnostics["alpha_hat_at_lower_boundary"],
+        "alpha_hat_at_upper_boundary": diagnostics["alpha_hat_at_upper_boundary"],
+        "alpha_hat_at_any_boundary": diagnostics["alpha_hat_at_any_boundary"],
+        "cr_lower": diagnostics["cr_lower"],
+        "cr_upper": diagnostics["cr_upper"],
+        "cr_length": diagnostics["cr_length"],
+        "cr_hits_lower_boundary": diagnostics["cr_hits_lower_boundary"],
+        "cr_hits_upper_boundary": diagnostics["cr_hits_upper_boundary"],
+        "cr_hits_any_boundary": diagnostics["cr_hits_any_boundary"],
+        "cr_empty": diagnostics["cr_empty"],
+        "cr_accepted_alpha_count": diagnostics["cr_accepted_alpha_count"],
+        "cr_acceptance_rate": diagnostics["cr_acceptance_rate"],
+        "cr_n_blocks": diagnostics["cr_n_blocks"],
+        "cr_disconnected": diagnostics["cr_disconnected"],
+        "cr_hull_length": diagnostics["cr_hull_length"],
         "cr_covers_true": None,
         "selected_controls": None,
         "runtime_seconds": None,
-        "failed_alpha_count": None,
-        "alpha_grid_size": len(alphas),
+        "failed_alpha_count": diagnostics["failed_alpha_count"],
+        "failed_alpha_rate": diagnostics["failed_alpha_rate"],
+        "min_test_stat": diagnostics["min_test_stat"],
+        "max_test_stat": diagnostics["max_test_stat"],
+        "test_stat_at_alpha_hat": diagnostics["test_stat_at_alpha_hat"],
+        "critical_value": diagnostics["critical_value"],
+        **ps_diagnostics,
         "message": message,
     }
 
@@ -378,7 +532,7 @@ def _run_one(
                 alphas=alphas,
                 max_iter=quantreg_max_iter,
             )
-        return _result_to_row(design, result)
+        return _result_to_row(design, result, alphas)
     except Exception as exc:  # noqa: BLE001 - record failed replications.
         return _failure_row(design, alphas, exc)
 
@@ -454,6 +608,7 @@ def _write_manifest(
         "pending_designs": pending_designs,
         "designs_in_run": designs_in_run,
         "estimator": ESTIMATOR_NAME,
+        "estimators": list(args.estimators),
         "alpha_grid": [float(value) for value in alphas],
     }
     path.write_text(
@@ -535,6 +690,7 @@ def main() -> None:
 
     start = time.perf_counter()
     completed = 0
+    print(f"Running estimators: {', '.join(args.estimators)}")
     for batch_start in range(0, len(designs), args.batch_size):
         batch = designs[batch_start : batch_start + args.batch_size]
         batch_df = _run_batch(

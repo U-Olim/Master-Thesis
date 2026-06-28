@@ -15,12 +15,12 @@ from inference.alpha_grid import (
 def test_default_alpha_grid_matches_project_simulation_grid() -> None:
     grid = default_alpha_grid()
 
-    assert len(grid) == 81
+    assert len(grid) == 21
     assert grid[0] == pytest.approx(DEFAULT_ALPHA_MIN)
     assert grid[-1] == pytest.approx(DEFAULT_ALPHA_MAX)
     assert DEFAULT_ALPHA_MIN == -1.0
     assert DEFAULT_ALPHA_MAX == 3.0
-    assert DEFAULT_ALPHA_STEP == pytest.approx(0.05)
+    assert DEFAULT_ALPHA_STEP == pytest.approx(0.2)
     assert np.allclose(np.diff(grid), DEFAULT_ALPHA_STEP)
 
 

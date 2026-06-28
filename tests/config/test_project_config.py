@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import config
+import numpy as np
 import pytest
 import simulation.config as sim_config
 from simulation.config import (
@@ -40,14 +41,49 @@ from simulation.config import (
 )
 
 
-def test_default_alpha_grid_is_81_points_on_minus_one_to_three() -> None:
+def test_default_alpha_grid_is_21_points_on_minus_one_to_three() -> None:
     assert DEFAULT_ALPHA_MIN == -1.0
     assert DEFAULT_ALPHA_MAX == 3.0
-    assert DEFAULT_ALPHA_GRID_SIZE == 81
-    assert FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE == 81
+    assert DEFAULT_ALPHA_GRID_SIZE == 21
+    assert FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE == DEFAULT_ALPHA_GRID_SIZE
     assert (DEFAULT_ALPHA_MAX - DEFAULT_ALPHA_MIN) / (
         DEFAULT_ALPHA_GRID_SIZE - 1
-    ) == pytest.approx(0.05)
+    ) == pytest.approx(0.2)
+
+
+def test_default_alpha_grid_values_are_size_based() -> None:
+    grid = np.linspace(
+        DEFAULT_ALPHA_MIN,
+        DEFAULT_ALPHA_MAX,
+        DEFAULT_ALPHA_GRID_SIZE,
+    )
+
+    assert np.allclose(
+        grid,
+        [
+            -1.0,
+            -0.8,
+            -0.6,
+            -0.4,
+            -0.2,
+            0.0,
+            0.2,
+            0.4,
+            0.6,
+            0.8,
+            1.0,
+            1.2,
+            1.4,
+            1.6,
+            1.8,
+            2.0,
+            2.2,
+            2.4,
+            2.6,
+            2.8,
+            3.0,
+        ],
+    )
 
 
 def test_simulation_replication_defaults() -> None:
@@ -113,6 +149,8 @@ def test_estimation_execution_defaults_are_positive_integers() -> None:
         assert value > 0, name
 
     assert DEFAULT_DML_K_FOLDS == 3
+    assert DEFAULT_N_JOBS == 4
+    assert DEFAULT_BATCH_SIZE == 10
 
 
 def test_full_control_benchmark_design_constants() -> None:
@@ -152,7 +190,7 @@ def test_main_simulation_design_values() -> None:
 
 
 def test_estimator_name_constants() -> None:
-    assert MAIN_ESTIMATORS == ("oracle", "post_selection", "dml")
+    assert MAIN_ESTIMATORS == ("oracle", "dml", "post_selection")
     assert FULL_CONTROL_BENCHMARK_ESTIMATOR == "full_control_ivqr"
 
 

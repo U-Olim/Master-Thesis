@@ -9,6 +9,7 @@ from inference.confidence_regions import (
     critical_value_chi_square,
     invert_score_test,
     sanitize_grid_statistics,
+    summarize_alpha_grid_diagnostics,
 )
 
 
@@ -50,6 +51,97 @@ def test_argmin_grid_reports_boundary_minimum() -> None:
     assert alpha_hat == pytest.approx(-1.0)
     assert min_stat == pytest.approx(1.0)
     assert at_boundary is True
+
+
+def test_alpha_grid_diagnostics_empty_confidence_region() -> None:
+    diagnostics = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([-1.0, 0.0, 1.0]),
+        accepted_mask=np.array([False, False, False]),
+        alpha_hat=0.0,
+        failed_alpha_count=1,
+    )
+
+    assert diagnostics["cr_empty"] is True
+    assert diagnostics["cr_accepted_alpha_count"] == 0
+    assert diagnostics["cr_acceptance_rate"] == pytest.approx(0.0)
+    assert diagnostics["cr_n_blocks"] == 0
+    assert diagnostics["cr_disconnected"] is False
+    assert np.isnan(diagnostics["cr_lower"])
+    assert np.isnan(diagnostics["cr_upper"])
+    assert np.isnan(diagnostics["cr_length"])
+    assert np.isnan(diagnostics["cr_hull_length"])
+    assert diagnostics["failed_alpha_rate"] == pytest.approx(1.0 / 3.0)
+
+
+def test_alpha_grid_diagnostics_one_contiguous_confidence_region() -> None:
+    diagnostics = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([-1.0, 0.0, 1.0, 2.0]),
+        accepted_mask=np.array([False, True, True, False]),
+        alpha_hat=1.0,
+    )
+
+    assert diagnostics["cr_empty"] is False
+    assert diagnostics["cr_lower"] == pytest.approx(0.0)
+    assert diagnostics["cr_upper"] == pytest.approx(1.0)
+    assert diagnostics["cr_length"] == pytest.approx(1.0)
+    assert diagnostics["cr_accepted_alpha_count"] == 2
+    assert diagnostics["cr_acceptance_rate"] == pytest.approx(0.5)
+    assert diagnostics["cr_n_blocks"] == 1
+    assert diagnostics["cr_disconnected"] is False
+
+
+def test_alpha_grid_diagnostics_two_disconnected_blocks() -> None:
+    diagnostics = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([-1.0, 0.0, 1.0, 2.0, 3.0]),
+        accepted_mask=np.array([False, True, True, False, True]),
+        alpha_hat=0.0,
+    )
+
+    assert diagnostics["cr_accepted_alpha_count"] == 3
+    assert diagnostics["cr_n_blocks"] == 2
+    assert diagnostics["cr_disconnected"] is True
+    assert diagnostics["cr_lower"] == pytest.approx(0.0)
+    assert diagnostics["cr_upper"] == pytest.approx(3.0)
+    assert diagnostics["cr_hull_length"] == pytest.approx(3.0)
+
+
+def test_alpha_grid_diagnostics_boundary_hits() -> None:
+    lower = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([-1.0, 0.0, 1.0]),
+        accepted_mask=np.array([True, True, False]),
+        alpha_hat=-1.0,
+    )
+    upper = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([-1.0, 0.0, 1.0]),
+        accepted_mask=np.array([False, True, True]),
+        alpha_hat=1.0,
+    )
+
+    assert lower["cr_hits_lower_boundary"] is True
+    assert lower["cr_hits_upper_boundary"] is False
+    assert lower["cr_hits_any_boundary"] is True
+    assert lower["alpha_hat_at_lower_boundary"] is True
+    assert lower["alpha_hat_at_any_boundary"] is True
+    assert upper["cr_hits_lower_boundary"] is False
+    assert upper["cr_hits_upper_boundary"] is True
+    assert upper["cr_hits_any_boundary"] is True
+    assert upper["alpha_hat_at_upper_boundary"] is True
+    assert upper["alpha_hat_at_any_boundary"] is True
+
+
+def test_alpha_grid_diagnostics_test_statistics() -> None:
+    diagnostics = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([-1.0, 0.0, 1.0]),
+        accepted_mask=np.array([False, True, False]),
+        alpha_hat=0.0,
+        test_stats=np.array([5.0, 1.0, 4.0]),
+        critical_value=3.84,
+    )
+
+    assert diagnostics["min_test_stat"] == pytest.approx(1.0)
+    assert diagnostics["max_test_stat"] == pytest.approx(5.0)
+    assert diagnostics["test_stat_at_alpha_hat"] == pytest.approx(1.0)
+    assert diagnostics["critical_value"] == pytest.approx(3.84)
 
 
 def test_invert_score_test_connected_region_includes_critical_boundary() -> None:

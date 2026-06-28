@@ -36,6 +36,45 @@ def test_run_small_simulation_returns_dataframe() -> None:
     assert {"cr_disconnected", "failed_alpha_count", "alpha_grid_size"}.issubset(
         results.columns
     )
+    assert (results["alpha_grid_min"] == 0.0).all()
+    assert (results["alpha_grid_max"] == 2.0).all()
+    assert (results["alpha_grid_size"] == 5).all()
+    assert np.allclose(results["alpha_grid_step"], 0.5)
+    assert {"cr_n_blocks", "cr_hits_any_boundary", "failed_alpha_rate"}.issubset(
+        results.columns
+    )
+    ps_columns = {
+        "ps_n_selected_controls",
+        "ps_n_selected_instruments",
+        "ps_n_selected_total",
+        "ps_share_selected_controls",
+        "ps_share_selected_instruments",
+        "ps_selected_no_controls",
+        "ps_selected_no_instruments",
+        "ps_selected_empty_total",
+        "ps_first_stage_r2",
+        "ps_first_stage_adj_r2",
+        "ps_first_stage_partial_r2",
+        "ps_first_stage_f_stat",
+        "ps_first_stage_condition_number",
+        "ps_selection_method",
+        "ps_lasso_alpha_controls",
+        "ps_lasso_alpha_instruments",
+        "ps_lasso_alpha_first_stage",
+        "ps_lasso_cv_folds",
+        "ps_selection_failed",
+        "ps_first_stage_failed",
+        "ps_rank_deficient",
+        "ps_warning_code",
+    }
+    assert ps_columns.issubset(results.columns)
+    post_selection = results.loc[results["estimator"] == "post_selection_ivqr"]
+    non_post_selection = results.loc[results["estimator"] != "post_selection_ivqr"]
+    assert post_selection["ps_n_selected_controls"].notna().all()
+    assert post_selection["ps_n_selected_instruments"].notna().all()
+    assert (post_selection["ps_selection_method"] == "lassocv_control_union").all()
+    assert non_post_selection["ps_n_selected_controls"].isna().all()
+    assert (non_post_selection["ps_selection_failed"] == False).all()  # noqa: E712
 
 
 def test_run_small_simulation_bias_logic() -> None:

@@ -13,6 +13,7 @@ from estimators.post_selection_ivqr import (
     estimate_post_selection_ivqr,
     evaluate_post_selection_alpha,
     select_controls_lasso,
+    summarize_post_selection_diagnostics,
 )
 from inference.alpha_grid import (
     DEFAULT_ALPHA_MAX,
@@ -192,6 +193,129 @@ def test_select_controls_lasso_handles_zero_control_matrix() -> None:
     assert "selected_union=0" in message
 
 
+def test_post_selection_diagnostics_no_selected_instruments() -> None:
+    rng = np.random.default_rng(123)
+    d = rng.normal(size=20)
+    x = rng.normal(size=(20, 3))
+    z = rng.normal(size=20)
+
+    diagnostics = summarize_post_selection_diagnostics(
+        d=d,
+        x=x,
+        z=z,
+        selected_control_indices=[0],
+        selected_instrument_indices=[],
+    )
+
+    assert diagnostics["ps_n_selected_instruments"] == 0
+    assert diagnostics["ps_selected_no_instruments"] is True
+    assert np.isnan(diagnostics["ps_first_stage_f_stat"])
+    assert np.isnan(diagnostics["ps_first_stage_partial_r2"])
+    assert diagnostics["ps_warning_code"] == "empty_instruments"
+
+
+def test_post_selection_diagnostics_no_selected_controls() -> None:
+    rng = np.random.default_rng(123)
+    d = rng.normal(size=20)
+    x = rng.normal(size=(20, 3))
+    z = rng.normal(size=20)
+
+    diagnostics = summarize_post_selection_diagnostics(
+        d=d,
+        x=x,
+        z=z,
+        selected_control_indices=[],
+        selected_instrument_indices=[0],
+    )
+
+    assert diagnostics["ps_n_selected_controls"] == 0
+    assert diagnostics["ps_selected_no_controls"] is True
+    assert diagnostics["ps_selected_empty_total"] is False
+
+
+def test_post_selection_diagnostics_empty_total_selection() -> None:
+    rng = np.random.default_rng(123)
+    d = rng.normal(size=20)
+    x = rng.normal(size=(20, 3))
+    z = rng.normal(size=20)
+
+    diagnostics = summarize_post_selection_diagnostics(
+        d=d,
+        x=x,
+        z=z,
+        selected_control_indices=[],
+        selected_instrument_indices=[],
+    )
+
+    assert diagnostics["ps_n_selected_total"] == 0
+    assert diagnostics["ps_selected_empty_total"] is True
+
+
+def test_post_selection_diagnostics_counts_and_shares() -> None:
+    rng = np.random.default_rng(123)
+    d = rng.normal(size=20)
+    x = rng.normal(size=(20, 4))
+    z = rng.normal(size=(20, 2))
+
+    diagnostics = summarize_post_selection_diagnostics(
+        d=d,
+        x=x,
+        z=z,
+        selected_control_indices=[0, 3],
+        selected_instrument_indices=[1],
+        lasso_alpha_controls=0.2,
+        lasso_alpha_first_stage=0.3,
+        lasso_cv_folds=3,
+    )
+
+    assert diagnostics["ps_n_selected_controls"] == 2
+    assert diagnostics["ps_n_selected_instruments"] == 1
+    assert diagnostics["ps_n_selected_total"] == 3
+    assert diagnostics["ps_share_selected_controls"] == pytest.approx(0.5)
+    assert diagnostics["ps_share_selected_instruments"] == pytest.approx(0.5)
+    assert diagnostics["ps_lasso_alpha_controls"] == pytest.approx(0.2)
+    assert diagnostics["ps_lasso_alpha_first_stage"] == pytest.approx(0.3)
+    assert diagnostics["ps_lasso_cv_folds"] == 3
+
+
+def test_post_selection_diagnostics_rank_deficient_design_does_not_crash() -> None:
+    rng = np.random.default_rng(123)
+    z = rng.normal(size=30)
+    x = np.column_stack([z, rng.normal(size=30)])
+    d = z + rng.normal(scale=0.1, size=30)
+
+    diagnostics = summarize_post_selection_diagnostics(
+        d=d,
+        x=x,
+        z=z,
+        selected_control_indices=[0],
+        selected_instrument_indices=[0],
+    )
+
+    assert diagnostics["ps_rank_deficient"] is True
+    assert diagnostics["ps_warning_code"] == "rank_deficient"
+
+
+def test_post_selection_diagnostics_first_stage_synthetic_data() -> None:
+    rng = np.random.default_rng(123)
+    x = rng.normal(size=(80, 2))
+    z = rng.normal(size=80)
+    d = 0.5 * x[:, 0] + 2.0 * z + rng.normal(scale=0.2, size=80)
+
+    diagnostics = summarize_post_selection_diagnostics(
+        d=d,
+        x=x,
+        z=z,
+        selected_control_indices=[0],
+        selected_instrument_indices=[0],
+    )
+
+    assert 0.0 <= diagnostics["ps_first_stage_r2"] <= 1.0
+    assert 0.0 <= diagnostics["ps_first_stage_partial_r2"] <= 1.0
+    assert np.isfinite(diagnostics["ps_first_stage_f_stat"])
+    assert diagnostics["ps_first_stage_f_stat"] > 0.0
+
+
 def test_evaluate_post_selection_alpha_returns_finite_statistic() -> None:
     data = generate_data(Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123))
     x_selected = data.x[:, :3]
@@ -360,11 +484,16 @@ def test_post_selection_qr_feasibility_counts_instruments(
     )
 
     def fake_select_controls(*args, **kwargs):
-        return np.arange(3), "selected_y=3; selected_d=3; selected_union=3"
+        return post_module.SelectionResult(
+            selected_indices=np.arange(3),
+            message="selected_y=3; selected_d=3; selected_union=3",
+            lasso_alpha_controls=0.1,
+            lasso_alpha_first_stage=0.2,
+        )
 
     monkeypatch.setattr(
         post_module,
-        "select_controls_lasso",
+        "_select_controls_lasso_details",
         fake_select_controls,
     )
 

@@ -19,7 +19,7 @@ The full-control benchmark is kept outside the main simulation because it is slo
 
 The reported DML estimator is a DML-style residualized IVQR estimator with cross-fitting. It should not be interpreted as an exact density-weighted Chen-Huang-Tien DML-IVQR implementation. The implementation is designed for the one-instrument simulation setting used in this thesis.
 
-Alpha-grid resolution matters for alpha estimates, bias, RMSE, coverage, and confidence-region length. All default simulation modes use an 81-point alpha grid on [-1, 3], giving grid step 0.05. Direct estimator fallback grids use the same range and step when `alphas` is not supplied. CLI options or explicit `alphas` can override the default grid.
+Alpha-grid resolution matters for alpha estimates, bias, RMSE, coverage, and confidence-region length. All default simulation modes use a 21-point alpha grid on [-1, 3], giving grid step 0.2. Direct estimator fallback grids use the same range and step when `alphas` is not supplied. CLI options or explicit `alphas` can override the default grid.
 
 ## Repository Structure
 
@@ -77,9 +77,11 @@ Instrument strengths: pi = 1.0, 0.5, 0.25, 0.10
 Quantiles:            tau = 0.25, 0.50, 0.75
 Fast replications:    R = 10
 Full replications:    R = 500
-Alpha grid:           81 points on [-1, 3], step 0.05
-Estimators:           oracle, post_selection, dml
+Alpha grid:           21 points on [-1, 3], step 0.2
+Estimators:           oracle, dml, post_selection
 DML folds:            K = 3
+Parallel jobs:        n_jobs = 4
+Batch size:           10 designs
 Main base seed:       12345
 ```
 
@@ -92,8 +94,10 @@ Control dimensions:   p = 20, 50, 100
 Instrument strengths: pi = 1.0
 Quantiles:            tau = 0.25, 0.5, 0.75
 Replications:         R = 500
-Alpha grid:           81 points on [-1, 3], step 0.05
+Alpha grid:           21 points on [-1, 3], step 0.2
 Estimator:            full_control_ivqr
+Parallel jobs:        n_jobs = 4
+Batch size:           10 designs
 Base seed:            54321
 ```
 
@@ -107,6 +111,54 @@ pixi run fast_mode
 pixi run full_mode
 pixi run full_control
 ```
+
+Recommended local fast-mode command for a MacBook Pro M5 base model:
+
+```bash
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+caffeinate -dimsu pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --estimators oracle dml post_selection \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21 \
+  --output results/raw/fast_mode_results_grid21.csv \
+  --manifest results/raw/fast_mode_manifest_grid21.json
+```
+
+Run a targeted estimator subset when diagnosing runtime or coverage:
+
+```bash
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --estimators oracle \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21
+
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --estimators dml \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21
+
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --estimators oracle post_selection \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21
+```
+
+Recommended diagnostic workflow: run `--estimators oracle`, then
+`--estimators post_selection`, then `--estimators dml`, and reserve the full
+estimator set for final comparisons.
 
 ## Dry Runs
 

@@ -200,8 +200,8 @@ def test_main_simulation_fast_dry_run_excludes_full_control(
     assert "Replications per design: 1" in result.stdout
     assert "alpha_min = -1.0" in result.stdout
     assert "alpha_max = 3.0" in result.stdout
-    assert "alpha_grid_size = 81" in result.stdout
-    assert "alpha_grid_step = 0.05" in result.stdout
+    assert "alpha_grid_size = 21" in result.stdout
+    assert "alpha_grid_step = 0.2" in result.stdout
     assert str(output) in result.stdout
     assert "Reports: automatic after successful run" in result.stdout
     assert "full-control IVQR benchmark" not in result.stdout
@@ -244,8 +244,8 @@ def test_main_simulation_full_dry_run_uses_500_reps(
     assert "Replications per design: 500" in result.stdout
     assert "alpha_min = -1.0" in result.stdout
     assert "alpha_max = 3.0" in result.stdout
-    assert "alpha_grid_size = 81" in result.stdout
-    assert "alpha_grid_step = 0.05" in result.stdout
+    assert "alpha_grid_size = 21" in result.stdout
+    assert "alpha_grid_step = 0.2" in result.stdout
     assert str(output) in result.stdout
     assert "Reports: automatic after successful run" in result.stdout
     assert not output.exists()
@@ -299,23 +299,89 @@ def test_main_mode_defaults_use_separate_report_paths(
     assert args.figures_dir == expected_figures
 
 
+def test_main_simulation_cli_runs_only_requested_estimators(
+    main_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "raw" / "selected.csv"
+    manifest = tmp_path / "selected_manifest.json"
+    captured_estimators: list[tuple[str, ...]] = []
+
+    def fake_run_simulation_batch(designs, alphas, **kwargs):
+        estimators = tuple(kwargs["estimators"])
+        captured_estimators.append(estimators)
+        output_names = {
+            "oracle": "oracle",
+            "dml": "dml_ivqr",
+            "post_selection": "post_selection_ivqr",
+        }
+        output.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(
+            {
+                "estimator": [output_names[estimator] for estimator in estimators]
+            }
+        ).to_csv(output, index=False)
+
+    monkeypatch.setattr(main_cli, "run_simulation_batch", fake_run_simulation_batch)
+    monkeypatch.setattr(main_cli, "_make_reports", lambda args: None)
+
+    result = _run_cli_in_process(
+        main_cli,
+        [
+            "--estimators",
+            "oracle",
+            "post-selection",
+            "--reps",
+            "1",
+            "--dgps",
+            "dgp1",
+            "--n-values",
+            "80",
+            "--p-values",
+            "5",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--max-designs",
+            "1",
+            "--n-jobs",
+            "1",
+            "--output",
+            str(output),
+            "--manifest",
+            str(manifest),
+        ],
+        monkeypatch,
+        capsys,
+        tmp_path,
+    )
+
+    assert result.returncode == 0
+    assert captured_estimators == [("oracle", "post_selection")]
+    written = pd.read_csv(output)
+    assert set(written["estimator"]) == {"oracle", "post_selection_ivqr"}
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["estimators"] == ["oracle", "post_selection"]
+    assert payload["resume_signature"]["estimators"] == ["oracle", "post_selection"]
+
+
 def test_main_simulation_rejects_full_control_estimator(
     main_cli,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
-    result = _run_cli_in_process(
-        main_cli,
-        ["--estimators", "full", "--dry-run"],
-        monkeypatch,
-        capsys,
-        tmp_path,
-        expected_exit=2,
-    )
-
-    assert result.returncode == 2
-    assert "invalid choice: 'full'" in result.stderr
+    with pytest.raises(ValueError, match="not supported"):
+        _run_cli_in_process(
+            main_cli,
+            ["--estimators", "full_control", "--dry-run"],
+            monkeypatch,
+            capsys,
+            tmp_path,
+        )
 
 
 def test_full_control_script_dry_run_uses_limited_design(
@@ -338,8 +404,8 @@ def test_full_control_script_dry_run_uses_limited_design(
     assert "Replications per design: 500" in result.stdout
     assert "alpha_min = -1.0" in result.stdout
     assert "alpha_max = 3.0" in result.stdout
-    assert "alpha_grid_size = 81" in result.stdout
-    assert "alpha_grid_step = 0.05" in result.stdout
+    assert "alpha_grid_size = 21" in result.stdout
+    assert "alpha_grid_step = 0.2" in result.stdout
     assert str(output) in result.stdout
     assert "Reports: automatic after successful run" in result.stdout
     assert not output.exists()
@@ -419,6 +485,14 @@ def test_main_resume_applies_chunking_before_filtering(
     assert payload["pending_designs"] == 2
     assert payload["designs_in_run"] == 2
     assert payload["resume_signature"]["mode"] == "fast"
+    assert payload["resume_signature"]["batch_size"] == 10
+    assert payload["resume_signature"]["n_jobs"] == 1
+    assert payload["resume_signature"]["estimators"] == [
+        "oracle",
+        "dml",
+        "post_selection",
+    ]
+    assert payload["estimators"] == ["oracle", "dml", "post_selection"]
 
 
 def test_full_control_resume_applies_chunking_before_filtering(
@@ -499,6 +573,10 @@ def test_full_control_resume_applies_chunking_before_filtering(
     assert payload["pending_designs"] == 2
     assert payload["designs_in_run"] == 2
     assert "resume_signature" in payload
+    assert payload["resume_signature"]["batch_size"] == 10
+    assert payload["resume_signature"]["n_jobs"] == 1
+    assert payload["resume_signature"]["estimators"] == ["full_control"]
+    assert payload["estimators"] == ["full_control"]
 
 
 def test_full_control_resume_key_rejects_decimal_integer_fields(
@@ -549,7 +627,10 @@ def test_scenario_output_validation_rejects_directories(
         )
 
 
-@pytest.mark.parametrize("changed_field", ["alpha_grid_size", "mode"])
+@pytest.mark.parametrize(
+    "changed_field",
+    ["alpha_grid_size", "mode", "batch_size", "n_jobs"],
+)
 def test_main_resume_manifest_rejects_incompatible_settings(
     main_cli,
     monkeypatch: pytest.MonkeyPatch,
@@ -572,6 +653,10 @@ def test_main_resume_manifest_rejects_incompatible_settings(
     main_cli._validate_resume_manifest(manifest, args)
     if changed_field == "alpha_grid_size":
         args.alpha_grid_size += 1
+    elif changed_field == "batch_size":
+        args.batch_size += 1
+    elif changed_field == "n_jobs":
+        args.n_jobs += 1
     else:
         args.mode = "full"
 
@@ -579,10 +664,12 @@ def test_main_resume_manifest_rejects_incompatible_settings(
         main_cli._validate_resume_manifest(manifest, args)
 
 
+@pytest.mark.parametrize("changed_field", ["alpha_grid_size", "batch_size", "n_jobs"])
 def test_full_control_resume_manifest_rejects_incompatible_settings(
     full_control_cli,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    changed_field: str,
 ) -> None:
     monkeypatch.setattr(sys, "argv", [str(full_control_cli.__file__)])
     args = full_control_cli._parse_args()
@@ -593,7 +680,12 @@ def test_full_control_resume_manifest_rejects_incompatible_settings(
     )
 
     full_control_cli._validate_resume_manifest(manifest, args)
-    args.alpha_grid_size += 1
+    if changed_field == "alpha_grid_size":
+        args.alpha_grid_size += 1
+    elif changed_field == "batch_size":
+        args.batch_size += 1
+    else:
+        args.n_jobs += 1
 
     with pytest.raises(ValueError, match="resume signature"):
         full_control_cli._validate_resume_manifest(manifest, args)

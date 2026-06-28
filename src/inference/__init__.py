@@ -8,6 +8,7 @@ from .confidence_regions import (
     critical_value_chi_square,
     invert_score_test,
     sanitize_grid_statistics,
+    summarize_alpha_grid_diagnostics,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "critical_value_chi_square",
     "invert_score_test",
     "sanitize_grid_statistics",
+    "summarize_alpha_grid_diagnostics",
 ]

@@ -7,7 +7,7 @@ import numpy as np
 
 DEFAULT_ALPHA_MIN: float = -1.0
 DEFAULT_ALPHA_MAX: float = 3.0
-DEFAULT_ALPHA_STEP: float = 0.05
+DEFAULT_ALPHA_STEP: float = 0.2
 
 
 __all__ = [

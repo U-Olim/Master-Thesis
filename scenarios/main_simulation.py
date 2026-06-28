@@ -60,10 +60,14 @@ from simulation.config import (  # noqa: E402
     R_MAIN,
     TAUS,
 )
-from simulation.runner import VALID_ESTIMATORS, make_simulation_grid  # noqa: E402
+from simulation.estimators_config import (  # noqa: E402
+    MAIN_SCENARIO_ESTIMATORS,
+    normalize_estimator_names,
+)
+from simulation.runner import make_simulation_grid  # noqa: E402
 
 
-MAIN_ESTIMATORS = ("oracle", "post_selection", "dml")
+MAIN_ESTIMATORS = MAIN_SCENARIO_ESTIMATORS
 VALID_MODES = ("fast", "full")
 
 
@@ -99,7 +103,10 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--show-quantreg-warnings", action="store_true")
     parser.add_argument(
-        "--estimators", nargs="+", choices=VALID_ESTIMATORS, default=None
+        "--estimators",
+        nargs="+",
+        default=None,
+        help="Subset of estimators to run. Default: all estimators for this scenario.",
     )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--rerun-failed", action="store_true")
@@ -120,9 +127,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _apply_mode_defaults(args: argparse.Namespace) -> None:
-    args.estimators = (
-        list(MAIN_ESTIMATORS) if args.estimators is None else args.estimators
-    )
+    args.estimators = normalize_estimator_names(args.estimators, scenario="main")
     args.dgps = list(DGPS) if args.dgps is None else args.dgps
     args.n_values = list(N_VALUES) if args.n_values is None else args.n_values
     args.p_values = list(P_VALUES) if args.p_values is None else args.p_values
@@ -173,8 +178,6 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--quantreg-max-iter must be at least 1")
     if args.alpha_max <= args.alpha_min:
         raise ValueError("--alpha-max must exceed --alpha-min")
-    if set(args.estimators) - set(MAIN_ESTIMATORS):
-        raise ValueError("Main runner only allows oracle, post_selection, and dml.")
 
 
 def _count_rows(path: Path) -> int | None:
@@ -196,6 +199,8 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
         "taus": list(args.taus),
         "reps": args.reps,
         "base_seed": args.base_seed,
+        "batch_size": args.batch_size,
+        "n_jobs": args.n_jobs,
         "alpha_min": args.alpha_min,
         "alpha_max": args.alpha_max,
         "alpha_grid_size": args.alpha_grid_size,
@@ -227,6 +232,7 @@ def _print_dry_run(
         alpha_grid_size=alpha_grid_size,
         output=args.output,
         resume=args.resume,
+        extra_lines=(f"Running estimators: {', '.join(args.estimators)}",),
     )
 
 
@@ -337,6 +343,7 @@ def main() -> None:
 
     start = time.perf_counter()
     completed = 0
+    print(f"Running estimators: {', '.join(estimators)}")
     for batch_start in range(0, len(designs_to_run), args.batch_size):
         batch = designs_to_run[batch_start : batch_start + args.batch_size]
         append = args.resume or completed > 0

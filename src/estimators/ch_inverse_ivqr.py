@@ -16,7 +16,7 @@ from statsmodels.regression.quantile_regression import QuantReg
 from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp.designs import SimData
-from estimators.base import EstimationResult
+from estimators.base import EstimationResult, estimation_result_diagnostic_kwargs
 from inference.alpha_grid import (
     DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN,
@@ -28,6 +28,7 @@ from inference.confidence_regions import (
     critical_value_chi_square,
     invert_score_test,
     sanitize_grid_statistics,
+    summarize_alpha_grid_diagnostics,
 )
 from simulation.config import DEFAULT_QUANTREG_MAX_ITER
 from utils.validation import (
@@ -344,6 +345,15 @@ def estimate_ch_ivqr_controls(
 
     alpha_hat, min_statistic, at_boundary = argmin_grid(alphas, statistics)
     critical = critical_value_chi_square(confidence_level, df=z_2d.shape[1])
+    accepted_mask = statistics <= critical
+    diagnostics = summarize_alpha_grid_diagnostics(
+        alpha_grid=alphas,
+        accepted_mask=accepted_mask,
+        alpha_hat=alpha_hat,
+        failed_alpha_count=num_failed,
+        test_stats=statistics,
+        critical_value=critical,
+    )
     region = invert_score_test(
         alphas=alphas,
         statistics=statistics,
@@ -365,14 +375,15 @@ def estimate_ch_ivqr_controls(
         at_grid_boundary=at_boundary,
         alpha_grid_size=len(alphas),
         failed_alpha_count=num_failed,
-        cr_lower=region.lower,
-        cr_upper=region.upper,
-        cr_length=region.length,
+        cr_lower=diagnostics["cr_lower"],
+        cr_upper=diagnostics["cr_upper"],
+        cr_length=diagnostics["cr_length"],
         cr_covers_true=region.covers_true,
-        cr_empty=region.empty,
-        cr_disconnected=region.disconnected,
+        cr_empty=diagnostics["cr_empty"],
+        cr_disconnected=diagnostics["cr_disconnected"],
         selected_controls=selected_controls,
         runtime_seconds=perf_counter() - start,
+        **estimation_result_diagnostic_kwargs(diagnostics),
     )
 
 

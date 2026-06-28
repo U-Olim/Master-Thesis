@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from scipy.stats import chi2
@@ -18,6 +19,7 @@ __all__ = [
     "critical_value_chi_square",
     "sanitize_grid_statistics",
     "argmin_grid",
+    "summarize_alpha_grid_diagnostics",
 ]
 
 
@@ -383,3 +385,126 @@ def argmin_grid(
     at_boundary = min_index == 0 or min_index == alphas.size - 1
 
     return alpha_hat, min_statistic, bool(at_boundary)
+
+
+def _nan() -> float:
+    return float("nan")
+
+
+def _optional_float(value: float | None) -> float:
+    if value is None:
+        return _nan()
+    value = float(value)
+    return value if np.isfinite(value) else _nan()
+
+
+def _count_accepted_blocks(accepted_mask: np.ndarray) -> int:
+    accepted_indices = np.flatnonzero(accepted_mask)
+    if accepted_indices.size == 0:
+        return 0
+    return int(np.sum(np.diff(accepted_indices) > 1) + 1)
+
+
+def summarize_alpha_grid_diagnostics(
+    alpha_grid: np.ndarray,
+    accepted_mask: np.ndarray | None,
+    alpha_hat: float | None,
+    failed_alpha_count: int = 0,
+    test_stats: np.ndarray | None = None,
+    critical_value: float | None = None,
+) -> dict[str, Any]:
+    """Summarize alpha-grid, confidence-region, and boundary diagnostics."""
+    alphas = _as_1d_array(alpha_grid, "alpha grid")
+    _validate_strictly_increasing(alphas)
+    alpha_grid_size = int(alphas.size)
+    alpha_grid_min = float(alphas[0])
+    alpha_grid_max = float(alphas[-1])
+    alpha_grid_step = (
+        (alpha_grid_max - alpha_grid_min) / (alpha_grid_size - 1)
+        if alpha_grid_size > 1
+        else _nan()
+    )
+
+    if failed_alpha_count < 0:
+        raise ValueError("failed_alpha_count must be nonnegative")
+    if failed_alpha_count > alpha_grid_size:
+        raise ValueError("failed_alpha_count must not exceed alpha grid size")
+
+    alpha_hat_value = _optional_float(alpha_hat)
+    alpha_hat_at_lower = bool(
+        np.isfinite(alpha_hat_value) and np.isclose(alpha_hat_value, alpha_grid_min)
+    )
+    alpha_hat_at_upper = bool(
+        np.isfinite(alpha_hat_value) and np.isclose(alpha_hat_value, alpha_grid_max)
+    )
+
+    if accepted_mask is None:
+        accepted = np.zeros(alpha_grid_size, dtype=bool)
+    else:
+        accepted = np.asarray(accepted_mask)
+        if accepted.dtype != np.bool_:
+            raise ValueError("accepted_mask must be boolean")
+        if accepted.ndim != 1:
+            raise ValueError("accepted_mask must be one-dimensional")
+        if accepted.size != alpha_grid_size:
+            raise ValueError("accepted_mask and alpha grid must have equal length")
+
+    accepted_count = int(np.sum(accepted))
+    cr_empty = accepted_count == 0
+    cr_n_blocks = _count_accepted_blocks(accepted)
+    accepted_alphas = alphas[accepted]
+    if cr_empty:
+        cr_lower = _nan()
+        cr_upper = _nan()
+        cr_length = _nan()
+        cr_hull_length = _nan()
+    else:
+        cr_lower = float(accepted_alphas[0])
+        cr_upper = float(accepted_alphas[-1])
+        cr_length = cr_upper - cr_lower
+        cr_hull_length = cr_length
+
+    cr_hits_lower = bool(accepted[0])
+    cr_hits_upper = bool(accepted[-1])
+
+    min_test_stat = _nan()
+    max_test_stat = _nan()
+    test_stat_at_alpha_hat = _nan()
+    if test_stats is not None:
+        stats = _as_1d_array(test_stats, "test_stats")
+        if stats.size != alpha_grid_size:
+            raise ValueError("test_stats and alpha grid must have equal length")
+        min_test_stat = float(np.min(stats))
+        max_test_stat = float(np.max(stats))
+        if np.isfinite(alpha_hat_value):
+            matches = np.flatnonzero(np.isclose(alphas, alpha_hat_value))
+            if matches.size > 0:
+                test_stat_at_alpha_hat = float(stats[int(matches[0])])
+
+    return {
+        "alpha_grid_min": alpha_grid_min,
+        "alpha_grid_max": alpha_grid_max,
+        "alpha_grid_size": alpha_grid_size,
+        "alpha_grid_step": alpha_grid_step,
+        "alpha_hat_at_lower_boundary": alpha_hat_at_lower,
+        "alpha_hat_at_upper_boundary": alpha_hat_at_upper,
+        "alpha_hat_at_any_boundary": alpha_hat_at_lower or alpha_hat_at_upper,
+        "cr_lower": cr_lower,
+        "cr_upper": cr_upper,
+        "cr_length": cr_length,
+        "cr_hits_lower_boundary": cr_hits_lower,
+        "cr_hits_upper_boundary": cr_hits_upper,
+        "cr_hits_any_boundary": cr_hits_lower or cr_hits_upper,
+        "cr_empty": cr_empty,
+        "cr_accepted_alpha_count": accepted_count,
+        "cr_acceptance_rate": accepted_count / alpha_grid_size,
+        "cr_n_blocks": cr_n_blocks,
+        "cr_disconnected": cr_n_blocks > 1,
+        "cr_hull_length": cr_hull_length,
+        "failed_alpha_count": int(failed_alpha_count),
+        "failed_alpha_rate": failed_alpha_count / alpha_grid_size,
+        "min_test_stat": min_test_stat,
+        "max_test_stat": max_test_stat,
+        "test_stat_at_alpha_hat": test_stat_at_alpha_hat,
+        "critical_value": _optional_float(critical_value),
+    }

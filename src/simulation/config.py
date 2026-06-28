@@ -14,7 +14,7 @@ P_VALUES: tuple[int, ...] = (200, 500)
 PI_VALUES: tuple[float, ...] = (1.0, 0.5, 0.25, 0.10)
 TAUS: tuple[float, ...] = (0.25, 0.50, 0.75)
 DGPS: tuple[str, ...] = ("dgp1", "dgp2", "dgp3")
-MAIN_ESTIMATORS: tuple[str, ...] = ("oracle", "post_selection", "dml")
+MAIN_ESTIMATORS: tuple[str, ...] = ("oracle", "dml", "post_selection")
 
 R_FAST: int = 10
 R_MAIN: int = 500
@@ -32,9 +32,9 @@ FULL_FIGURES_DIR: str = "results/figures/full"
 
 DEFAULT_ALPHA_MIN: float = -1.0
 DEFAULT_ALPHA_MAX: float = 3.0
-DEFAULT_ALPHA_GRID_SIZE: int = 81
+DEFAULT_ALPHA_GRID_SIZE: int = 21
 DEFAULT_DML_K_FOLDS: int = 3
-DEFAULT_N_JOBS: int = 6
+DEFAULT_N_JOBS: int = 4
 DEFAULT_BATCH_SIZE: int = 10
 DEFAULT_QUANTREG_MAX_ITER: int = 1000
 
