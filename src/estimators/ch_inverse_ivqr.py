@@ -27,10 +27,12 @@ from inference.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
+    merge_region_and_grid_diagnostics,
     sanitize_grid_statistics,
     summarize_alpha_grid_diagnostics,
 )
 from simulation.config import DEFAULT_QUANTREG_MAX_ITER
+from utils.timing import RuntimeDiagnosticColumns, estimator_runtime_columns
 from utils.validation import (
     validate_1d_array,
     validate_2d_array,
@@ -227,6 +229,7 @@ def failed_ch_ivqr_result(
     alpha_grid_size: int | None,
     failed_alpha_count: int | None,
     selected_controls: int | None = None,
+    runtime_diagnostics: RuntimeDiagnosticColumns | None = None,
 ) -> EstimationResult:
     """Create a standard failed result for any CH-IVQR-style estimator."""
     if not np.isfinite(runtime_seconds) or runtime_seconds < 0:
@@ -261,6 +264,11 @@ def failed_ch_ivqr_result(
         cr_disconnected=None,
         selected_controls=selected_controls,
         runtime_seconds=runtime_seconds,
+        **(
+            estimator_runtime_columns(estimator=estimator, total_sec=runtime_seconds)
+            if runtime_diagnostics is None
+            else runtime_diagnostics
+        ),
     )
 
 
@@ -279,6 +287,7 @@ def estimate_ch_ivqr_controls(
 ) -> EstimationResult:
     """Estimate alpha by CH inverse-IVQR using a supplied control matrix."""
     start = perf_counter()
+    alpha_loop_sec = float("nan")
     if max_iter <= 0:
         raise ValueError("max_iter must be positive")
     validate_tau(tau)
@@ -314,6 +323,7 @@ def estimate_ch_ivqr_controls(
 
     statistics = np.empty(len(alphas), dtype=float)
     converged_flags: list[bool] = []
+    alpha_loop_start = perf_counter()
     for j, alpha in enumerate(alphas):
         evaluation = evaluate_alpha_ch_ivqr(
             y=y,
@@ -326,9 +336,11 @@ def estimate_ch_ivqr_controls(
         )
         statistics[j] = evaluation.statistic
         converged_flags.append(evaluation.converged)
+    alpha_loop_sec = perf_counter() - alpha_loop_start
 
     statistics, num_failed = sanitize_grid_statistics(statistics, converged_flags)
     if num_failed == len(alphas):
+        runtime_seconds = perf_counter() - start
         return failed_ch_ivqr_result(
             data=data,
             tau=tau,
@@ -337,12 +349,18 @@ def estimate_ch_ivqr_controls(
                 "All alpha-grid evaluations failed; "
                 f"failed_alpha_points={num_failed}/{len(alphas)}"
             ),
-            runtime_seconds=perf_counter() - start,
+            runtime_seconds=runtime_seconds,
             alpha_grid_size=len(alphas),
             failed_alpha_count=num_failed,
             selected_controls=selected_controls,
+            runtime_diagnostics=estimator_runtime_columns(
+                estimator=estimator_name,
+                total_sec=runtime_seconds,
+                alpha_loop_sec=alpha_loop_sec,
+            ),
         )
 
+    confidence_region_start = perf_counter()
     alpha_hat, min_statistic, at_boundary = argmin_grid(alphas, statistics)
     critical = critical_value_chi_square(confidence_level, df=z_2d.shape[1])
     accepted_mask = statistics <= critical
@@ -362,6 +380,9 @@ def estimate_ch_ivqr_controls(
         statistic_reference=0.0,
         inversion_type="absolute",
     )
+    diagnostics = merge_region_and_grid_diagnostics(region, diagnostics)
+    confidence_region_sec = perf_counter() - confidence_region_start
+    runtime_seconds = perf_counter() - start
 
     return EstimationResult(
         estimator=estimator_name,
@@ -382,7 +403,13 @@ def estimate_ch_ivqr_controls(
         cr_empty=diagnostics["cr_empty"],
         cr_disconnected=diagnostics["cr_disconnected"],
         selected_controls=selected_controls,
-        runtime_seconds=perf_counter() - start,
+        runtime_seconds=runtime_seconds,
+        **estimator_runtime_columns(
+            estimator=estimator_name,
+            total_sec=runtime_seconds,
+            alpha_loop_sec=alpha_loop_sec,
+            confidence_region_sec=confidence_region_sec,
+        ),
         **estimation_result_diagnostic_kwargs(diagnostics),
     )
 

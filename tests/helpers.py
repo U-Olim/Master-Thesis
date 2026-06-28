@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+from utils.timing import RUNTIME_COLUMNS
+
 
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[1]
 SCENARIOS_DIR: Path = PROJECT_ROOT / "scenarios"
@@ -88,6 +90,7 @@ SIMULATION_RESULT_REQUIRED_KEYS: frozenset[str] = frozenset(
         "cr_covers_true",
         "selected_controls",
         "runtime_seconds",
+        *RUNTIME_COLUMNS,
         "failed_alpha_count",
         "failed_alpha_rate",
         "min_test_stat",
@@ -99,6 +102,11 @@ SIMULATION_RESULT_REQUIRED_KEYS: frozenset[str] = frozenset(
         "ps_n_selected_total",
         "ps_share_selected_controls",
         "ps_share_selected_instruments",
+        "ps_instrument_selection_method",
+        "ps_n_candidate_instruments",
+        "ps_n_retained_instruments",
+        "ps_share_retained_instruments",
+        "ps_all_instruments_retained",
         "ps_selected_no_controls",
         "ps_selected_no_instruments",
         "ps_selected_empty_total",

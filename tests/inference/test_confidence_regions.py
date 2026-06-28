@@ -4,10 +4,12 @@ import numpy as np
 import pytest
 
 from inference.confidence_regions import (
+    ConfidenceRegion,
     FAILED_ALPHA_STATISTIC,
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
+    merge_region_and_grid_diagnostics,
     sanitize_grid_statistics,
     summarize_alpha_grid_diagnostics,
 )
@@ -142,6 +144,136 @@ def test_alpha_grid_diagnostics_test_statistics() -> None:
     assert diagnostics["max_test_stat"] == pytest.approx(5.0)
     assert diagnostics["test_stat_at_alpha_hat"] == pytest.approx(1.0)
     assert diagnostics["critical_value"] == pytest.approx(3.84)
+
+
+def _confidence_region(
+    *,
+    lower: float | None,
+    upper: float | None,
+    length: float,
+    hull_length: float,
+    blocks: tuple[tuple[float, float], ...],
+    empty: bool = False,
+) -> ConfidenceRegion:
+    return ConfidenceRegion(
+        lower=lower,
+        upper=upper,
+        length=length,
+        hull_length=hull_length,
+        blocks=blocks,
+        accepted_alphas=tuple(),
+        n_blocks=len(blocks),
+        empty=empty,
+        disconnected=len(blocks) > 1,
+        covers_true=None,
+        selected_grid=np.array([], dtype=float),
+        critical_value=3.84,
+        statistic_reference=0.0,
+    )
+
+
+def test_merge_region_diagnostics_uses_disconnected_region_block_length() -> None:
+    grid_diagnostics = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([0.0, 0.2, 0.8, 1.0]),
+        accepted_mask=np.array([True, True, True, True]),
+        alpha_hat=0.0,
+    )
+    region = _confidence_region(
+        lower=0.0,
+        upper=1.0,
+        length=0.4,
+        hull_length=1.0,
+        blocks=((0.0, 0.2), (0.8, 1.0)),
+    )
+
+    diagnostics = merge_region_and_grid_diagnostics(region, grid_diagnostics)
+
+    assert diagnostics["cr_lower"] == pytest.approx(0.0)
+    assert diagnostics["cr_upper"] == pytest.approx(1.0)
+    assert diagnostics["cr_hull_length"] == pytest.approx(1.0)
+    assert diagnostics["cr_length"] == pytest.approx(0.4)
+    assert diagnostics["cr_n_blocks"] == 2
+    assert diagnostics["cr_disconnected"] is True
+
+
+def test_merge_region_diagnostics_uses_contiguous_region_geometry() -> None:
+    grid_diagnostics = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([0.0, 0.5, 1.0]),
+        accepted_mask=np.array([False, True, False]),
+        alpha_hat=0.5,
+    )
+    region = _confidence_region(
+        lower=0.2,
+        upper=0.8,
+        length=0.6,
+        hull_length=0.6,
+        blocks=((0.2, 0.8),),
+    )
+
+    diagnostics = merge_region_and_grid_diagnostics(region, grid_diagnostics)
+
+    assert diagnostics["cr_n_blocks"] == 1
+    assert diagnostics["cr_disconnected"] is False
+    assert diagnostics["cr_length"] == pytest.approx(region.length)
+    assert diagnostics["cr_hull_length"] == pytest.approx(region.hull_length)
+    assert diagnostics["cr_lower"] == pytest.approx(region.lower)
+    assert diagnostics["cr_upper"] == pytest.approx(region.upper)
+
+
+def test_merge_region_diagnostics_preserves_empty_region_convention() -> None:
+    grid_diagnostics = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([0.0, 0.5, 1.0]),
+        accepted_mask=np.array([False, False, False]),
+        alpha_hat=0.5,
+    )
+    region = _confidence_region(
+        lower=None,
+        upper=None,
+        length=0.0,
+        hull_length=0.0,
+        blocks=(),
+        empty=True,
+    )
+
+    diagnostics = merge_region_and_grid_diagnostics(region, grid_diagnostics)
+
+    assert diagnostics["cr_empty"] is True
+    assert diagnostics["cr_n_blocks"] == 0
+    assert diagnostics["cr_disconnected"] is False
+    assert np.isnan(diagnostics["cr_lower"])
+    assert np.isnan(diagnostics["cr_upper"])
+    assert diagnostics["cr_length"] == pytest.approx(region.length)
+    assert diagnostics["cr_hull_length"] == pytest.approx(region.hull_length)
+
+
+def test_merge_region_diagnostics_keeps_boundary_hits_grid_based() -> None:
+    lower_grid = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([-1.0, 0.0, 1.0]),
+        accepted_mask=np.array([True, False, False]),
+        alpha_hat=0.0,
+    )
+    upper_grid = summarize_alpha_grid_diagnostics(
+        alpha_grid=np.array([-1.0, 0.0, 1.0]),
+        accepted_mask=np.array([False, False, True]),
+        alpha_hat=0.0,
+    )
+    region = _confidence_region(
+        lower=-0.9,
+        upper=0.9,
+        length=1.8,
+        hull_length=1.8,
+        blocks=((-0.9, 0.9),),
+    )
+
+    lower = merge_region_and_grid_diagnostics(region, lower_grid)
+    upper = merge_region_and_grid_diagnostics(region, upper_grid)
+
+    assert lower["cr_hits_lower_boundary"] is True
+    assert lower["cr_hits_upper_boundary"] is False
+    assert lower["cr_hits_any_boundary"] is True
+    assert upper["cr_hits_lower_boundary"] is False
+    assert upper["cr_hits_upper_boundary"] is True
+    assert upper["cr_hits_any_boundary"] is True
 
 
 def test_invert_score_test_connected_region_includes_critical_boundary() -> None:

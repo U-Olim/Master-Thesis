@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 import inference
+import numpy as np
 import pandas as pd
 import pytest
 from dgp.designs import Design
@@ -17,6 +18,9 @@ from tests.helpers import load_full_control_cli, load_main_simulation_cli
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FULL_SIMULATION_SCRIPT = PROJECT_ROOT / "scenarios" / "main_simulation.py"
 FULL_CONTROL_SCRIPT = PROJECT_ROOT / "scenarios" / "full_control_ivqr.py"
+RESUME_REQUIRES_MANIFEST_MESSAGE = (
+    "--resume requires --manifest so run configuration compatibility can be validated."
+)
 
 
 @dataclass(frozen=True)
@@ -408,6 +412,90 @@ def test_full_control_script_dry_run_uses_limited_design(
     assert "alpha_grid_step = 0.2" in result.stdout
     assert str(output) in result.stdout
     assert "Reports: automatic after successful run" in result.stdout
+    assert not output.exists()
+
+
+def test_full_control_result_row_uses_authoritative_region_geometry(
+    full_control_cli,
+) -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    result = EstimationResult(
+        estimator="full_control_ivqr",
+        alpha_hat=0.0,
+        alpha_true=0.0,
+        tau=0.5,
+        converged=True,
+        failed=False,
+        message="ok",
+        objective_value=0.0,
+        at_grid_boundary=False,
+        alpha_grid_size=4,
+        failed_alpha_count=0,
+        cr_lower=0.0,
+        cr_upper=1.0,
+        cr_length=0.4,
+        cr_covers_true=True,
+        cr_empty=False,
+        cr_disconnected=True,
+        selected_controls=5,
+        runtime_seconds=0.1,
+        cr_n_blocks=2,
+        cr_hull_length=1.0,
+        cr_accepted_alpha_count=4,
+        cr_hits_any_boundary=True,
+    )
+
+    row = full_control_cli._result_to_row(
+        design,
+        result,
+        np.array([0.0, 0.2, 0.8, 1.0]),
+    )
+
+    assert row["cr_length"] == pytest.approx(0.4)
+    assert row["cr_hull_length"] == pytest.approx(1.0)
+    assert row["cr_n_blocks"] == 2
+    assert row["cr_disconnected"] is True
+    assert "cr_accepted_alpha_count" in row
+    assert "cr_hits_any_boundary" in row
+
+
+def test_main_resume_without_manifest_exits_before_run(
+    main_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "main.csv"
+    result = _run_cli_in_process(
+        main_cli,
+        ["--resume", "--dry-run", "--output", str(output)],
+        monkeypatch,
+        capsys,
+        tmp_path,
+        expected_exit=2,
+    )
+
+    assert RESUME_REQUIRES_MANIFEST_MESSAGE in result.stderr
+    assert not output.exists()
+
+
+def test_full_control_resume_without_manifest_exits_before_run(
+    full_control_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "full_control.csv"
+    result = _run_cli_in_process(
+        full_control_cli,
+        ["--resume", "--dry-run", "--output", str(output)],
+        monkeypatch,
+        capsys,
+        tmp_path,
+        expected_exit=2,
+    )
+
+    assert RESUME_REQUIRES_MANIFEST_MESSAGE in result.stderr
     assert not output.exists()
 
 

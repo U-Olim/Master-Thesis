@@ -214,10 +214,49 @@ def cr_disconnected_rate(df: pd.DataFrame) -> float:
 
 
 def boundary_rate(df: pd.DataFrame) -> float:
+    """Backward-compatible point-estimate boundary rate.
+
+    Prefer the current alpha-hat diagnostic and fall back to the legacy
+    at-grid-boundary column for old result files.
+    """
     validate_metric_input(df)
-    if "at_grid_boundary" not in df.columns:
+    if "alpha_hat_at_any_boundary" in df.columns:
+        return _mean_bool(df["alpha_hat_at_any_boundary"])
+    if "at_grid_boundary" in df.columns:
+        return _mean_bool(df["at_grid_boundary"])
+    return float(np.nan)
+
+
+def alpha_hat_boundary_rate(df: pd.DataFrame) -> float:
+    """Return share of rows where alpha_hat lies at the alpha-grid boundary."""
+    validate_metric_input(df)
+    if "alpha_hat_at_any_boundary" not in df.columns:
         return float(np.nan)
-    return _mean_bool(df["at_grid_boundary"])
+    return _mean_bool(df["alpha_hat_at_any_boundary"])
+
+
+def cr_boundary_hit_rate(df: pd.DataFrame) -> float:
+    """Return share of rows where the confidence region touches a grid boundary."""
+    validate_metric_input(df)
+    if "cr_hits_any_boundary" not in df.columns:
+        return float(np.nan)
+    return _mean_bool(df["cr_hits_any_boundary"])
+
+
+def cr_lower_boundary_hit_rate(df: pd.DataFrame) -> float:
+    """Return share of rows where the confidence region touches the lower boundary."""
+    validate_metric_input(df)
+    if "cr_hits_lower_boundary" not in df.columns:
+        return float(np.nan)
+    return _mean_bool(df["cr_hits_lower_boundary"])
+
+
+def cr_upper_boundary_hit_rate(df: pd.DataFrame) -> float:
+    """Return share of rows where the confidence region touches the upper boundary."""
+    validate_metric_input(df)
+    if "cr_hits_upper_boundary" not in df.columns:
+        return float(np.nan)
+    return _mean_bool(df["cr_hits_upper_boundary"])
 
 
 def mean_failed_alpha_count(df: pd.DataFrame) -> float:
@@ -237,6 +276,47 @@ def mean_selected_controls(df: pd.DataFrame) -> float:
 def mean_runtime_seconds(df: pd.DataFrame) -> float:
     validate_metric_input(df)
     return _mean_nonnegative_numeric(df["runtime_seconds"])
+
+
+def _mean_optional_nonnegative(df: pd.DataFrame, column: str) -> float:
+    validate_metric_input(df)
+    if column not in df.columns:
+        return float(np.nan)
+    return _mean_nonnegative_numeric(df[column])
+
+
+def _median_optional_nonnegative(df: pd.DataFrame, column: str) -> float:
+    validate_metric_input(df)
+    if column not in df.columns:
+        return float(np.nan)
+    values = _to_nonnegative_numeric(df[column]).dropna()
+    if values.empty:
+        return float(np.nan)
+    return float(values.median())
+
+
+def mean_runtime_total_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "runtime_total_sec")
+
+
+def median_runtime_total_sec(df: pd.DataFrame) -> float:
+    return _median_optional_nonnegative(df, "runtime_total_sec")
+
+
+def mean_runtime_alpha_grid_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "runtime_alpha_grid_sec")
+
+
+def mean_runtime_confidence_region_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "runtime_confidence_region_sec")
+
+
+def mean_dml_runtime_crossfit_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "dml_runtime_crossfit_sec")
+
+
+def mean_ps_runtime_selection_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "ps_runtime_selection_sec")
 
 
 def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
@@ -265,9 +345,17 @@ def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
         "cr_empty_rate": cr_empty_rate(df),
         "cr_disconnected_rate": cr_disconnected_rate(df),
         "boundary_rate": boundary_rate(df),
+        "alpha_hat_boundary_rate": alpha_hat_boundary_rate(df),
+        "cr_boundary_hit_rate": cr_boundary_hit_rate(df),
         "mean_failed_alpha_count": mean_failed_alpha_count(df),
         "mean_selected_controls": mean_selected_controls(df),
         "mean_runtime_seconds": mean_runtime_seconds(df),
+        "mean_runtime_total_sec": mean_runtime_total_sec(df),
+        "median_runtime_total_sec": median_runtime_total_sec(df),
+        "mean_runtime_alpha_grid_sec": mean_runtime_alpha_grid_sec(df),
+        "mean_runtime_confidence_region_sec": mean_runtime_confidence_region_sec(df),
+        "mean_dml_runtime_crossfit_sec": mean_dml_runtime_crossfit_sec(df),
+        "mean_ps_runtime_selection_sec": mean_ps_runtime_selection_sec(df),
     }
 
 
@@ -289,8 +377,18 @@ __all__ = [
     "cr_empty_rate",
     "cr_disconnected_rate",
     "boundary_rate",
+    "alpha_hat_boundary_rate",
+    "cr_boundary_hit_rate",
+    "cr_lower_boundary_hit_rate",
+    "cr_upper_boundary_hit_rate",
     "mean_failed_alpha_count",
     "mean_selected_controls",
     "mean_runtime_seconds",
+    "mean_runtime_total_sec",
+    "median_runtime_total_sec",
+    "mean_runtime_alpha_grid_sec",
+    "mean_runtime_confidence_region_sec",
+    "mean_dml_runtime_crossfit_sec",
+    "mean_ps_runtime_selection_sec",
     "summarize_group",
 ]

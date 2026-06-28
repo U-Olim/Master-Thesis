@@ -40,9 +40,17 @@ SUMMARY_METRIC_COLUMNS: tuple[str, ...] = (
     "cr_empty_rate",
     "cr_disconnected_rate",
     "boundary_rate",
+    "alpha_hat_boundary_rate",
+    "cr_boundary_hit_rate",
     "mean_failed_alpha_count",
     "mean_selected_controls",
     "mean_runtime_seconds",
+    "mean_runtime_total_sec",
+    "median_runtime_total_sec",
+    "mean_runtime_alpha_grid_sec",
+    "mean_runtime_confidence_region_sec",
+    "mean_dml_runtime_crossfit_sec",
+    "mean_ps_runtime_selection_sec",
 )
 
 __all__ = [

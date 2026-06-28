@@ -12,6 +12,21 @@ from reporting.tables import write_tables
 from simulation._validation import validate_output_file_path
 
 
+RESUME_REQUIRES_MANIFEST_MESSAGE = (
+    "--resume requires --manifest so run configuration compatibility can be validated."
+)
+
+
+def validate_resume_manifest_args(
+    *,
+    resume: bool,
+    manifest_path: str | Path | None,
+) -> None:
+    """Require a manifest path for resume so compatibility can be checked."""
+    if resume and manifest_path is None:
+        raise ValueError(RESUME_REQUIRES_MANIFEST_MESSAGE)
+
+
 def validate_output_path(output_path: Path, *, resume: bool) -> None:
     """Validate a scenario output path and protect existing files."""
     validated = validate_output_file_path(output_path)

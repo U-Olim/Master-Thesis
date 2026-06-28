@@ -29,6 +29,9 @@ full_simulation_main = full_simulation_cli.main
 
 full_control_cli = load_full_control_cli()
 full_control_main = full_control_cli.main
+RESUME_REQUIRES_MANIFEST_MESSAGE = (
+    "--resume requires --manifest so run configuration compatibility can be validated."
+)
 
 
 def test_run_small_simulation_default_grid_has_21_points() -> None:
@@ -432,6 +435,70 @@ def test_full_control_parser_runtime_defaults_and_overrides(monkeypatch) -> None
     args = full_control_cli._parse_args()
     assert args.n_jobs == 2
     assert args.batch_size == 5
+
+
+def test_full_simulation_parser_allows_no_resume_without_manifest(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["main_simulation.py"])
+    args = full_simulation_cli._parse_args()
+
+    assert args.resume is False
+    assert args.manifest is None
+
+
+def test_full_simulation_parser_allows_resume_with_manifest(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["main_simulation.py", "--resume", "--manifest", "manifest.json"],
+    )
+    args = full_simulation_cli._parse_args()
+
+    assert args.resume is True
+    assert args.manifest == "manifest.json"
+
+
+def test_full_simulation_parser_rejects_resume_without_manifest(
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr("sys.argv", ["main_simulation.py", "--resume"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        full_simulation_cli._parse_args()
+
+    assert exc_info.value.code == 2
+    assert RESUME_REQUIRES_MANIFEST_MESSAGE in capsys.readouterr().err
+
+
+def test_full_control_parser_allows_no_resume_without_manifest(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["full_control_ivqr.py"])
+    args = full_control_cli._parse_args()
+
+    assert args.resume is False
+    assert args.manifest is None
+
+
+def test_full_control_parser_allows_resume_with_manifest(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["full_control_ivqr.py", "--resume", "--manifest", "manifest.json"],
+    )
+    args = full_control_cli._parse_args()
+
+    assert args.resume is True
+    assert args.manifest == Path("manifest.json")
+
+
+def test_full_control_parser_rejects_resume_without_manifest(
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr("sys.argv", ["full_control_ivqr.py", "--resume"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        full_control_cli._parse_args()
+
+    assert exc_info.value.code == 2
+    assert RESUME_REQUIRES_MANIFEST_MESSAGE in capsys.readouterr().err
 
 
 def test_full_simulation_parser_quantreg_max_iter_default_and_override(

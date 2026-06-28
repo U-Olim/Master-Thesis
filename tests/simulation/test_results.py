@@ -1,10 +1,25 @@
 """Tests for simulation result rows and tables."""
 
+import inspect
+
 import numpy as np
+import pytest
 
 from dgp.designs import Design
-from simulation.runner import run_single_replication, run_small_simulation
+from estimators.base import EstimationResult, POST_SELECTION_DIAGNOSTIC_FIELDS
+from inference.confidence_regions import ConfidenceRegion
+import scenarios.full_control_ivqr as full_control_cli
+import simulation.runner as runner_module
+from simulation.runner import _result_to_row, run_single_replication, run_small_simulation
+from simulation.results import (
+    RESULT_COLUMNS,
+    build_failure_result_row,
+    build_simulation_result_row,
+    empty_post_selection_diagnostics,
+    merge_region_and_grid_diagnostics,
+)
 from tests.helpers import SIMULATION_RESULT_REQUIRED_KEYS
+from utils.timing import RUNTIME_COLUMNS
 
 
 def test_run_single_replication_returns_one_row_per_estimator() -> None:
@@ -28,7 +43,7 @@ def test_run_single_replication_returns_one_row_per_estimator() -> None:
 def test_run_small_simulation_returns_dataframe() -> None:
     alphas = np.linspace(0.0, 2.0, 5)
 
-    results = run_small_simulation(reps=2, n=80, p=5, alphas=alphas)
+    results = run_small_simulation(reps=2, n=80, p=10, alphas=alphas)
 
     assert len(results) == 6
     assert set(results["estimator"]) == {"oracle", "post_selection_ivqr", "dml_ivqr"}
@@ -43,12 +58,20 @@ def test_run_small_simulation_returns_dataframe() -> None:
     assert {"cr_n_blocks", "cr_hits_any_boundary", "failed_alpha_rate"}.issubset(
         results.columns
     )
+    assert set(RUNTIME_COLUMNS).issubset(results.columns)
+    assert results["runtime_total_sec"].notna().all()
+    assert np.allclose(results["runtime_seconds"], results["runtime_total_sec"])
     ps_columns = {
         "ps_n_selected_controls",
         "ps_n_selected_instruments",
         "ps_n_selected_total",
         "ps_share_selected_controls",
         "ps_share_selected_instruments",
+        "ps_instrument_selection_method",
+        "ps_n_candidate_instruments",
+        "ps_n_retained_instruments",
+        "ps_share_retained_instruments",
+        "ps_all_instruments_retained",
         "ps_selected_no_controls",
         "ps_selected_no_instruments",
         "ps_selected_empty_total",
@@ -73,8 +96,31 @@ def test_run_small_simulation_returns_dataframe() -> None:
     assert post_selection["ps_n_selected_controls"].notna().all()
     assert post_selection["ps_n_selected_instruments"].notna().all()
     assert (post_selection["ps_selection_method"] == "lassocv_control_union").all()
+    assert (
+        post_selection["ps_instrument_selection_method"]
+        == "all_instruments_retained"
+    ).all()
+    assert post_selection["ps_n_candidate_instruments"].notna().all()
+    assert post_selection["ps_n_retained_instruments"].notna().all()
+    assert post_selection["ps_share_retained_instruments"].notna().all()
+    assert (post_selection["ps_all_instruments_retained"] == True).all()  # noqa: E712
     assert non_post_selection["ps_n_selected_controls"].isna().all()
+    assert non_post_selection["ps_n_retained_instruments"].isna().all()
     assert (non_post_selection["ps_selection_failed"] == False).all()  # noqa: E712
+
+    oracle = results.loc[results["estimator"] == "oracle"]
+    dml = results.loc[results["estimator"] == "dml_ivqr"]
+    assert oracle["oracle_runtime_total_sec"].notna().all()
+    assert oracle["oracle_runtime_alpha_loop_sec"].notna().all()
+    assert oracle["dml_runtime_total_sec"].isna().all()
+    assert post_selection["ps_runtime_total_sec"].notna().all()
+    assert post_selection["ps_runtime_selection_sec"].notna().all()
+    assert post_selection["ps_runtime_diagnostics_sec"].notna().all()
+    assert post_selection["ps_runtime_first_stage_sec"].isna().all()
+    assert dml["dml_runtime_total_sec"].notna().all()
+    assert dml["dml_runtime_crossfit_sec"].notna().all()
+    assert dml["dml_runtime_nuisance_fit_sec"].isna().all()
+    assert dml["dml_runtime_nuisance_predict_sec"].isna().all()
 
 
 def test_run_small_simulation_bias_logic() -> None:
@@ -83,5 +129,301 @@ def test_run_small_simulation_bias_logic() -> None:
     for row in results.to_dict("records"):
         if row["alpha_hat"] is not None and not np.isnan(row["alpha_hat"]):
             assert row["bias"] == row["alpha_hat"] - row["alpha_true"]
+
+
+def test_result_row_uses_authoritative_region_geometry() -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    result = EstimationResult(
+        estimator="oracle",
+        alpha_hat=0.0,
+        alpha_true=0.0,
+        tau=0.5,
+        converged=True,
+        failed=False,
+        message="ok",
+        objective_value=0.0,
+        at_grid_boundary=False,
+        alpha_grid_size=4,
+        failed_alpha_count=0,
+        cr_lower=0.0,
+        cr_upper=1.0,
+        cr_length=0.4,
+        cr_covers_true=True,
+        cr_empty=False,
+        cr_disconnected=True,
+        selected_controls=5,
+        runtime_seconds=0.1,
+        cr_n_blocks=2,
+        cr_hull_length=1.0,
+        cr_accepted_alpha_count=4,
+        cr_hits_any_boundary=True,
+    )
+
+    row = _result_to_row(design, result, np.array([0.0, 0.2, 0.8, 1.0]))
+
+    assert row["cr_length"] == pytest.approx(0.4)
+    assert row["cr_hull_length"] == pytest.approx(1.0)
+    assert row["cr_n_blocks"] == 2
+    assert row["cr_disconnected"] is True
+    assert "cr_accepted_alpha_count" in row
+    assert "cr_hits_any_boundary" in row
+
+
+def test_empty_post_selection_diagnostics_has_all_expected_defaults() -> None:
+    diagnostics = empty_post_selection_diagnostics()
+
+    assert set(diagnostics) == set(POST_SELECTION_DIAGNOSTIC_FIELDS)
+
+    numeric_unavailable = {
+        "ps_n_selected_controls",
+        "ps_n_selected_instruments",
+        "ps_n_selected_total",
+        "ps_share_selected_controls",
+        "ps_share_selected_instruments",
+        "ps_n_candidate_instruments",
+        "ps_n_retained_instruments",
+        "ps_share_retained_instruments",
+        "ps_first_stage_r2",
+        "ps_first_stage_adj_r2",
+        "ps_first_stage_partial_r2",
+        "ps_first_stage_f_stat",
+        "ps_first_stage_condition_number",
+        "ps_lasso_alpha_controls",
+        "ps_lasso_alpha_instruments",
+        "ps_lasso_alpha_first_stage",
+        "ps_lasso_cv_folds",
+    }
+    for name in numeric_unavailable:
+        assert diagnostics[name] is None
+
+    assert diagnostics["ps_selection_method"] is None
+    assert diagnostics["ps_instrument_selection_method"] is None
+    assert diagnostics["ps_warning_code"] == ""
+    assert diagnostics["ps_selected_no_controls"] is False
+    assert diagnostics["ps_selected_no_instruments"] is False
+    assert diagnostics["ps_selected_empty_total"] is False
+    assert diagnostics["ps_selection_failed"] is False
+    assert diagnostics["ps_first_stage_failed"] is False
+    assert diagnostics["ps_rank_deficient"] is False
+    assert diagnostics["ps_all_instruments_retained"] is False
+
+
+def test_merge_region_and_grid_diagnostics_preserves_grid_boundary_fields() -> None:
+    grid_diagnostics = {
+        "cr_lower": -1.0,
+        "cr_upper": 3.0,
+        "cr_length": 4.0,
+        "cr_hull_length": 4.0,
+        "cr_empty": False,
+        "cr_n_blocks": 1,
+        "cr_disconnected": False,
+        "cr_accepted_alpha_count": 3,
+        "cr_acceptance_rate": 0.6,
+        "cr_hits_lower_boundary": True,
+        "cr_hits_upper_boundary": False,
+        "cr_hits_any_boundary": True,
+        "alpha_grid_min": -1.0,
+        "alpha_grid_max": 3.0,
+        "alpha_grid_size": 5,
+        "alpha_grid_step": 1.0,
+        "failed_alpha_count": 1,
+        "failed_alpha_rate": 0.2,
+        "min_test_stat": 0.1,
+        "max_test_stat": 9.0,
+        "critical_value": 3.84,
+    }
+    region = ConfidenceRegion(
+        lower=-0.5,
+        upper=2.5,
+        length=1.25,
+        hull_length=3.0,
+        blocks=((-0.5, 0.0), (1.75, 2.5)),
+        accepted_alphas=(-0.5, 0.0, 1.75, 2.5),
+        n_blocks=2,
+        empty=False,
+        disconnected=True,
+        covers_true=True,
+        selected_grid=np.array([-0.5, 0.0, 1.75, 2.5]),
+        critical_value=3.84,
+        statistic_reference=0.0,
+    )
+
+    diagnostics = merge_region_and_grid_diagnostics(region, grid_diagnostics)
+
+    assert diagnostics["cr_lower"] == pytest.approx(-0.5)
+    assert diagnostics["cr_upper"] == pytest.approx(2.5)
+    assert diagnostics["cr_length"] == pytest.approx(1.25)
+    assert diagnostics["cr_hull_length"] == pytest.approx(3.0)
+    assert diagnostics["cr_n_blocks"] == 2
+    assert diagnostics["cr_disconnected"] is True
+    assert diagnostics["cr_hits_lower_boundary"] is True
+    assert diagnostics["cr_hits_upper_boundary"] is False
+    assert diagnostics["cr_accepted_alpha_count"] == 3
+
+
+def test_build_simulation_result_row_defaults_and_extra_fields() -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    result = EstimationResult(
+        estimator="oracle",
+        alpha_hat=0.4,
+        alpha_true=0.2,
+        tau=0.5,
+        converged=True,
+        failed=False,
+        message="ok",
+        objective_value=0.0,
+        at_grid_boundary=False,
+        alpha_grid_size=3,
+        failed_alpha_count=0,
+        cr_lower=0.0,
+        cr_upper=1.0,
+        cr_length=1.0,
+        cr_covers_true=True,
+        cr_empty=False,
+        cr_disconnected=False,
+        selected_controls=5,
+        runtime_seconds=0.1,
+    )
+
+    row = build_simulation_result_row(
+        design,
+        result,
+        np.array([0.0, 0.5, 1.0]),
+        extra={"custom_field": "kept"},
+    )
+
+    assert row["bias"] == pytest.approx(0.2)
+    assert row["absolute_error"] == pytest.approx(0.2)
+    assert row["squared_error"] == pytest.approx(0.04)
+    assert row["custom_field"] == "kept"
+    assert row["ps_n_selected_controls"] is None
+    assert row["ps_selection_failed"] is False
+    assert set(RESULT_COLUMNS).issubset(row)
+
+
+def test_build_simulation_result_row_handles_failed_nan_alpha_hat() -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    result = EstimationResult(
+        estimator="oracle",
+        alpha_hat=None,
+        alpha_true=0.2,
+        tau=0.5,
+        converged=False,
+        failed=True,
+        message="failed",
+        objective_value=None,
+        at_grid_boundary=False,
+        alpha_grid_size=3,
+        failed_alpha_count=None,
+        cr_lower=None,
+        cr_upper=None,
+        cr_length=None,
+        cr_covers_true=None,
+        cr_empty=True,
+        cr_disconnected=None,
+        selected_controls=None,
+        runtime_seconds=0.0,
+    )
+
+    row = build_simulation_result_row(design, result, np.array([0.0, 0.5, 1.0]))
+
+    assert row["status"] == "failed"
+    assert row["bias"] is None
+    assert row["absolute_error"] is None
+    assert row["squared_error"] is None
+    assert row["error_type"] == "EstimatorFailure"
+
+
+def test_build_failure_result_row_uses_common_schema() -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+
+    row = build_failure_result_row(
+        design=design,
+        estimator="oracle",
+        alphas=np.array([0.0, 0.5, 1.0]),
+        alpha_true=0.2,
+        exc=RuntimeError("boom"),
+        message="RuntimeError: boom",
+    )
+
+    assert row["status"] == "failed"
+    assert row["estimator"] == "oracle"
+    assert row["error_type"] == "RuntimeError"
+    assert row["runtime_seconds"] is None
+    assert np.isnan(row["runtime_total_sec"])
+    assert row["ps_selected_empty_total"] is False
+    assert set(RESULT_COLUMNS).issubset(row)
+
+
+def test_result_builder_helpers_are_not_duplicated_in_scenario_modules() -> None:
+    runner_source = inspect.getsource(runner_module)
+    full_control_source = inspect.getsource(full_control_cli)
+
+    for source in (runner_source, full_control_source):
+        assert "def _result_diagnostics(" not in source
+        assert "def _post_selection_diagnostics(" not in source
+        assert "def _runtime_diagnostics(" not in source
+        assert "def _diagnostic_value(" not in source
+
+
+def test_main_and_full_control_result_rows_share_common_diagnostic_columns() -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    main_result = EstimationResult(
+        estimator="oracle",
+        alpha_hat=0.0,
+        alpha_true=0.0,
+        tau=0.5,
+        converged=True,
+        failed=False,
+        message="ok",
+        objective_value=0.0,
+        at_grid_boundary=False,
+        alpha_grid_size=3,
+        failed_alpha_count=0,
+        cr_lower=0.0,
+        cr_upper=1.0,
+        cr_length=1.0,
+        cr_covers_true=True,
+        cr_empty=False,
+        cr_disconnected=False,
+        selected_controls=5,
+        runtime_seconds=0.1,
+    )
+    full_control_result = EstimationResult(
+        estimator="full_control_ivqr",
+        alpha_hat=0.0,
+        alpha_true=0.0,
+        tau=0.5,
+        converged=True,
+        failed=False,
+        message="ok",
+        objective_value=0.0,
+        at_grid_boundary=False,
+        alpha_grid_size=3,
+        failed_alpha_count=0,
+        cr_lower=0.0,
+        cr_upper=1.0,
+        cr_length=1.0,
+        cr_covers_true=True,
+        cr_empty=False,
+        cr_disconnected=False,
+        selected_controls=5,
+        runtime_seconds=0.1,
+    )
+
+    main_row = runner_module._result_to_row(
+        design,
+        main_result,
+        np.array([0.0, 0.5, 1.0]),
+    )
+    full_control_row = full_control_cli._result_to_row(
+        design,
+        full_control_result,
+        np.array([0.0, 0.5, 1.0]),
+    )
+
+    assert set(RESULT_COLUMNS).issubset(main_row)
+    assert set(RESULT_COLUMNS).issubset(full_control_row)
+    assert set(main_row) == set(full_control_row)
 
 

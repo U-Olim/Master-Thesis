@@ -22,6 +22,11 @@ from inference.alpha_grid import (
 )
 
 
+def assert_is_nan(value: float | None) -> None:
+    assert value is not None
+    assert np.isnan(value)
+
+
 def _call_failed_result_with_objects(
     *,
     data: object,
@@ -208,10 +213,81 @@ def test_post_selection_diagnostics_no_selected_instruments() -> None:
     )
 
     assert diagnostics["ps_n_selected_instruments"] == 0
+    assert diagnostics["ps_n_candidate_instruments"] == 1
+    assert diagnostics["ps_n_retained_instruments"] == 0
+    assert diagnostics["ps_all_instruments_retained"] is False
     assert diagnostics["ps_selected_no_instruments"] is True
     assert np.isnan(diagnostics["ps_first_stage_f_stat"])
     assert np.isnan(diagnostics["ps_first_stage_partial_r2"])
     assert diagnostics["ps_warning_code"] == "empty_instruments"
+
+
+def test_post_selection_diagnostics_all_instruments_retained_single_instrument() -> None:
+    rng = np.random.default_rng(123)
+    d = rng.normal(size=20)
+    x = rng.normal(size=(20, 3))
+    z = rng.normal(size=20)
+
+    diagnostics = summarize_post_selection_diagnostics(
+        d=d,
+        x=x,
+        z=z,
+        selected_control_indices=[0],
+        selected_instrument_indices=[0],
+    )
+
+    assert diagnostics["ps_instrument_selection_method"] == "all_instruments_retained"
+    assert diagnostics["ps_n_candidate_instruments"] == 1
+    assert diagnostics["ps_n_retained_instruments"] == 1
+    assert diagnostics["ps_share_retained_instruments"] == pytest.approx(1.0)
+    assert diagnostics["ps_all_instruments_retained"] is True
+    assert diagnostics["ps_n_selected_instruments"] == 1
+    assert diagnostics["ps_share_selected_instruments"] == pytest.approx(1.0)
+
+
+def test_post_selection_diagnostics_all_instruments_retained_multiple_instruments() -> None:
+    rng = np.random.default_rng(123)
+    d = rng.normal(size=30)
+    x = rng.normal(size=(30, 3))
+    z = rng.normal(size=(30, 3))
+
+    diagnostics = summarize_post_selection_diagnostics(
+        d=d,
+        x=x,
+        z=z,
+        selected_control_indices=[0],
+        selected_instrument_indices=[0, 1, 2],
+    )
+
+    assert diagnostics["ps_instrument_selection_method"] == "all_instruments_retained"
+    assert diagnostics["ps_n_candidate_instruments"] == 3
+    assert diagnostics["ps_n_retained_instruments"] == 3
+    assert diagnostics["ps_share_retained_instruments"] == pytest.approx(1.0)
+    assert diagnostics["ps_all_instruments_retained"] is True
+
+
+def test_post_selection_diagnostics_no_candidate_instruments() -> None:
+    rng = np.random.default_rng(123)
+    d = rng.normal(size=20)
+    x = rng.normal(size=(20, 3))
+    z = np.empty((20, 0))
+
+    diagnostics = summarize_post_selection_diagnostics(
+        d=d,
+        x=x,
+        z=z,
+        selected_control_indices=[0],
+        selected_instrument_indices=[],
+    )
+
+    assert diagnostics["ps_instrument_selection_method"] == "all_instruments_retained"
+    assert diagnostics["ps_n_candidate_instruments"] == 0
+    assert diagnostics["ps_n_retained_instruments"] == 0
+    assert np.isnan(diagnostics["ps_share_retained_instruments"])
+    assert diagnostics["ps_all_instruments_retained"] is False
+    assert diagnostics["ps_selected_no_instruments"] is True
+    assert np.isnan(diagnostics["ps_first_stage_partial_r2"])
+    assert np.isnan(diagnostics["ps_first_stage_f_stat"])
 
 
 def test_post_selection_diagnostics_no_selected_controls() -> None:
@@ -273,6 +349,10 @@ def test_post_selection_diagnostics_counts_and_shares() -> None:
     assert diagnostics["ps_n_selected_total"] == 3
     assert diagnostics["ps_share_selected_controls"] == pytest.approx(0.5)
     assert diagnostics["ps_share_selected_instruments"] == pytest.approx(0.5)
+    assert diagnostics["ps_n_candidate_instruments"] == 2
+    assert diagnostics["ps_n_retained_instruments"] == 1
+    assert diagnostics["ps_share_retained_instruments"] == pytest.approx(0.5)
+    assert diagnostics["ps_all_instruments_retained"] is False
     assert diagnostics["ps_lasso_alpha_controls"] == pytest.approx(0.2)
     assert diagnostics["ps_lasso_alpha_first_stage"] == pytest.approx(0.3)
     assert diagnostics["ps_lasso_cv_folds"] == 3
@@ -402,6 +482,17 @@ def test_estimate_post_selection_ivqr_returns_estimation_result() -> None:
         in result.message
     )
     assert result.runtime_seconds >= 0.0
+    assert result.runtime_total_sec == pytest.approx(result.runtime_seconds)
+    assert result.ps_runtime_total_sec == pytest.approx(result.runtime_seconds)
+    assert result.ps_runtime_selection_sec is not None
+    assert result.ps_runtime_selection_sec >= 0.0
+    assert result.ps_runtime_alpha_loop_sec is not None
+    assert result.ps_runtime_alpha_loop_sec >= 0.0
+    assert result.ps_runtime_confidence_region_sec is not None
+    assert result.ps_runtime_confidence_region_sec >= 0.0
+    assert result.ps_runtime_diagnostics_sec is not None
+    assert result.ps_runtime_diagnostics_sec >= 0.0
+    assert_is_nan(result.ps_runtime_first_stage_sec)
 
 
 def test_estimate_post_selection_ivqr_invalid_tau_raises_value_error() -> None:

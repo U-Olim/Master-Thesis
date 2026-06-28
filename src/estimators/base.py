@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from utils.timing import RUNTIME_COLUMNS
+
 
 RESULT_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
     "alpha_grid_min",
@@ -31,6 +33,11 @@ POST_SELECTION_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
     "ps_n_selected_total",
     "ps_share_selected_controls",
     "ps_share_selected_instruments",
+    "ps_instrument_selection_method",
+    "ps_n_candidate_instruments",
+    "ps_n_retained_instruments",
+    "ps_share_retained_instruments",
+    "ps_all_instruments_retained",
     "ps_selected_no_controls",
     "ps_selected_no_instruments",
     "ps_selected_empty_total",
@@ -49,6 +56,8 @@ POST_SELECTION_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
     "ps_rank_deficient",
     "ps_warning_code",
 )
+
+RUNTIME_DIAGNOSTIC_FIELDS: tuple[str, ...] = RUNTIME_COLUMNS
 
 
 def estimation_result_diagnostic_kwargs(
@@ -116,11 +125,46 @@ class EstimationResult:
     test_stat_at_alpha_hat: float | None = None
     critical_value: float | None = None
 
+    runtime_total_sec: float | None = None
+    runtime_data_generation_sec: float | None = None
+    runtime_estimator_sec: float | None = None
+    runtime_alpha_grid_sec: float | None = None
+    runtime_confidence_region_sec: float | None = None
+    runtime_score_eval_sec: float | None = None
+    runtime_other_sec: float | None = None
+    dml_runtime_total_sec: float | None = None
+    dml_runtime_crossfit_sec: float | None = None
+    dml_runtime_nuisance_fit_sec: float | None = None
+    dml_runtime_nuisance_predict_sec: float | None = None
+    dml_runtime_alpha_loop_sec: float | None = None
+    dml_runtime_score_eval_sec: float | None = None
+    dml_runtime_confidence_region_sec: float | None = None
+    ps_runtime_total_sec: float | None = None
+    ps_runtime_selection_sec: float | None = None
+    ps_runtime_first_stage_sec: float | None = None
+    ps_runtime_alpha_loop_sec: float | None = None
+    ps_runtime_score_eval_sec: float | None = None
+    ps_runtime_confidence_region_sec: float | None = None
+    ps_runtime_diagnostics_sec: float | None = None
+    oracle_runtime_total_sec: float | None = None
+    oracle_runtime_alpha_loop_sec: float | None = None
+    oracle_runtime_score_eval_sec: float | None = None
+    oracle_runtime_confidence_region_sec: float | None = None
+    fc_runtime_total_sec: float | None = None
+    fc_runtime_alpha_loop_sec: float | None = None
+    fc_runtime_score_eval_sec: float | None = None
+    fc_runtime_confidence_region_sec: float | None = None
+
     ps_n_selected_controls: int | None = None
     ps_n_selected_instruments: int | None = None
     ps_n_selected_total: int | None = None
     ps_share_selected_controls: float | None = None
     ps_share_selected_instruments: float | None = None
+    ps_instrument_selection_method: str | None = None
+    ps_n_candidate_instruments: int | None = None
+    ps_n_retained_instruments: int | None = None
+    ps_share_retained_instruments: float | None = None
+    ps_all_instruments_retained: bool | None = None
     ps_selected_no_controls: bool | None = None
     ps_selected_no_instruments: bool | None = None
     ps_selected_empty_total: bool | None = None

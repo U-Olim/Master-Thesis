@@ -61,6 +61,12 @@ def test_estimate_full_control_ivqr_returns_estimation_result() -> None:
     assert result.alpha_grid_size == len(alphas)
     assert result.failed_alpha_count == 0
     assert result.runtime_seconds >= 0.0
+    assert result.runtime_total_sec == pytest.approx(result.runtime_seconds)
+    assert result.fc_runtime_total_sec == pytest.approx(result.runtime_seconds)
+    assert result.fc_runtime_alpha_loop_sec is not None
+    assert result.fc_runtime_alpha_loop_sec >= 0.0
+    assert result.fc_runtime_confidence_region_sec is not None
+    assert result.fc_runtime_confidence_region_sec >= 0.0
 
 
 def test_full_control_delegates_all_controls_to_ch(

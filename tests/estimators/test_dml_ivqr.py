@@ -27,6 +27,11 @@ from inference.alpha_grid import (
 )
 
 
+def assert_is_nan(value: float | None) -> None:
+    assert value is not None
+    assert np.isnan(value)
+
+
 def _call_failed_result_with_objects(
     *,
     data: object,
@@ -508,6 +513,16 @@ def test_estimate_dml_ivqr_returns_estimation_result() -> None:
     assert result.alpha_grid_size == len(alphas)
     assert result.failed_alpha_count == 0
     assert result.runtime_seconds >= 0.0
+    assert result.runtime_total_sec == pytest.approx(result.runtime_seconds)
+    assert result.dml_runtime_total_sec == pytest.approx(result.runtime_seconds)
+    assert result.dml_runtime_crossfit_sec is not None
+    assert result.dml_runtime_crossfit_sec >= 0.0
+    assert result.dml_runtime_alpha_loop_sec is not None
+    assert result.dml_runtime_alpha_loop_sec >= 0.0
+    assert result.dml_runtime_confidence_region_sec is not None
+    assert result.dml_runtime_confidence_region_sec >= 0.0
+    assert_is_nan(result.dml_runtime_nuisance_fit_sec)
+    assert_is_nan(result.dml_runtime_nuisance_predict_sec)
 
 
 @pytest.mark.parametrize(
@@ -700,6 +715,36 @@ def test_dml_failed_result_rejects_invalid_diagnostics(
 
     with pytest.raises(ValueError, match=message):
         _call_failed_result_with_objects(**arguments)
+
+
+def test_dml_failed_result_uses_typed_missing_diagnostics() -> None:
+    data = generate_data(
+        Design("dgp1", n=20, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    result = _failed_result(
+        data=data,
+        tau=0.5,
+        message="failed",
+        runtime_seconds=0.0,
+        alpha_grid_size=3,
+        failed_alpha_count=3,
+    )
+
+    assert result.failed is True
+    assert result.alpha_hat is None
+    assert result.alpha_hat_at_lower_boundary is None
+    assert result.alpha_hat_at_upper_boundary is None
+    assert result.alpha_hat_at_any_boundary is None
+    assert result.cr_hits_lower_boundary is None
+    assert result.cr_hits_upper_boundary is None
+    assert result.cr_hits_any_boundary is None
+    assert result.cr_accepted_alpha_count is None
+    assert result.cr_n_blocks is None
+    assert result.failed_alpha_count == 3
+    assert result.alpha_grid_size == 3
+    assert result.runtime_total_sec == pytest.approx(0.0)
+    assert_is_nan(result.dml_runtime_nuisance_fit_sec)
 
 
 def test_estimate_dml_ivqr_all_alpha_points_fail_cleanly(

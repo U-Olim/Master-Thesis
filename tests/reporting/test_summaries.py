@@ -50,6 +50,9 @@ def test_aggregate_results_dml_metrics() -> None:
     assert row["avg_cr_length"] == pytest.approx(1.5)
     assert row["failure_rate"] == pytest.approx(0.0)
     assert row["non_convergence_rate"] == pytest.approx(0.0)
+    assert row["boundary_rate"] == pytest.approx(0.5)
+    assert row["alpha_hat_boundary_rate"] == pytest.approx(0.5)
+    assert row["cr_boundary_hit_rate"] == pytest.approx(0.5)
     assert row["observed_replications"] == 2
     assert row["expected_replications"] == 2
     assert row["completion_rate"] == pytest.approx(1.0)
@@ -65,6 +68,8 @@ def test_aggregate_results_post_selection_metrics() -> None:
     assert row["cr_empty_rate"] == pytest.approx(0.5)
     assert row["coverage"] == pytest.approx(0.0)
     assert row["coverage_valid_only"] == pytest.approx(0.0)
+    assert row["alpha_hat_boundary_rate"] == pytest.approx(0.0)
+    assert row["cr_boundary_hit_rate"] == pytest.approx(1.0)
     assert row["mean_selected_controls"] == pytest.approx(3.5)
 
 def test_aggregate_results_ignores_status_failed_rows_for_performance_metrics() -> None:

@@ -20,6 +20,7 @@ __all__ = [
     "sanitize_grid_statistics",
     "argmin_grid",
     "summarize_alpha_grid_diagnostics",
+    "merge_region_and_grid_diagnostics",
 ]
 
 
@@ -508,3 +509,26 @@ def summarize_alpha_grid_diagnostics(
         "test_stat_at_alpha_hat": test_stat_at_alpha_hat,
         "critical_value": _optional_float(critical_value),
     }
+
+
+def merge_region_and_grid_diagnostics(
+    region: ConfidenceRegion,
+    grid_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    """Return grid diagnostics with authoritative region geometry merged in."""
+    diagnostics = dict(grid_diagnostics)
+    # Confidence-region geometry is taken from ConfidenceRegion because it may
+    # include interpolation and disconnected blocks. Grid diagnostics are used
+    # only for accepted-point counts and boundary-hit flags.
+    diagnostics.update(
+        {
+            "cr_lower": _optional_float(region.lower),
+            "cr_upper": _optional_float(region.upper),
+            "cr_length": float(region.length),
+            "cr_hull_length": float(region.hull_length),
+            "cr_empty": bool(region.empty),
+            "cr_n_blocks": int(region.n_blocks),
+            "cr_disconnected": bool(region.disconnected),
+        }
+    )
+    return diagnostics

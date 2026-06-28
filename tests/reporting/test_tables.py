@@ -141,7 +141,12 @@ def test_make_comparison_table_contains_metrics_labels_and_rounded_values() -> N
 
 def test_make_diagnostic_table_includes_available_columns_only() -> None:
     summary = make_summary().drop(
-        columns=["boundary_rate", "mean_selected_controls"]
+        columns=[
+            "boundary_rate",
+            "alpha_hat_boundary_rate",
+            "cr_boundary_hit_rate",
+            "mean_selected_controls",
+        ]
     )
 
     table = make_diagnostic_table(summary, round_digits=3)
@@ -150,7 +155,16 @@ def test_make_diagnostic_table_includes_available_columns_only() -> None:
     assert "completion_rate" in table.columns
     assert "avg_cr_length_valid_only" in table.columns
     assert "boundary_rate" not in table.columns
+    assert "alpha_hat_boundary_rate" not in table.columns
+    assert "cr_boundary_hit_rate" not in table.columns
     assert "mean_selected_controls" not in table.columns
+
+def test_make_diagnostic_table_includes_boundary_diagnostics() -> None:
+    table = make_diagnostic_table(make_summary(), round_digits=3)
+
+    assert "boundary_rate" in table.columns
+    assert "alpha_hat_boundary_rate" in table.columns
+    assert "cr_boundary_hit_rate" in table.columns
 
 def test_cr_length_wide_uses_strict_avg_cr_length(tmp_path: Path) -> None:
     written = write_tables(make_summary(), tmp_path, round_digits=3)

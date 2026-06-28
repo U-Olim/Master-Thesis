@@ -8,10 +8,12 @@ from inference.metrics import (
     average_cr_length,
     average_cr_length_all,
     average_cr_length_valid_only,
+    alpha_hat_boundary_rate,
     bias,
     boundary_rate,
     coverage,
     coverage_valid_only,
+    cr_boundary_hit_rate,
     cr_disconnected_rate,
     cr_empty_rate,
     estimation_errors,
@@ -243,19 +245,69 @@ def test_optional_missing_diagnostic_columns_return_nan() -> None:
 
     assert np.isnan(cr_disconnected_rate(df))
     assert np.isnan(boundary_rate(df))
+    assert np.isnan(alpha_hat_boundary_rate(df))
+    assert np.isnan(cr_boundary_hit_rate(df))
     assert np.isnan(mean_failed_alpha_count(df))
     assert np.isnan(mean_selected_controls(df))
 
 
+def test_boundary_rate_uses_current_alpha_hat_boundary_column() -> None:
+    df = _base_df(
+        alpha_hat_at_any_boundary=[True, False, True],
+        at_grid_boundary=[False, False, False],
+    )
+
+    assert boundary_rate(df) == pytest.approx(2 / 3)
+    assert alpha_hat_boundary_rate(df) == pytest.approx(2 / 3)
+
+
+def test_boundary_rate_falls_back_to_legacy_at_grid_boundary_column() -> None:
+    df = _base_df().iloc[:2].copy()
+    df["at_grid_boundary"] = [False, True]
+
+    assert boundary_rate(df) == pytest.approx(1 / 2)
+
+
+def test_cr_boundary_hit_rate_uses_cr_hits_any_boundary_column() -> None:
+    df = _base_df(cr_hits_any_boundary=[True, True, False, False])
+
+    assert cr_boundary_hit_rate(df) == pytest.approx(0.5)
+
+
+def test_boundary_rates_return_nan_for_empty_dataframe() -> None:
+    df = _base_df(
+        alpha_hat_at_any_boundary=[True, False, True],
+        cr_hits_any_boundary=[True, False, True],
+    ).iloc[0:0]
+
+    assert np.isnan(boundary_rate(df))
+    assert np.isnan(alpha_hat_boundary_rate(df))
+    assert np.isnan(cr_boundary_hit_rate(df))
+
+
+def test_boundary_rates_parse_csv_style_string_booleans() -> None:
+    df = _base_df(
+        alpha_hat_at_any_boundary=["True", "False", "true", "0", "1"],
+        cr_hits_any_boundary=["False", "true", "1", "0", None],
+    )
+
+    assert boundary_rate(df) == pytest.approx(3 / 5)
+    assert alpha_hat_boundary_rate(df) == pytest.approx(3 / 5)
+    assert cr_boundary_hit_rate(df) == pytest.approx(2 / 4)
+
+
 def test_optional_diagnostic_means_and_rates() -> None:
     df = _base_df(
-        at_grid_boundary=[True, False, "true", None],
+        alpha_hat_at_any_boundary=[True, False, "true", None],
+        cr_hits_any_boundary=[False, True, "true", None],
         failed_alpha_count=[0, 2, None, "4"],
         selected_controls=[1, None, "3", 5],
         runtime_seconds=[0.5, "1.0", None, "bad"],
     )
 
     assert boundary_rate(df) == pytest.approx(2 / 3)
+    assert alpha_hat_boundary_rate(df) == pytest.approx(2 / 3)
+    assert cr_boundary_hit_rate(df) == pytest.approx(2 / 3)
     assert mean_failed_alpha_count(df) == pytest.approx(2.0)
     assert mean_selected_controls(df) == pytest.approx(3.0)
     assert mean_runtime_seconds(df) == pytest.approx(0.75)
@@ -301,7 +353,8 @@ def test_summarize_group_returns_expected_keys() -> None:
     df = _base_df(
         alpha_hat=[1.1, None, 1.3],
         cr_disconnected=[False, True, False],
-        at_grid_boundary=[False, False, True],
+        alpha_hat_at_any_boundary=[False, False, True],
+        cr_hits_any_boundary=[False, True, True],
         failed_alpha_count=[0, 1, 2],
         selected_controls=[5, 6, None],
     )
@@ -326,10 +379,21 @@ def test_summarize_group_returns_expected_keys() -> None:
         "cr_empty_rate",
         "cr_disconnected_rate",
         "boundary_rate",
+        "alpha_hat_boundary_rate",
+        "cr_boundary_hit_rate",
         "mean_failed_alpha_count",
         "mean_selected_controls",
         "mean_runtime_seconds",
+        "mean_runtime_total_sec",
+        "median_runtime_total_sec",
+        "mean_runtime_alpha_grid_sec",
+        "mean_runtime_confidence_region_sec",
+        "mean_dml_runtime_crossfit_sec",
+        "mean_ps_runtime_selection_sec",
     }
+    assert summary["boundary_rate"] == pytest.approx(1 / 3)
+    assert summary["alpha_hat_boundary_rate"] == pytest.approx(1 / 3)
+    assert summary["cr_boundary_hit_rate"] == pytest.approx(2 / 3)
 
 
 def test_summarize_group_valid_estimates_require_hat_and_true() -> None:

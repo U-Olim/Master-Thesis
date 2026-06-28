@@ -30,15 +30,14 @@ if str(SRC_PATH) not in sys.path:
 from dgp.designs import Design  # noqa: E402
 from dgp.generators import generate_data  # noqa: E402
 from dgp.true_parameters import true_alpha  # noqa: E402
-from estimators.base import EstimationResult, POST_SELECTION_DIAGNOSTIC_FIELDS  # noqa: E402
+from estimators.base import EstimationResult  # noqa: E402
 from estimators.full_control_ivqr import estimate_full_control_ivqr  # noqa: E402
-from estimators.post_selection_ivqr import empty_post_selection_diagnostics  # noqa: E402
-from inference.confidence_regions import summarize_alpha_grid_diagnostics  # noqa: E402
 from _common import (  # noqa: E402
     make_reports as _make_reports,
     print_dry_run_common,
     validate_output_path as _validate_output_path,
     validate_resume_manifest,
+    validate_resume_manifest_args,
 )
 from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa: E402
 from simulation._validation import (  # noqa: E402
@@ -64,9 +63,14 @@ from simulation.config import (  # noqa: E402
 from simulation.estimators_config import normalize_estimator_names  # noqa: E402
 from simulation.runner import (  # noqa: E402
     DESIGN_KEY_COLUMNS,
-    RESULT_COLUMNS,
     make_simulation_grid,
     quantreg_iteration_warning_filter,
+)
+from simulation.results import (  # noqa: E402
+    MAX_ERROR_MESSAGE_LENGTH,
+    RESULT_COLUMNS,
+    build_failure_result_row,
+    build_simulation_result_row,
 )
 
 try:
@@ -77,7 +81,6 @@ except ImportError:  # pragma: no cover - statsmodels is a project dependency.
 
 DEFAULT_FULL_CONTROL_OUTPUT = Path(FULL_CONTROL_BENCHMARK_OUTPUT)
 ESTIMATOR_NAME = "full_control_ivqr"
-MAX_ERROR_MESSAGE_LENGTH = 500
 
 
 def _parse_args() -> argparse.Namespace:
@@ -169,6 +172,13 @@ def _parse_args() -> argparse.Namespace:
         default=Path("results/figures/full_control"),
     )
     args = parser.parse_args()
+    try:
+        validate_resume_manifest_args(
+            resume=args.resume,
+            manifest_path=args.manifest,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     args.estimators = normalize_estimator_names(args.estimators, scenario="full_control")
     return args
 
@@ -297,155 +307,12 @@ def _print_dry_run(
     )
 
 
-def _diagnostic_value(
-    result: EstimationResult,
-    name: str,
-    fallback: object,
-) -> object:
-    value = getattr(result, name)
-    return fallback if value is None else value
-
-
-def _result_diagnostics(
-    result: EstimationResult,
-    alphas: np.ndarray,
-) -> dict[str, object]:
-    failed_alpha_count = result.failed_alpha_count
-    diagnostics = summarize_alpha_grid_diagnostics(
-        alpha_grid=alphas,
-        accepted_mask=None,
-        alpha_hat=result.alpha_hat,
-        failed_alpha_count=0 if failed_alpha_count is None else failed_alpha_count,
-    )
-    if failed_alpha_count is None:
-        diagnostics["failed_alpha_count"] = None
-        diagnostics["failed_alpha_rate"] = np.nan
-
-    for name in (
-        "alpha_grid_min",
-        "alpha_grid_max",
-        "alpha_grid_step",
-        "alpha_hat_at_lower_boundary",
-        "alpha_hat_at_upper_boundary",
-        "alpha_hat_at_any_boundary",
-        "cr_hits_lower_boundary",
-        "cr_hits_upper_boundary",
-        "cr_hits_any_boundary",
-        "cr_accepted_alpha_count",
-        "cr_acceptance_rate",
-        "cr_n_blocks",
-        "cr_hull_length",
-        "failed_alpha_rate",
-        "min_test_stat",
-        "max_test_stat",
-        "test_stat_at_alpha_hat",
-        "critical_value",
-    ):
-        diagnostics[name] = _diagnostic_value(result, name, diagnostics[name])
-
-    diagnostics["alpha_grid_size"] = _diagnostic_value(
-        result,
-        "alpha_grid_size",
-        diagnostics["alpha_grid_size"],
-    )
-    diagnostics["failed_alpha_count"] = _diagnostic_value(
-        result,
-        "failed_alpha_count",
-        diagnostics["failed_alpha_count"],
-    )
-    diagnostics["cr_lower"] = (
-        result.cr_lower if result.cr_lower is not None else diagnostics["cr_lower"]
-    )
-    diagnostics["cr_upper"] = (
-        result.cr_upper if result.cr_upper is not None else diagnostics["cr_upper"]
-    )
-    diagnostics["cr_length"] = (
-        result.cr_length if result.cr_length is not None else diagnostics["cr_length"]
-    )
-    diagnostics["cr_empty"] = result.cr_empty
-    diagnostics["cr_disconnected"] = (
-        result.cr_disconnected
-        if result.cr_disconnected is not None
-        else diagnostics["cr_disconnected"]
-    )
-    return diagnostics
-
-
-def _post_selection_diagnostics(result: EstimationResult) -> dict[str, object]:
-    diagnostics = empty_post_selection_diagnostics()
-    for name in POST_SELECTION_DIAGNOSTIC_FIELDS:
-        value = getattr(result, name)
-        if value is not None:
-            diagnostics[name] = value
-    return diagnostics
-
-
 def _result_to_row(
     design: Design,
     result: EstimationResult,
     alphas: np.ndarray,
 ) -> dict[str, object]:
-    bias = None
-    absolute_error = None
-    squared_error = None
-    if result.alpha_hat is not None and result.alpha_true is not None:
-        bias = result.alpha_hat - result.alpha_true
-        absolute_error = abs(bias)
-        squared_error = bias**2
-    diagnostics = _result_diagnostics(result, alphas)
-    ps_diagnostics = _post_selection_diagnostics(result)
-    return {
-        "dgp": design.dgp,
-        "n": design.n,
-        "p": design.p,
-        "pi": design.pi,
-        "tau": design.tau,
-        "rep": design.rep,
-        "seed": design.seed,
-        "estimator": result.estimator,
-        "alpha_hat": result.alpha_hat,
-        "alpha_true": result.alpha_true,
-        "bias": bias,
-        "absolute_error": absolute_error,
-        "squared_error": squared_error,
-        "status": "failed" if result.failed else "ok",
-        "error_type": "EstimatorFailure" if result.failed else None,
-        "error_message": (
-            result.message[:MAX_ERROR_MESSAGE_LENGTH] if result.failed else None
-        ),
-        "failed": result.failed,
-        "converged": result.converged,
-        "alpha_grid_min": diagnostics["alpha_grid_min"],
-        "alpha_grid_max": diagnostics["alpha_grid_max"],
-        "alpha_grid_size": diagnostics["alpha_grid_size"],
-        "alpha_grid_step": diagnostics["alpha_grid_step"],
-        "alpha_hat_at_lower_boundary": diagnostics["alpha_hat_at_lower_boundary"],
-        "alpha_hat_at_upper_boundary": diagnostics["alpha_hat_at_upper_boundary"],
-        "alpha_hat_at_any_boundary": diagnostics["alpha_hat_at_any_boundary"],
-        "cr_lower": diagnostics["cr_lower"],
-        "cr_upper": diagnostics["cr_upper"],
-        "cr_length": diagnostics["cr_length"],
-        "cr_hits_lower_boundary": diagnostics["cr_hits_lower_boundary"],
-        "cr_hits_upper_boundary": diagnostics["cr_hits_upper_boundary"],
-        "cr_hits_any_boundary": diagnostics["cr_hits_any_boundary"],
-        "cr_empty": diagnostics["cr_empty"],
-        "cr_accepted_alpha_count": diagnostics["cr_accepted_alpha_count"],
-        "cr_acceptance_rate": diagnostics["cr_acceptance_rate"],
-        "cr_n_blocks": diagnostics["cr_n_blocks"],
-        "cr_disconnected": diagnostics["cr_disconnected"],
-        "cr_hull_length": diagnostics["cr_hull_length"],
-        "cr_covers_true": result.cr_covers_true,
-        "selected_controls": result.selected_controls,
-        "runtime_seconds": result.runtime_seconds,
-        "failed_alpha_count": diagnostics["failed_alpha_count"],
-        "failed_alpha_rate": diagnostics["failed_alpha_rate"],
-        "min_test_stat": diagnostics["min_test_stat"],
-        "max_test_stat": diagnostics["max_test_stat"],
-        "test_stat_at_alpha_hat": diagnostics["test_stat_at_alpha_hat"],
-        "critical_value": diagnostics["critical_value"],
-        **ps_diagnostics,
-        "message": result.message,
-    }
+    return build_simulation_result_row(design, result, alphas)
 
 
 def _failure_row(
@@ -456,65 +323,15 @@ def _failure_row(
     except Exception:
         alpha_true = None
     message = f"{type(exc).__name__}: {str(exc)[:MAX_ERROR_MESSAGE_LENGTH]}"
-    diagnostics = summarize_alpha_grid_diagnostics(
-        alpha_grid=alphas,
-        accepted_mask=None,
-        alpha_hat=None,
-        failed_alpha_count=0,
+    return build_failure_result_row(
+        design=design,
+        estimator=ESTIMATOR_NAME,
+        alphas=alphas,
+        alpha_true=alpha_true,
+        exc=exc,
+        message=message,
+        max_error_message_length=MAX_ERROR_MESSAGE_LENGTH,
     )
-    diagnostics["failed_alpha_count"] = None
-    diagnostics["failed_alpha_rate"] = np.nan
-    ps_diagnostics = empty_post_selection_diagnostics()
-    return {
-        "dgp": design.dgp,
-        "n": design.n,
-        "p": design.p,
-        "pi": design.pi,
-        "tau": design.tau,
-        "rep": design.rep,
-        "seed": design.seed,
-        "estimator": ESTIMATOR_NAME,
-        "alpha_hat": None,
-        "alpha_true": alpha_true,
-        "bias": None,
-        "absolute_error": None,
-        "squared_error": None,
-        "status": "failed",
-        "error_type": type(exc).__name__,
-        "error_message": str(exc)[:MAX_ERROR_MESSAGE_LENGTH],
-        "failed": True,
-        "converged": False,
-        "alpha_grid_min": diagnostics["alpha_grid_min"],
-        "alpha_grid_max": diagnostics["alpha_grid_max"],
-        "alpha_grid_size": diagnostics["alpha_grid_size"],
-        "alpha_grid_step": diagnostics["alpha_grid_step"],
-        "alpha_hat_at_lower_boundary": diagnostics["alpha_hat_at_lower_boundary"],
-        "alpha_hat_at_upper_boundary": diagnostics["alpha_hat_at_upper_boundary"],
-        "alpha_hat_at_any_boundary": diagnostics["alpha_hat_at_any_boundary"],
-        "cr_lower": diagnostics["cr_lower"],
-        "cr_upper": diagnostics["cr_upper"],
-        "cr_length": diagnostics["cr_length"],
-        "cr_hits_lower_boundary": diagnostics["cr_hits_lower_boundary"],
-        "cr_hits_upper_boundary": diagnostics["cr_hits_upper_boundary"],
-        "cr_hits_any_boundary": diagnostics["cr_hits_any_boundary"],
-        "cr_empty": diagnostics["cr_empty"],
-        "cr_accepted_alpha_count": diagnostics["cr_accepted_alpha_count"],
-        "cr_acceptance_rate": diagnostics["cr_acceptance_rate"],
-        "cr_n_blocks": diagnostics["cr_n_blocks"],
-        "cr_disconnected": diagnostics["cr_disconnected"],
-        "cr_hull_length": diagnostics["cr_hull_length"],
-        "cr_covers_true": None,
-        "selected_controls": None,
-        "runtime_seconds": None,
-        "failed_alpha_count": diagnostics["failed_alpha_count"],
-        "failed_alpha_rate": diagnostics["failed_alpha_rate"],
-        "min_test_stat": diagnostics["min_test_stat"],
-        "max_test_stat": diagnostics["max_test_stat"],
-        "test_stat_at_alpha_hat": diagnostics["test_stat_at_alpha_hat"],
-        "critical_value": diagnostics["critical_value"],
-        **ps_diagnostics,
-        "message": message,
-    }
 
 
 def _run_one(

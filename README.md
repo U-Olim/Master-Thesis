@@ -131,6 +131,20 @@ caffeinate -dimsu pixi run python scenarios/main_simulation.py \
   --manifest results/raw/fast_mode_manifest_grid21.json
 ```
 
+Resume the same local run with the same output and manifest pair:
+
+```bash
+caffeinate -dimsu pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --estimators oracle dml post_selection \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21 \
+  --resume \
+  --output results/raw/fast_mode_results_grid21.csv \
+  --manifest results/raw/fast_mode_manifest_grid21.json
+```
+
 Run a targeted estimator subset when diagnosing runtime or coverage:
 
 ```bash
@@ -224,6 +238,29 @@ runtime_wide.csv
 failure_rate_wide.csv
 ```
 
+Boundary diagnostics in the summary and diagnostic tables distinguish point
+estimates from confidence-region truncation. `alpha_hat_boundary_rate` is the
+share of rows where `alpha_hat` lies at the searched alpha-grid boundary.
+`cr_boundary_hit_rate` is the share of rows where the confidence region touches
+the searched alpha-grid boundary; high values mean confidence-region endpoints
+may be truncated by the searched grid.
+
+Post-selection diagnostics distinguish selected controls from retained
+instruments. The current post-selection IVQR estimator selects controls and
+retains all excluded instruments, reported as
+`ps_instrument_selection_method = all_instruments_retained`. The legacy
+`ps_n_selected_instruments` and `ps_share_selected_instruments` fields are kept
+as compatibility aliases for retained instruments; use
+`ps_n_retained_instruments`, `ps_share_retained_instruments`, and
+`ps_all_instruments_retained` for interpretation.
+
+Runtime diagnostics are written to every raw result row. `runtime_seconds` is
+kept for compatibility and matches `runtime_total_sec`; estimator-specific
+columns such as `dml_runtime_crossfit_sec`, `ps_runtime_selection_sec`,
+`oracle_runtime_alpha_loop_sec`, and `fc_runtime_alpha_loop_sec` identify coarse
+bottlenecks. Stages that are not cleanly separable without refactoring are left
+missing rather than estimated indirectly.
+
 Standard figure files:
 
 ```text
@@ -236,13 +273,13 @@ fig_failure_rate.png
 
 ## Resume, Failed Rows, Chunking, and Manifests
 
-Use `--resume` to append to an existing results CSV while skipping design keys that already have the required estimator rows. In the main simulation, a design is considered complete when all requested estimator rows are present. In the full-control benchmark, completion is checked for the `full_control_ivqr` estimator.
+Use `--resume` to append to an existing results CSV while skipping design keys that already have the required estimator rows. Resume requires `--manifest PATH` so the current run settings can be checked against the stored resume signature before any output is written. Always use a dedicated output file and manifest file for each configuration. In the main simulation, a design is considered complete when all requested estimator rows are present. In the full-control benchmark, completion is checked for the `full_control_ivqr` estimator.
 
 Use `--rerun-failed` with `--resume` to ignore failed prior rows when deciding whether a design is complete, so failed designs can be rerun. Without `--resume`, `--rerun-failed` has no effect.
 
 Use `--num-chunks N --chunk-index I` to run one deterministic strided chunk of the design grid, with `0 <= I < N`. Both options must be supplied together. Chunking is applied before resume filtering.
 
-Use `--manifest PATH` to write a JSON manifest containing run parameters, counts, alpha-grid information, and a resume signature. When resuming with a manifest, the stored resume signature must match the current run settings; otherwise the run is rejected.
+Use `--manifest PATH` to write a JSON manifest containing run parameters, counts, alpha-grid information, and a resume signature. When resuming, the stored resume signature must match the current run settings; otherwise the run is rejected.
 
 ## Reproducibility
 

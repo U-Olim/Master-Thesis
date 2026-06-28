@@ -32,6 +32,7 @@ from inference.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
+    merge_region_and_grid_diagnostics,
     sanitize_grid_statistics,
     summarize_alpha_grid_diagnostics,
 )
@@ -42,6 +43,7 @@ from inference.alpha_grid import (
     alpha_grid,
 )
 from inference.moments import quantile_score, weighted_gmm_statistic
+from utils.timing import RuntimeDiagnosticColumns, estimator_runtime_columns
 from utils.validation import (
     validate_1d_array,
     validate_2d_array,
@@ -185,6 +187,7 @@ def _failed_result(
     runtime_seconds: float,
     alpha_grid_size: int | None = None,
     failed_alpha_count: int | None = None,
+    runtime_diagnostics: RuntimeDiagnosticColumns | None = None,
 ) -> EstimationResult:
     if runtime_seconds < 0:
         raise ValueError("runtime_seconds must be nonnegative")
@@ -218,6 +221,11 @@ def _failed_result(
         cr_disconnected=None,
         selected_controls=None,
         runtime_seconds=runtime_seconds,
+        **(
+            estimator_runtime_columns(estimator="dml_ivqr", total_sec=runtime_seconds)
+            if runtime_diagnostics is None
+            else runtime_diagnostics
+        ),
     )
 
 
@@ -557,6 +565,8 @@ def estimate_dml_ivqr(
     across alpha values. Setting it to False is mainly for regression tests.
     """
     start = perf_counter()
+    crossfit_sec = float("nan")
+    alpha_loop_sec = float("nan")
     validate_tau(tau)
     if not isinstance(use_cache, bool):
         raise ValueError("use_cache must be a boolean")
@@ -582,6 +592,7 @@ def estimate_dml_ivqr(
     fold_cache: list[DMLFoldCache] | None = None
     if use_cache:
         try:
+            crossfit_start = perf_counter()
             fold_cache = _build_dml_fold_cache(
                 y,
                 d,
@@ -591,14 +602,21 @@ def estimate_dml_ivqr(
                 random_state=fold_random_state,
                 ridge_alpha=ridge_alpha,
             )
+            crossfit_sec = perf_counter() - crossfit_start
         except RuntimeError as exc:
+            runtime_seconds = perf_counter() - start
             return _failed_result(
                 data=data,
                 tau=tau,
                 message=f"Fold cache construction failed: {exc}",
-                runtime_seconds=perf_counter() - start,
+                runtime_seconds=runtime_seconds,
                 alpha_grid_size=len(alphas),
                 failed_alpha_count=len(alphas),
+                runtime_diagnostics=estimator_runtime_columns(
+                    estimator="dml_ivqr",
+                    total_sec=runtime_seconds,
+                    crossfit_sec=perf_counter() - crossfit_start,
+                ),
             )
     else:
         make_folds(n=len(y), k_folds=k_folds, random_state=fold_random_state)
@@ -607,6 +625,7 @@ def estimate_dml_ivqr(
     converged_flags: list[bool] = []
     failure_messages: list[str] = []
 
+    alpha_loop_start = perf_counter()
     for j, alpha_value in enumerate(alphas):
         try:
             if fold_cache is not None:
@@ -642,6 +661,7 @@ def estimate_dml_ivqr(
             failure_messages.append(message)
         statistics[j] = statistic
         converged_flags.append(converged)
+    alpha_loop_sec = perf_counter() - alpha_loop_start
 
     statistics, num_failed = sanitize_grid_statistics(statistics, converged_flags)
     if num_failed == len(alphas):
@@ -650,6 +670,7 @@ def estimate_dml_ivqr(
             if failure_messages
             else ""
         )
+        runtime_seconds = perf_counter() - start
         return _failed_result(
             data=data,
             tau=tau,
@@ -658,11 +679,18 @@ def estimate_dml_ivqr(
                 f"failed_alpha_points={num_failed}/{len(alphas)}"
                 f"{first_failure}"
             ),
-            runtime_seconds=perf_counter() - start,
+            runtime_seconds=runtime_seconds,
             alpha_grid_size=len(alphas),
             failed_alpha_count=num_failed,
+            runtime_diagnostics=estimator_runtime_columns(
+                estimator="dml_ivqr",
+                total_sec=runtime_seconds,
+                crossfit_sec=crossfit_sec,
+                alpha_loop_sec=alpha_loop_sec,
+            ),
         )
 
+    confidence_region_start = perf_counter()
     alpha_hat, min_statistic, at_boundary = argmin_grid(alphas, statistics)
     critical = critical_value_chi_square(confidence_level, df=1)
     accepted_mask = statistics <= critical
@@ -682,12 +710,15 @@ def estimate_dml_ivqr(
         statistic_reference=None,
         inversion_type="absolute",
     )
+    diagnostics = merge_region_and_grid_diagnostics(region, diagnostics)
+    confidence_region_sec = perf_counter() - confidence_region_start
 
     first_failure = (
         f"; first_failure={failure_messages[0][:200]}"
         if failure_messages
         else ""
     )
+    runtime_seconds = perf_counter() - start
     return EstimationResult(
         estimator="dml_ivqr",
         alpha_hat=alpha_hat,
@@ -710,7 +741,14 @@ def estimate_dml_ivqr(
         cr_empty=diagnostics["cr_empty"],
         cr_disconnected=diagnostics["cr_disconnected"],
         selected_controls=None,
-        runtime_seconds=perf_counter() - start,
+        runtime_seconds=runtime_seconds,
+        **estimator_runtime_columns(
+            estimator="dml_ivqr",
+            total_sec=runtime_seconds,
+            crossfit_sec=crossfit_sec,
+            alpha_loop_sec=alpha_loop_sec,
+            confidence_region_sec=confidence_region_sec,
+        ),
         **estimation_result_diagnostic_kwargs(diagnostics),
     )
 

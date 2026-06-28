@@ -33,6 +33,7 @@ from _common import (  # noqa: E402
     print_dry_run_common,
     validate_output_path as _validate_output_path,
     validate_resume_manifest,
+    validate_resume_manifest_args,
 )
 from simulation.batching import filter_completed_designs, run_simulation_batch  # noqa: E402
 from simulation.chunking import select_design_chunk, validate_chunk_args  # noqa: E402
@@ -123,7 +124,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--summary-output", default=None)
     parser.add_argument("--tables-dir", default=None)
     parser.add_argument("--figures-dir", default=None)
-    return parser.parse_args()
+    args = parser.parse_args()
+    try:
+        validate_resume_manifest_args(
+            resume=args.resume,
+            manifest_path=args.manifest,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    return args
 
 
 def _apply_mode_defaults(args: argparse.Namespace) -> None:
