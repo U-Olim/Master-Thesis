@@ -9,10 +9,14 @@ import numpy as np
 from dgp.designs import Design
 from estimators.base import EstimationResult, POST_SELECTION_DIAGNOSTIC_FIELDS
 from inference.confidence_regions import (
-    ConfidenceRegion,
+    merge_region_and_grid_diagnostics,
     summarize_alpha_grid_diagnostics,
 )
-from utils.timing import RUNTIME_COLUMNS, empty_runtime_columns
+from utils.timing import (
+    RUNTIME_COLUMNS,
+    RuntimeDiagnosticColumns,
+    empty_runtime_columns,
+)
 
 
 POST_SELECTION_WARNING_NONE = ""
@@ -130,32 +134,9 @@ def empty_post_selection_diagnostics() -> dict[str, Any]:
     }
 
 
-def empty_runtime_diagnostics() -> dict[str, float]:
+def empty_runtime_diagnostics() -> RuntimeDiagnosticColumns:
     """Return neutral runtime diagnostics for rows without stage timing."""
     return empty_runtime_columns()
-
-
-def merge_region_and_grid_diagnostics(
-    region: ConfidenceRegion,
-    grid_diagnostics: dict[str, Any],
-) -> dict[str, Any]:
-    """Return grid diagnostics with authoritative region geometry merged in."""
-    diagnostics = dict(grid_diagnostics)
-    # Confidence-region geometry comes from ConfidenceRegion because it may
-    # include interpolation and disconnected blocks. Grid diagnostics remain
-    # grid-based.
-    diagnostics.update(
-        {
-            "cr_lower": _optional_float(region.lower),
-            "cr_upper": _optional_float(region.upper),
-            "cr_length": float(region.length),
-            "cr_hull_length": float(region.hull_length),
-            "cr_empty": bool(region.empty),
-            "cr_n_blocks": int(region.n_blocks),
-            "cr_disconnected": bool(region.disconnected),
-        }
-    )
-    return diagnostics
 
 
 def result_diagnostics(
@@ -408,13 +389,6 @@ def _diagnostic_value(
 ) -> object:
     value = getattr(result, name)
     return fallback if value is None else value
-
-
-def _optional_float(value: float | None) -> float:
-    if value is None:
-        return float("nan")
-    value = float(value)
-    return value if np.isfinite(value) else float("nan")
 
 
 __all__ = [

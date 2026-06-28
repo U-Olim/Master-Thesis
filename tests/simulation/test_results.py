@@ -7,7 +7,10 @@ import pytest
 
 from dgp.designs import Design
 from estimators.base import EstimationResult, POST_SELECTION_DIAGNOSTIC_FIELDS
-from inference.confidence_regions import ConfidenceRegion
+from inference.confidence_regions import (
+    ConfidenceRegion,
+    merge_region_and_grid_diagnostics,
+)
 import scenarios.full_control_ivqr as full_control_cli
 import simulation.runner as runner_module
 from simulation.runner import _result_to_row, run_single_replication, run_small_simulation
@@ -16,7 +19,6 @@ from simulation.results import (
     build_failure_result_row,
     build_simulation_result_row,
     empty_post_selection_diagnostics,
-    merge_region_and_grid_diagnostics,
 )
 from tests.helpers import SIMULATION_RESULT_REQUIRED_KEYS
 from utils.timing import RUNTIME_COLUMNS

@@ -15,6 +15,10 @@ from simulation._validation import validate_output_file_path
 RESUME_REQUIRES_MANIFEST_MESSAGE = (
     "--resume requires --manifest so run configuration compatibility can be validated."
 )
+RESUME_REQUIRES_EXISTING_MANIFEST_MESSAGE = (
+    "--resume requires an existing --manifest file so run configuration "
+    "compatibility can be validated."
+)
 
 
 def validate_resume_manifest_args(
@@ -44,10 +48,10 @@ def validate_resume_manifest(
 ) -> None:
     """Reject resume attempts whose manifest signature differs from current args."""
     if manifest_path is None:
-        return
+        raise ValueError(RESUME_REQUIRES_MANIFEST_MESSAGE)
     path = Path(manifest_path)
     if not path.exists():
-        return
+        raise FileNotFoundError(RESUME_REQUIRES_EXISTING_MANIFEST_MESSAGE)
     payload = json.loads(path.read_text(encoding="utf-8"))
     previous = payload.get("resume_signature")
     if previous is not None and previous != current_signature:

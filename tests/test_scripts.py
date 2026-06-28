@@ -21,6 +21,10 @@ FULL_CONTROL_SCRIPT = PROJECT_ROOT / "scenarios" / "full_control_ivqr.py"
 RESUME_REQUIRES_MANIFEST_MESSAGE = (
     "--resume requires --manifest so run configuration compatibility can be validated."
 )
+RESUME_REQUIRES_EXISTING_MANIFEST_MESSAGE = (
+    "--resume requires an existing --manifest file so run configuration "
+    "compatibility can be validated."
+)
 
 
 @dataclass(frozen=True)
@@ -499,6 +503,102 @@ def test_full_control_resume_without_manifest_exits_before_run(
     assert not output.exists()
 
 
+def test_main_resume_with_missing_manifest_is_rejected(
+    main_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [str(main_cli.__file__), "--mode", "fast"],
+    )
+    args = main_cli._parse_args()
+    main_cli._apply_mode_defaults(args)
+    missing_manifest = tmp_path / "missing_manifest.json"
+
+    with pytest.raises(FileNotFoundError, match=RESUME_REQUIRES_EXISTING_MANIFEST_MESSAGE):
+        main_cli._validate_resume_manifest(missing_manifest, args)
+
+
+def test_full_control_resume_with_missing_manifest_is_rejected(
+    full_control_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(sys, "argv", [str(full_control_cli.__file__)])
+    args = full_control_cli._parse_args()
+    missing_manifest = tmp_path / "missing_manifest.json"
+
+    with pytest.raises(FileNotFoundError, match=RESUME_REQUIRES_EXISTING_MANIFEST_MESSAGE):
+        full_control_cli._validate_resume_manifest(missing_manifest, args)
+
+
+def test_main_non_resume_run_allows_new_manifest_path(
+    main_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "raw" / "selected.csv"
+    manifest = tmp_path / "selected_manifest.json"
+
+    def fake_run_simulation_batch(designs, alphas, **kwargs):
+        output.parent.mkdir(parents=True, exist_ok=True)
+        return pd.DataFrame(
+            [
+                {
+                    "dgp": "dgp1",
+                    "n": 80,
+                    "p": 5,
+                    "pi": 1.0,
+                    "tau": 0.5,
+                    "rep": 0,
+                    "seed": 12345,
+                    "estimator": "oracle",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(main_cli, "run_simulation_batch", fake_run_simulation_batch)
+    monkeypatch.setattr(main_cli, "_make_reports", lambda args: None)
+    monkeypatch.setattr(main_cli, "_count_rows", lambda path: 1)
+
+    result = _run_cli_in_process(
+        main_cli,
+        [
+            "--estimators",
+            "oracle",
+            "--reps",
+            "1",
+            "--dgps",
+            "dgp1",
+            "--n-values",
+            "80",
+            "--p-values",
+            "5",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--max-designs",
+            "1",
+            "--n-jobs",
+            "1",
+            "--output",
+            str(output),
+            "--manifest",
+            str(manifest),
+        ],
+        monkeypatch,
+        capsys,
+        tmp_path,
+    )
+
+    assert result.returncode == 0
+    assert manifest.exists()
+
+
 def test_main_resume_applies_chunking_before_filtering(
     main_cli,
     monkeypatch: pytest.MonkeyPatch,
@@ -523,6 +623,40 @@ def test_main_resume_applies_chunking_before_filtering(
         ]
     ).to_csv(output, index=False)
     captured_designs: list[Design] = []
+    cli_args = [
+        "--resume",
+        "--reps",
+        "4",
+        "--dgps",
+        "dgp1",
+        "--n-values",
+        "80",
+        "--p-values",
+        "20",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--chunk-index",
+        "0",
+        "--num-chunks",
+        "2",
+        "--batch-size",
+        "10",
+        "--n-jobs",
+        "1",
+        "--output",
+        str(output),
+        "--manifest",
+        str(manifest),
+    ]
+    monkeypatch.setattr(sys, "argv", [str(main_cli.__file__), *cli_args])
+    args = main_cli._parse_args()
+    main_cli._apply_mode_defaults(args)
+    manifest.write_text(
+        json.dumps({"resume_signature": main_cli._resume_signature(args)}),
+        encoding="utf-8",
+    )
 
     def fake_run_simulation_batch(designs, alphas, **kwargs):
         captured_designs.extend(designs)
@@ -534,33 +668,7 @@ def test_main_resume_applies_chunking_before_filtering(
 
     _run_cli_in_process(
         main_cli,
-        [
-            "--resume",
-            "--reps",
-            "4",
-            "--dgps",
-            "dgp1",
-            "--n-values",
-            "80",
-            "--p-values",
-            "20",
-            "--pi-values",
-            "1.0",
-            "--taus",
-            "0.5",
-            "--chunk-index",
-            "0",
-            "--num-chunks",
-            "2",
-            "--batch-size",
-            "10",
-            "--n-jobs",
-            "1",
-            "--output",
-            str(output),
-            "--manifest",
-            str(manifest),
-        ],
+        cli_args,
         monkeypatch,
         capsys,
         tmp_path,
@@ -606,6 +714,41 @@ def test_full_control_resume_applies_chunking_before_filtering(
         ]
     ).to_csv(output, index=False)
     captured_designs: list[Design] = []
+    cli_args = [
+        "--resume",
+        "--reps",
+        "4",
+        "--dgps",
+        "dgp1",
+        "--n-values",
+        "80",
+        "--p-values",
+        "20",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--chunk-index",
+        "0",
+        "--num-chunks",
+        "2",
+        "--batch-size",
+        "10",
+        "--n-jobs",
+        "1",
+        "--output",
+        str(output),
+        "--manifest",
+        str(manifest),
+    ]
+    monkeypatch.setattr(sys, "argv", [str(full_control_cli.__file__), *cli_args])
+    args = full_control_cli._parse_args()
+    manifest.write_text(
+        json.dumps(
+            {"resume_signature": full_control_cli._resume_signature(args)}
+        ),
+        encoding="utf-8",
+    )
 
     def fake_run_batch(
         designs,
@@ -622,33 +765,7 @@ def test_full_control_resume_applies_chunking_before_filtering(
 
     _run_cli_in_process(
         full_control_cli,
-        [
-            "--resume",
-            "--reps",
-            "4",
-            "--dgps",
-            "dgp1",
-            "--n-values",
-            "80",
-            "--p-values",
-            "20",
-            "--pi-values",
-            "1.0",
-            "--taus",
-            "0.5",
-            "--chunk-index",
-            "0",
-            "--num-chunks",
-            "2",
-            "--batch-size",
-            "10",
-            "--n-jobs",
-            "1",
-            "--output",
-            str(output),
-            "--manifest",
-            str(manifest),
-        ],
+        cli_args,
         monkeypatch,
         capsys,
         tmp_path,

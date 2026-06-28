@@ -273,7 +273,7 @@ fig_failure_rate.png
 
 ## Resume, Failed Rows, Chunking, and Manifests
 
-Use `--resume` to append to an existing results CSV while skipping design keys that already have the required estimator rows. Resume requires `--manifest PATH` so the current run settings can be checked against the stored resume signature before any output is written. Always use a dedicated output file and manifest file for each configuration. In the main simulation, a design is considered complete when all requested estimator rows are present. In the full-control benchmark, completion is checked for the `full_control_ivqr` estimator.
+Use `--resume` to append to an existing results CSV while skipping design keys that already have the required estimator rows. Resume requires an existing `--manifest PATH` so the current run settings can be checked against the stored resume signature before any output is written. Always use a dedicated output file and manifest file for each configuration. In the main simulation, a design is considered complete when all requested estimator rows are present. In the full-control benchmark, completion is checked for the `full_control_ivqr` estimator.
 
 Use `--rerun-failed` with `--resume` to ignore failed prior rows when deciding whether a design is complete, so failed designs can be rerun. Without `--resume`, `--rerun-failed` has no effect.
 

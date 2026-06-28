@@ -658,6 +658,9 @@ def estimate_post_selection_ivqr(
         cr_disconnected=diagnostics["cr_disconnected"],
         selected_controls=int(selected_indices.size),
         runtime_seconds=runtime_seconds,
+        # First-stage diagnostics are computed inside the combined
+        # post-selection diagnostics helper, so first-stage timing is not
+        # cleanly separable and is intentionally reported as NaN.
         **estimator_runtime_columns(
             estimator="post_selection_ivqr",
             total_sec=runtime_seconds,

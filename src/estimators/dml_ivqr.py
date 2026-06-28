@@ -742,6 +742,9 @@ def estimate_dml_ivqr(
         cr_disconnected=diagnostics["cr_disconnected"],
         selected_controls=None,
         runtime_seconds=runtime_seconds,
+        # At the current profiling granularity, DML cross-fitting is timed as
+        # a combined stage. Nuisance fit and prediction sub-times are not
+        # separated, so their runtime fields are intentionally NaN.
         **estimator_runtime_columns(
             estimator="dml_ivqr",
             total_sec=runtime_seconds,
