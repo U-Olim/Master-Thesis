@@ -565,6 +565,40 @@ def test_post_selection_failed_result_rejects_invalid_diagnostics(
         _call_failed_result_with_objects(**arguments)
 
 
+def test_estimate_post_selection_selection_failure_returns_failed_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = generate_data(
+        Design("dgp1", n=30, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    )
+
+    def fail_selection(*args, **kwargs):
+        raise RuntimeError("forced selection failure")
+
+    monkeypatch.setattr(
+        post_module,
+        "_select_controls_lasso_details",
+        fail_selection,
+    )
+
+    result = estimate_post_selection_ivqr(
+        data,
+        tau=0.5,
+        alphas=np.linspace(0.0, 2.0, 3),
+        selection_cv=3,
+    )
+
+    assert result.failed is True
+    assert "Control selection failed: forced selection failure" in result.message
+    assert result.ps_runtime_total_sec is not None
+    assert np.isfinite(result.ps_runtime_total_sec)
+    assert result.ps_runtime_selection_sec is not None
+    assert np.isfinite(result.ps_runtime_selection_sec)
+    assert result.ps_runtime_diagnostics_sec is not None
+    assert np.isfinite(result.ps_runtime_diagnostics_sec)
+    assert_is_nan(result.ps_runtime_first_stage_sec)
+
+
 def test_post_selection_qr_feasibility_counts_instruments(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

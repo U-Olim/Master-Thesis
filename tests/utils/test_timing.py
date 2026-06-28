@@ -3,8 +3,6 @@
 import math
 import time
 
-import numpy as np
-
 from utils.timing import RUNTIME_COLUMNS, RuntimeProfile, empty_runtime_columns
 
 
@@ -39,4 +37,7 @@ def test_empty_runtime_columns_returns_all_expected_columns() -> None:
     columns = empty_runtime_columns()
 
     assert set(columns) == set(RUNTIME_COLUMNS)
-    assert all(np.isnan(value) for value in columns.values())
+    # ensure all expected columns are present and set to a NaN float
+    assert all(
+        isinstance(value, float) and math.isnan(value) for value in columns.values()
+    )

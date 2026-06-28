@@ -76,6 +76,13 @@ def _nan_or_float(value: float | None) -> float | None:
     return value if np.isfinite(value) else None
 
 
+def _elapsed_since(start: float | None) -> float:
+    """Return elapsed seconds since start, or NaN if the timer was not started."""
+    if start is None:
+        return float("nan")
+    return perf_counter() - start
+
+
 def _as_selected_indices(
     selected_indices: np.ndarray | list[int] | tuple[int, ...] | None,
     total: int,
@@ -470,6 +477,8 @@ def estimate_post_selection_ivqr(
     z_2d = as_2d_instruments(z)
     _validate_selection_config(selection_cv, selection_max_iter, x.shape[0])
 
+    selection_start: float | None = None
+    diagnostics_start: float | None = None
     try:
         selection_start = perf_counter()
         selection_details = _select_controls_lasso_details(
@@ -481,7 +490,7 @@ def estimate_post_selection_ivqr(
             cv=selection_cv,
             max_iter=selection_max_iter,
         )
-        selection_sec = perf_counter() - selection_start
+        selection_sec = _elapsed_since(selection_start)
     except Exception as exc:  # noqa: BLE001 - selection failures should be reported cleanly.
         diagnostics_start = perf_counter()
         ps_diagnostics = summarize_post_selection_diagnostics(
@@ -494,7 +503,7 @@ def estimate_post_selection_ivqr(
             selection_failed=True,
             warning_code="lasso_failed",
         )
-        diagnostics_sec = perf_counter() - diagnostics_start
+        diagnostics_sec = _elapsed_since(diagnostics_start)
         runtime_seconds = perf_counter() - start
         return _failed_result(
             data=data,
@@ -508,11 +517,7 @@ def estimate_post_selection_ivqr(
             runtime_diagnostics=estimator_runtime_columns(
                 estimator="post_selection_ivqr",
                 total_sec=runtime_seconds,
-                selection_sec=(
-                    perf_counter() - selection_start
-                    if "selection_start" in locals()
-                    else float("nan")
-                ),
+                selection_sec=_elapsed_since(selection_start),
                 diagnostics_sec=diagnostics_sec,
             ),
         )
@@ -531,7 +536,7 @@ def estimate_post_selection_ivqr(
         lasso_alpha_first_stage=selection_details.lasso_alpha_first_stage,
         lasso_cv_folds=selection_cv,
     )
-    diagnostics_sec = perf_counter() - diagnostics_start
+    diagnostics_sec = _elapsed_since(diagnostics_start)
 
     n = x.shape[0]
     if selected_indices.size == 0:
