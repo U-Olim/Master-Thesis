@@ -174,6 +174,276 @@ Recommended diagnostic workflow: run `--estimators oracle`, then
 `--estimators post_selection`, then `--estimators dml`, and reserve the full
 estimator set for final comparisons.
 
+## Experiment A: Wider alpha-grid sensitivity
+
+Experiment A tests whether low coverage and high confidence-region boundary-hit
+rates are partly caused by truncating confidence regions at the default
+`[-1, 3]` alpha-grid boundaries. It keeps the same grid resolution as the main
+21-point grid by using 31 points on `[-2, 4]`, so the implied step remains 0.2.
+Do not reuse baseline output or manifest files for this run.
+
+Run oracle and post-selection first because they are completed and faster:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-min -2 \
+  --alpha-max 4 \
+  --alpha-grid-size 31 \
+  --estimators oracle post_selection \
+  --output results/raw/fast_grid31_wide_oracle_post.csv \
+  --manifest results/raw/fast_grid31_wide_oracle_post_manifest.json
+```
+
+Resume the same wider-grid run with the same output and manifest pair:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-min -2 \
+  --alpha-max 4 \
+  --alpha-grid-size 31 \
+  --estimators oracle post_selection \
+  --resume \
+  --output results/raw/fast_grid31_wide_oracle_post.csv \
+  --manifest results/raw/fast_grid31_wide_oracle_post_manifest.json
+```
+
+DML can be tested later after the oracle/post-selection sensitivity confirms
+whether boundary truncation matters. The resume manifest signature includes
+`alpha_min`, `alpha_max`, `alpha_grid_size`, and `estimators`, so a 31-point
+wide-grid run cannot be resumed with a baseline 21-point manifest.
+
+Compare the baseline 21-grid files with the wider-grid result using the existing
+summary aggregation:
+
+```zsh
+pixi run python -c "from reporting.summaries import compare_result_files; compare_result_files(['results/raw/fast_grid21_oracle_only.csv', 'results/raw/fast_grid21_post_selection_only.csv', 'results/raw/fast_grid31_wide_oracle_post.csv'], ['grid21_oracle', 'grid21_post_selection', 'grid31_wide_oracle_post'], expected_replications=10).to_csv('results/summary/experiment_a_wide_grid_comparison.csv', index=False)"
+```
+
+Review `coverage`, `bias`, `mae`, `rmse`, `avg_cr_length`,
+`avg_cr_hull_length`, `cr_boundary_hit_rate`, `alpha_hat_boundary_rate`,
+`cr_disconnected_rate`, `mean_failed_alpha_rate`, and runtime columns by design.
+
+## Experiment B: Quantile-specific post-selection
+
+Experiment B adds an opt-in estimator, `post_selection_quantile`, without
+changing the baseline `post_selection` estimator. The baseline post-selection
+estimator selects controls using mean-regression LassoCV for `Y ~ X` and `D ~ X`.
+The quantile-specific variant selects outcome controls using L1-penalized
+quantile regression at the design quantile `tau`, selects treatment controls
+using the existing mean LassoCV for `D ~ X`, takes the union, retains all
+excluded instruments, and then runs the same inverse-IVQR alpha-grid inference
+with that fixed selected control set.
+
+This experiment tests whether tau-aligned selection improves coverage and point
+estimation. It does not fully solve post-selection inference uncertainty and
+should be interpreted as an experimental sensitivity check.
+
+Run the quantile-specific post-selection estimator only:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21 \
+  --estimators post_selection_quantile \
+  --output results/raw/fast_grid21_post_selection_quantile_only.csv \
+  --manifest results/raw/fast_grid21_post_selection_quantile_only_manifest.json
+```
+
+Resume the same run with the same output and manifest pair:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21 \
+  --estimators post_selection_quantile \
+  --resume \
+  --output results/raw/fast_grid21_post_selection_quantile_only.csv \
+  --manifest results/raw/fast_grid21_post_selection_quantile_only_manifest.json
+```
+
+For a direct baseline comparison, run:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21 \
+  --estimators post_selection post_selection_quantile \
+  --output results/raw/fast_grid21_post_selection_vs_quantile.csv \
+  --manifest results/raw/fast_grid21_post_selection_vs_quantile_manifest.json
+```
+
+The quantile-selection penalty grid is `(0.001, 0.003, 0.01, 0.03, 0.1)` with
+3-fold CV. PSQ-specific diagnostics use the `psq_` prefix, including selected
+quantile penalty, selected-control counts, shares, warning code, and stage
+runtime columns.
+
+## Experiment C: IVQR-aligned post-selection
+
+Experiment C adds another opt-in estimator, `post_selection_ivqr_aligned`,
+without changing baseline `post_selection` or Experiment B
+`post_selection_quantile`. Baseline post-selection selects controls from
+mean-Lasso `Y ~ X` and `D ~ X`. Experiment B selects outcome controls from
+quantile-specific `Y ~ X`. Experiment C selects controls from quantile-L1
+regressions of the transformed inverse-IVQR outcome
+`Y - alpha_anchor * D` on `X`.
+
+Alpha anchors are data-independent quartiles of the searched alpha interval:
+`alpha_min + {0.25, 0.50, 0.75} * (alpha_max - alpha_min)`. Thus the default
+`[-1, 3]` grid uses anchors `0, 1, 2`, while the wider `[-2, 4]` grid uses
+`-0.5, 1, 2.5`. The selected controls are the union across anchor regressions
+plus treatment controls from the same `D ~ X` LassoCV used by baseline
+post-selection. This fixed selected set is then held constant during final
+alpha-grid inversion. Instruments are retained, not selected.
+
+This experiment tests whether aligning selection with the inverse-IVQR
+transformed outcome improves coverage and point estimates. It is still not
+fully selection-robust inference; it is an experimental comparator.
+
+Run the IVQR-aligned estimator only:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21 \
+  --estimators post_selection_ivqr_aligned \
+  --output results/raw/fast_grid21_post_selection_ivqr_aligned_only.csv \
+  --manifest results/raw/fast_grid21_post_selection_ivqr_aligned_only_manifest.json
+```
+
+Resume the same run with the same output and manifest pair:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21 \
+  --estimators post_selection_ivqr_aligned \
+  --resume \
+  --output results/raw/fast_grid21_post_selection_ivqr_aligned_only.csv \
+  --manifest results/raw/fast_grid21_post_selection_ivqr_aligned_only_manifest.json
+```
+
+The quantile-selection penalty grid is `(0.001, 0.003, 0.01, 0.03, 0.1)` with
+3-fold CV. PSA-specific diagnostics use the `psa_` prefix, including anchor
+metadata, selected-control counts and shares, selected penalties by anchor,
+anchor-failure counts, and stage runtime columns.
+
+## Experiment D: Conservative critical-value sensitivity
+
+Experiment D adds an explicit confidence-region calibration sensitivity through
+`--critical-value-multiplier`. The nominal chi-square critical value is still
+computed as before, but confidence-region inversion uses:
+
+```text
+critical_value_adjusted = critical_value_nominal * critical_value_multiplier
+```
+
+The accepted confidence-region grid points are those with
+`test_stat(alpha) <= critical_value_adjusted`. The default multiplier is `1.0`,
+so the nominal baseline is unchanged unless the option is passed explicitly.
+This is a sensitivity experiment, not a replacement for the main inference
+procedure.
+
+The multiplier is applied to estimators that use inverse-IVQR confidence-region
+inversion: `oracle`, `post_selection`, `post_selection_quantile`,
+`post_selection_ivqr_aligned`, `dml`, and the separate `full_control_ivqr`
+scenario. It does not change DGPs, estimator formulas, selection rules, DML
+nuisance logic, alpha-grid defaults, or the definition of `alpha_hat`.
+`alpha_hat` remains the minimizer of the test statistic over the grid.
+
+Result rows include:
+
+```text
+critical_value_nominal
+critical_value_multiplier
+critical_value_adjusted
+critical_value
+```
+
+For backward compatibility, `critical_value` is the threshold actually used for
+the confidence region, so it equals `critical_value_adjusted`. The multiplier is
+also part of the manifest resume signature; a run with multiplier `1.0` cannot
+resume into a manifest created with multiplier `1.10`, and vice versa.
+
+Baseline nominal oracle/post-selection:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21 \
+  --critical-value-multiplier 1.0 \
+  --estimators oracle post_selection \
+  --output results/raw/fast_grid21_cv100_oracle_post.csv \
+  --manifest results/raw/fast_grid21_cv100_oracle_post_manifest.json
+```
+
+Moderate conservative sensitivity:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21 \
+  --critical-value-multiplier 1.10 \
+  --estimators oracle post_selection \
+  --output results/raw/fast_grid21_cv110_oracle_post.csv \
+  --manifest results/raw/fast_grid21_cv110_oracle_post_manifest.json
+```
+
+Strong conservative sensitivity:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-grid-size 21 \
+  --critical-value-multiplier 1.20 \
+  --estimators oracle post_selection \
+  --output results/raw/fast_grid21_cv120_oracle_post.csv \
+  --manifest results/raw/fast_grid21_cv120_oracle_post_manifest.json
+```
+
+Combined with the wider Experiment A grid:
+
+```zsh
+pixi run python scenarios/main_simulation.py \
+  --mode fast \
+  --n-jobs 4 \
+  --batch-size 10 \
+  --alpha-min -2 \
+  --alpha-max 4 \
+  --alpha-grid-size 31 \
+  --critical-value-multiplier 1.10 \
+  --estimators oracle post_selection \
+  --output results/raw/fast_grid31_wide_cv110_oracle_post.csv \
+  --manifest results/raw/fast_grid31_wide_cv110_oracle_post_manifest.json
+```
+
+Use separate output and manifest files for each multiplier. Candidate values
+for the sensitivity table are `1.00`, `1.05`, `1.10`, and `1.20`. Point
+estimation metrics should remain unchanged across multiplier runs with the same
+designs and alpha grid; coverage, CR length, CR hull length, empty-region rate,
+disconnected-region rate, and boundary-hit rates may change.
+
 ## Dry Runs
 
 Use dry runs to inspect resolved defaults without writing results.
@@ -234,6 +504,7 @@ rmse_wide.csv
 mae_wide.csv
 coverage_wide.csv
 cr_length_wide.csv
+cr_hull_length_wide.csv
 runtime_wide.csv
 failure_rate_wide.csv
 ```

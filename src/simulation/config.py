@@ -14,7 +14,14 @@ P_VALUES: tuple[int, ...] = (200, 500)
 PI_VALUES: tuple[float, ...] = (1.0, 0.5, 0.25, 0.10)
 TAUS: tuple[float, ...] = (0.25, 0.50, 0.75)
 DGPS: tuple[str, ...] = ("dgp1", "dgp2", "dgp3")
-MAIN_ESTIMATORS: tuple[str, ...] = ("oracle", "dml", "post_selection")
+MAIN_ESTIMATORS: tuple[str, ...] = (
+    "oracle",
+    "dml",
+    "post_selection",
+    "post_selection_quantile",
+    "post_selection_ivqr_aligned",
+)
+DEFAULT_MAIN_ESTIMATORS: tuple[str, ...] = ("oracle", "dml", "post_selection")
 
 R_FAST: int = 10
 R_MAIN: int = 500
@@ -37,6 +44,10 @@ DEFAULT_DML_K_FOLDS: int = 3
 DEFAULT_N_JOBS: int = 4
 DEFAULT_BATCH_SIZE: int = 10
 DEFAULT_QUANTREG_MAX_ITER: int = 1000
+DEFAULT_QUANTILE_SELECTION_ALPHAS: tuple[float, ...] = (0.001, 0.003, 0.01, 0.03, 0.1)
+DEFAULT_QUANTILE_SELECTION_CV_FOLDS: int = 3
+DEFAULT_SELECTION_COEF_TOL: float = 1e-10
+DEFAULT_CRITICAL_VALUE_MULTIPLIER: float = 1.0
 
 RHO_X: float = 0.5
 RHO_UV: float = 0.5
@@ -60,6 +71,7 @@ __all__ = [
     "TAUS",
     "DGPS",
     "MAIN_ESTIMATORS",
+    "DEFAULT_MAIN_ESTIMATORS",
     "R_FAST",
     "R_MAIN",
     "R_FULL_CONTROL_BENCHMARK",
@@ -79,6 +91,10 @@ __all__ = [
     "DEFAULT_N_JOBS",
     "DEFAULT_BATCH_SIZE",
     "DEFAULT_QUANTREG_MAX_ITER",
+    "DEFAULT_QUANTILE_SELECTION_ALPHAS",
+    "DEFAULT_QUANTILE_SELECTION_CV_FOLDS",
+    "DEFAULT_SELECTION_COEF_TOL",
+    "DEFAULT_CRITICAL_VALUE_MULTIPLIER",
     "RHO_X",
     "RHO_UV",
     "DF_T",

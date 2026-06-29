@@ -21,6 +21,7 @@ def raw_results() -> pd.DataFrame:
             "failed": [False, False, False, True],
             "converged": [True, True, True, False],
             "cr_length": [1.0, 2.0, 1.5, None],
+            "cr_hull_length": [1.2, 2.2, 1.8, None],
             "cr_covers_true": [True, True, False, None],
             "cr_empty": [False, False, False, True],
             "cr_disconnected": [False, False, True, None],
@@ -28,7 +29,10 @@ def raw_results() -> pd.DataFrame:
             "cr_hits_any_boundary": [False, True, True, None],
             "runtime_seconds": [0.1, 0.2, 0.3, 0.4],
             "failed_alpha_count": [0, 0, 0, 1],
+            "failed_alpha_rate": [0.0, 0.0, 0.0, 0.2],
             "selected_controls": [None, None, 3, 4],
+            "critical_value_multiplier": [1.0, 1.0, 1.0, 1.0],
+            "critical_value_adjusted": [3.84, 3.84, 3.84, 3.84],
         }
     )
 
@@ -51,6 +55,7 @@ def r10_style_raw_results() -> pd.DataFrame:
                     "failed": False,
                     "converged": True,
                     "cr_length": 1.0,
+                    "cr_hull_length": 1.2,
                     "cr_covers_true": rep == 0,
                     "cr_empty": False,
                     "cr_disconnected": False,
@@ -58,7 +63,10 @@ def r10_style_raw_results() -> pd.DataFrame:
                     "cr_hits_any_boundary": False,
                     "runtime_seconds": 0.1,
                     "failed_alpha_count": 0,
+                    "failed_alpha_rate": 0.0,
                     "selected_controls": 10,
+                    "critical_value_multiplier": 1.0,
+                    "critical_value_adjusted": 3.84,
                 },
                 {
                     "dgp": "dgp1",
@@ -74,6 +82,7 @@ def r10_style_raw_results() -> pd.DataFrame:
                     "failed": False,
                     "converged": True,
                     "cr_length": 1.5,
+                    "cr_hull_length": 1.7,
                     "cr_covers_true": True,
                     "cr_empty": False,
                     "cr_disconnected": False,
@@ -81,7 +90,10 @@ def r10_style_raw_results() -> pd.DataFrame:
                     "cr_hits_any_boundary": False,
                     "runtime_seconds": 0.2,
                     "failed_alpha_count": 0,
+                    "failed_alpha_rate": 0.0,
                     "selected_controls": 20,
+                    "critical_value_multiplier": 1.0,
+                    "critical_value_adjusted": 3.84,
                 },
                 {
                     "dgp": "dgp1",
@@ -97,6 +109,7 @@ def r10_style_raw_results() -> pd.DataFrame:
                     "failed": False,
                     "converged": True,
                     "cr_length": 2.0,
+                    "cr_hull_length": 2.2,
                     "cr_covers_true": True,
                     "cr_empty": False,
                     "cr_disconnected": False,
@@ -104,7 +117,10 @@ def r10_style_raw_results() -> pd.DataFrame:
                     "cr_hits_any_boundary": False,
                     "runtime_seconds": 0.3,
                     "failed_alpha_count": 0,
+                    "failed_alpha_rate": 0.0,
                     "selected_controls": None,
+                    "critical_value_multiplier": 1.0,
+                    "critical_value_adjusted": 3.84,
                 },
             ]
         )
@@ -132,6 +148,7 @@ def summary() -> pd.DataFrame:
                     "coverage": 0.95,
                     "avg_cr_length": 1.23456,
                     "avg_cr_length_valid_only": 1.5,
+                    "avg_cr_hull_length": 1.7,
                     "failure_rate": 0.0,
                     "non_convergence_rate": 0.0,
                     "cr_empty_rate": 0.0,
@@ -152,7 +169,10 @@ def summary() -> pd.DataFrame:
                     "alpha_hat_boundary_rate": 0.0,
                     "cr_boundary_hit_rate": 0.0,
                     "mean_failed_alpha_count": 0.0,
+                    "mean_failed_alpha_rate": 0.0,
                     "mean_selected_controls": 3.0,
+                    "critical_value_multiplier": 1.0,
+                    "mean_critical_value_adjusted": 3.84,
                 },
                 {
                     "dgp": dgp,
@@ -168,6 +188,7 @@ def summary() -> pd.DataFrame:
                     "coverage": 0.9,
                     "avg_cr_length": 1.5,
                     "avg_cr_length_valid_only": 2.0,
+                    "avg_cr_hull_length": 2.2,
                     "failure_rate": 0.1,
                     "non_convergence_rate": 0.1,
                     "cr_empty_rate": 0.05,
@@ -188,7 +209,10 @@ def summary() -> pd.DataFrame:
                     "alpha_hat_boundary_rate": 0.0,
                     "cr_boundary_hit_rate": 0.0,
                     "mean_failed_alpha_count": 1.0,
+                    "mean_failed_alpha_rate": 0.2,
                     "mean_selected_controls": 4.0,
+                    "critical_value_multiplier": 1.0,
+                    "mean_critical_value_adjusted": 3.84,
                 },
             ]
         )

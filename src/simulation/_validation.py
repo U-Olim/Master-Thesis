@@ -39,6 +39,15 @@ def validate_nonnegative_float(name: str, value: float) -> float:
     return value
 
 
+def validate_positive_float(name: str, value: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite and positive")
+    value = float(value)
+    if not np.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be finite and positive")
+    return value
+
+
 def validate_finite_float(name: str, value: float) -> float:
     if isinstance(value, bool):
         raise ValueError(f"{name} must be finite")

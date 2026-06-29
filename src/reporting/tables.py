@@ -16,6 +16,8 @@ ESTIMATOR_ORDER: tuple[str, ...] = (
     "oracle",
     "oracle_ivqr",
     "post_selection_ivqr",
+    "post_selection_quantile",
+    "post_selection_ivqr_aligned",
     "dml_ivqr",
     "full_control_ivqr",
 )
@@ -24,6 +26,8 @@ ESTIMATOR_LABELS = MappingProxyType(
         "oracle_ivqr": "Oracle IVQR",
         "oracle": "Oracle IVQR",
         "post_selection_ivqr": "Post-selection IVQR",
+        "post_selection_quantile": "Post-selection IVQR (quantile-specific)",
+        "post_selection_ivqr_aligned": "Post-selection IVQR (IVQR-aligned)",
         "dml_ivqr": "DML-style IVQR",
         "full_control_ivqr": "Full-control IVQR",
     }
@@ -33,6 +37,8 @@ ESTIMATOR_COLUMN_NAMES = MappingProxyType(
         "oracle": "oracle",
         "oracle_ivqr": "oracle_ivqr",
         "post_selection_ivqr": "post_selection",
+        "post_selection_quantile": "post_selection_quantile",
+        "post_selection_ivqr_aligned": "post_selection_ivqr_aligned",
         "dml_ivqr": "dml",
         "full_control_ivqr": "full_control",
     }
@@ -48,6 +54,7 @@ CORE_METRICS: tuple[str, ...] = (
     "non_convergence_rate",
     "cr_empty_rate",
     "cr_disconnected_rate",
+    "avg_cr_hull_length",
     "mean_runtime_seconds",
 )
 DIAGNOSTIC_COLUMNS: tuple[str, ...] = (
@@ -65,7 +72,10 @@ DIAGNOSTIC_COLUMNS: tuple[str, ...] = (
     "alpha_hat_boundary_rate",
     "cr_boundary_hit_rate",
     "mean_failed_alpha_count",
+    "mean_failed_alpha_rate",
     "mean_selected_controls",
+    "critical_value_multiplier",
+    "mean_critical_value_adjusted",
     "mean_runtime_seconds",
     "mean_runtime_total_sec",
     "median_runtime_total_sec",
@@ -73,6 +83,16 @@ DIAGNOSTIC_COLUMNS: tuple[str, ...] = (
     "mean_runtime_confidence_region_sec",
     "mean_dml_runtime_crossfit_sec",
     "mean_ps_runtime_selection_sec",
+    "mean_psq_runtime_quantile_selection_sec",
+    "mean_psq_runtime_treatment_selection_sec",
+    "mean_psq_runtime_alpha_loop_sec",
+    "mean_psq_runtime_confidence_region_sec",
+    "mean_psq_runtime_diagnostics_sec",
+    "mean_psa_runtime_anchor_selection_sec",
+    "mean_psa_runtime_treatment_selection_sec",
+    "mean_psa_runtime_alpha_loop_sec",
+    "mean_psa_runtime_confidence_region_sec",
+    "mean_psa_runtime_diagnostics_sec",
 )
 WIDE_TABLE_METRICS = MappingProxyType(
     {
@@ -81,6 +101,7 @@ WIDE_TABLE_METRICS = MappingProxyType(
         "mae": "mae_wide.csv",
         "coverage": "coverage_wide.csv",
         "avg_cr_length": "cr_length_wide.csv",
+        "avg_cr_hull_length": "cr_hull_length_wide.csv",
         "mean_runtime_seconds": "runtime_wide.csv",
         "failure_rate": "failure_rate_wide.csv",
     }

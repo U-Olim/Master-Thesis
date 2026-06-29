@@ -316,14 +316,18 @@ def test_main_simulation_cli_runs_only_requested_estimators(
     output = tmp_path / "raw" / "selected.csv"
     manifest = tmp_path / "selected_manifest.json"
     captured_estimators: list[tuple[str, ...]] = []
+    captured_multiplier: list[float] = []
 
     def fake_run_simulation_batch(designs, alphas, **kwargs):
         estimators = tuple(kwargs["estimators"])
         captured_estimators.append(estimators)
+        captured_multiplier.append(kwargs["critical_value_multiplier"])
         output_names = {
             "oracle": "oracle",
             "dml": "dml_ivqr",
             "post_selection": "post_selection_ivqr",
+            "post_selection_quantile": "post_selection_quantile",
+            "post_selection_ivqr_aligned": "post_selection_ivqr_aligned",
         }
         output.parent.mkdir(parents=True, exist_ok=True)
         pd.DataFrame(
@@ -341,6 +345,85 @@ def test_main_simulation_cli_runs_only_requested_estimators(
             "--estimators",
             "oracle",
             "post-selection",
+            "--alpha-min",
+            "-2",
+            "--alpha-max",
+            "4",
+            "--alpha-grid-size",
+            "31",
+            "--reps",
+            "1",
+            "--dgps",
+            "dgp1",
+            "--n-values",
+            "80",
+            "--p-values",
+            "5",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--max-designs",
+            "1",
+            "--n-jobs",
+            "1",
+            "--critical-value-multiplier",
+            "1.1",
+            "--output",
+            str(output),
+            "--manifest",
+            str(manifest),
+        ],
+        monkeypatch,
+        capsys,
+        tmp_path,
+    )
+
+    assert result.returncode == 0
+    assert captured_estimators == [("oracle", "post_selection")]
+    assert captured_multiplier == [pytest.approx(1.1)]
+    written = pd.read_csv(output)
+    assert set(written["estimator"]) == {"oracle", "post_selection_ivqr"}
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["estimators"] == ["oracle", "post_selection"]
+    assert payload["resume_signature"]["estimators"] == ["oracle", "post_selection"]
+    assert payload["resume_signature"]["alpha_min"] == -2.0
+    assert payload["resume_signature"]["alpha_max"] == 4.0
+    assert payload["resume_signature"]["alpha_grid_size"] == 31
+    assert payload["resume_signature"]["critical_value_multiplier"] == pytest.approx(1.1)
+    assert payload["alpha_grid"]["min"] == pytest.approx(-2.0)
+    assert payload["alpha_grid"]["max"] == pytest.approx(4.0)
+    assert payload["alpha_grid"]["size"] == 31
+    alpha_values = payload["alpha_grid"]["values"]
+    assert alpha_values[1] - alpha_values[0] == pytest.approx(0.2)
+
+
+def test_main_simulation_cli_runs_quantile_post_selection_only(
+    main_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "raw" / "psq.csv"
+    manifest = tmp_path / "psq_manifest.json"
+    captured_estimators: list[tuple[str, ...]] = []
+
+    def fake_run_simulation_batch(designs, alphas, **kwargs):
+        captured_estimators.append(tuple(kwargs["estimators"]))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({"estimator": ["post_selection_quantile"]}).to_csv(
+            output,
+            index=False,
+        )
+
+    monkeypatch.setattr(main_cli, "run_simulation_batch", fake_run_simulation_batch)
+    monkeypatch.setattr(main_cli, "_make_reports", lambda args: None)
+
+    result = _run_cli_in_process(
+        main_cli,
+        [
+            "--estimators",
+            "post_selection_quantile",
             "--reps",
             "1",
             "--dgps",
@@ -368,12 +451,73 @@ def test_main_simulation_cli_runs_only_requested_estimators(
     )
 
     assert result.returncode == 0
-    assert captured_estimators == [("oracle", "post_selection")]
+    assert captured_estimators == [("post_selection_quantile",)]
     written = pd.read_csv(output)
-    assert set(written["estimator"]) == {"oracle", "post_selection_ivqr"}
+    assert set(written["estimator"]) == {"post_selection_quantile"}
     payload = json.loads(manifest.read_text(encoding="utf-8"))
-    assert payload["estimators"] == ["oracle", "post_selection"]
-    assert payload["resume_signature"]["estimators"] == ["oracle", "post_selection"]
+    assert payload["estimators"] == ["post_selection_quantile"]
+    assert payload["resume_signature"]["estimators"] == ["post_selection_quantile"]
+
+
+def test_main_simulation_cli_runs_aligned_post_selection_only(
+    main_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "raw" / "psa.csv"
+    manifest = tmp_path / "psa_manifest.json"
+    captured_estimators: list[tuple[str, ...]] = []
+
+    def fake_run_simulation_batch(designs, alphas, **kwargs):
+        captured_estimators.append(tuple(kwargs["estimators"]))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({"estimator": ["post_selection_ivqr_aligned"]}).to_csv(
+            output,
+            index=False,
+        )
+
+    monkeypatch.setattr(main_cli, "run_simulation_batch", fake_run_simulation_batch)
+    monkeypatch.setattr(main_cli, "_make_reports", lambda args: None)
+
+    result = _run_cli_in_process(
+        main_cli,
+        [
+            "--estimators",
+            "post_selection_ivqr_aligned",
+            "--reps",
+            "1",
+            "--dgps",
+            "dgp1",
+            "--n-values",
+            "80",
+            "--p-values",
+            "5",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--max-designs",
+            "1",
+            "--n-jobs",
+            "1",
+            "--output",
+            str(output),
+            "--manifest",
+            str(manifest),
+        ],
+        monkeypatch,
+        capsys,
+        tmp_path,
+    )
+
+    assert result.returncode == 0
+    assert captured_estimators == [("post_selection_ivqr_aligned",)]
+    written = pd.read_csv(output)
+    assert set(written["estimator"]) == {"post_selection_ivqr_aligned"}
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["estimators"] == ["post_selection_ivqr_aligned"]
+    assert payload["resume_signature"]["estimators"] == ["post_selection_ivqr_aligned"]
 
 
 def test_main_simulation_rejects_full_control_estimator(
@@ -754,6 +898,7 @@ def test_full_control_resume_applies_chunking_before_filtering(
         designs,
         alphas,
         quantreg_max_iter,
+        critical_value_multiplier,
         n_jobs,
         show_quantreg_warnings,
     ):
@@ -834,7 +979,16 @@ def test_scenario_output_validation_rejects_directories(
 
 @pytest.mark.parametrize(
     "changed_field",
-    ["alpha_grid_size", "mode", "batch_size", "n_jobs"],
+    [
+        "alpha_min",
+        "alpha_max",
+        "alpha_grid_size",
+        "estimators",
+        "mode",
+        "batch_size",
+        "n_jobs",
+        "critical_value_multiplier",
+    ],
 )
 def test_main_resume_manifest_rejects_incompatible_settings(
     main_cli,
@@ -856,12 +1010,20 @@ def test_main_resume_manifest_rejects_incompatible_settings(
     )
 
     main_cli._validate_resume_manifest(manifest, args)
-    if changed_field == "alpha_grid_size":
+    if changed_field == "alpha_min":
+        args.alpha_min -= 1
+    elif changed_field == "alpha_max":
+        args.alpha_max += 1
+    elif changed_field == "alpha_grid_size":
         args.alpha_grid_size += 1
+    elif changed_field == "estimators":
+        args.estimators = ("oracle", "post_selection")
     elif changed_field == "batch_size":
         args.batch_size += 1
     elif changed_field == "n_jobs":
         args.n_jobs += 1
+    elif changed_field == "critical_value_multiplier":
+        args.critical_value_multiplier = 1.1
     else:
         args.mode = "full"
 
@@ -869,7 +1031,10 @@ def test_main_resume_manifest_rejects_incompatible_settings(
         main_cli._validate_resume_manifest(manifest, args)
 
 
-@pytest.mark.parametrize("changed_field", ["alpha_grid_size", "batch_size", "n_jobs"])
+@pytest.mark.parametrize(
+    "changed_field",
+    ["alpha_grid_size", "batch_size", "n_jobs", "critical_value_multiplier"],
+)
 def test_full_control_resume_manifest_rejects_incompatible_settings(
     full_control_cli,
     monkeypatch: pytest.MonkeyPatch,
@@ -889,8 +1054,10 @@ def test_full_control_resume_manifest_rejects_incompatible_settings(
         args.alpha_grid_size += 1
     elif changed_field == "batch_size":
         args.batch_size += 1
-    else:
+    elif changed_field == "n_jobs":
         args.n_jobs += 1
+    else:
+        args.critical_value_multiplier = 1.1
 
     with pytest.raises(ValueError, match="resume signature"):
         full_control_cli._validate_resume_manifest(manifest, args)

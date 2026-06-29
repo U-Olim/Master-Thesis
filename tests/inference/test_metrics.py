@@ -7,6 +7,7 @@ import pytest
 from inference.metrics import (
     average_cr_length,
     average_cr_length_all,
+    average_cr_hull_length,
     average_cr_length_valid_only,
     alpha_hat_boundary_rate,
     bias,
@@ -20,6 +21,7 @@ from inference.metrics import (
     failure_rate,
     mae,
     mean_failed_alpha_count,
+    mean_failed_alpha_rate,
     mean_runtime_seconds,
     mean_selected_controls,
     median_bias,
@@ -244,10 +246,12 @@ def test_optional_missing_diagnostic_columns_return_nan() -> None:
     df = _base_df()
 
     assert np.isnan(cr_disconnected_rate(df))
+    assert np.isnan(average_cr_hull_length(df))
     assert np.isnan(boundary_rate(df))
     assert np.isnan(alpha_hat_boundary_rate(df))
     assert np.isnan(cr_boundary_hit_rate(df))
     assert np.isnan(mean_failed_alpha_count(df))
+    assert np.isnan(mean_failed_alpha_rate(df))
     assert np.isnan(mean_selected_controls(df))
 
 
@@ -300,7 +304,9 @@ def test_optional_diagnostic_means_and_rates() -> None:
     df = _base_df(
         alpha_hat_at_any_boundary=[True, False, "true", None],
         cr_hits_any_boundary=[False, True, "true", None],
+        cr_hull_length=[1.0, "2.5", None, -1],
         failed_alpha_count=[0, 2, None, "4"],
+        failed_alpha_rate=[0.0, 0.2, None, "0.4"],
         selected_controls=[1, None, "3", 5],
         runtime_seconds=[0.5, "1.0", None, "bad"],
     )
@@ -308,7 +314,9 @@ def test_optional_diagnostic_means_and_rates() -> None:
     assert boundary_rate(df) == pytest.approx(2 / 3)
     assert alpha_hat_boundary_rate(df) == pytest.approx(2 / 3)
     assert cr_boundary_hit_rate(df) == pytest.approx(2 / 3)
+    assert average_cr_hull_length(df) == pytest.approx(1.75)
     assert mean_failed_alpha_count(df) == pytest.approx(2.0)
+    assert mean_failed_alpha_rate(df) == pytest.approx(0.2)
     assert mean_selected_controls(df) == pytest.approx(3.0)
     assert mean_runtime_seconds(df) == pytest.approx(0.75)
 
@@ -355,8 +363,12 @@ def test_summarize_group_returns_expected_keys() -> None:
         cr_disconnected=[False, True, False],
         alpha_hat_at_any_boundary=[False, False, True],
         cr_hits_any_boundary=[False, True, True],
+        cr_hull_length=[1.0, 2.0, 3.0],
         failed_alpha_count=[0, 1, 2],
+        failed_alpha_rate=[0.0, 0.1, 0.2],
         selected_controls=[5, 6, None],
+        critical_value_multiplier=[1.1, 1.1, 1.1],
+        critical_value_adjusted=[4.0, 4.2, 4.4],
     )
 
     summary = summarize_group(df)
@@ -374,6 +386,7 @@ def test_summarize_group_returns_expected_keys() -> None:
         "coverage_valid_only",
         "avg_cr_length",
         "avg_cr_length_valid_only",
+        "avg_cr_hull_length",
         "failure_rate",
         "non_convergence_rate",
         "cr_empty_rate",
@@ -382,7 +395,10 @@ def test_summarize_group_returns_expected_keys() -> None:
         "alpha_hat_boundary_rate",
         "cr_boundary_hit_rate",
         "mean_failed_alpha_count",
+        "mean_failed_alpha_rate",
         "mean_selected_controls",
+        "critical_value_multiplier",
+        "mean_critical_value_adjusted",
         "mean_runtime_seconds",
         "mean_runtime_total_sec",
         "median_runtime_total_sec",
@@ -390,10 +406,24 @@ def test_summarize_group_returns_expected_keys() -> None:
         "mean_runtime_confidence_region_sec",
         "mean_dml_runtime_crossfit_sec",
         "mean_ps_runtime_selection_sec",
+        "mean_psq_runtime_quantile_selection_sec",
+        "mean_psq_runtime_treatment_selection_sec",
+        "mean_psq_runtime_alpha_loop_sec",
+        "mean_psq_runtime_confidence_region_sec",
+        "mean_psq_runtime_diagnostics_sec",
+        "mean_psa_runtime_anchor_selection_sec",
+        "mean_psa_runtime_treatment_selection_sec",
+        "mean_psa_runtime_alpha_loop_sec",
+        "mean_psa_runtime_confidence_region_sec",
+        "mean_psa_runtime_diagnostics_sec",
     }
     assert summary["boundary_rate"] == pytest.approx(1 / 3)
     assert summary["alpha_hat_boundary_rate"] == pytest.approx(1 / 3)
     assert summary["cr_boundary_hit_rate"] == pytest.approx(2 / 3)
+    assert summary["avg_cr_hull_length"] == pytest.approx(2.0)
+    assert summary["mean_failed_alpha_rate"] == pytest.approx(0.1)
+    assert summary["critical_value_multiplier"] == pytest.approx(1.1)
+    assert summary["mean_critical_value_adjusted"] == pytest.approx(4.2)
 
 
 def test_summarize_group_valid_estimates_require_hat_and_true() -> None:

@@ -9,9 +9,18 @@ CANONICAL_ESTIMATORS: tuple[str, ...] = (
     "oracle",
     "dml",
     "post_selection",
+    "post_selection_quantile",
+    "post_selection_ivqr_aligned",
     "full_control",
 )
 MAIN_SCENARIO_ESTIMATORS: tuple[str, ...] = (
+    "oracle",
+    "dml",
+    "post_selection",
+    "post_selection_quantile",
+    "post_selection_ivqr_aligned",
+)
+MAIN_SCENARIO_DEFAULT_ESTIMATORS: tuple[str, ...] = (
     "oracle",
     "dml",
     "post_selection",
@@ -28,6 +37,12 @@ ESTIMATOR_ALIASES: dict[str, str] = {
     "post-selection": "post_selection",
     "post-selection-ivqr": "post_selection",
     "postselection": "post_selection",
+    "post_selection_quantile": "post_selection_quantile",
+    "post_selection_q": "post_selection_quantile",
+    "quantile_post_selection": "post_selection_quantile",
+    "post_selection_ivqr_aligned": "post_selection_ivqr_aligned",
+    "post_selection_aligned": "post_selection_ivqr_aligned",
+    "ivqr_aligned_post_selection": "post_selection_ivqr_aligned",
     "full_control": "full_control",
     "full_control_ivqr": "full_control",
     "full-control": "full_control",
@@ -35,6 +50,11 @@ ESTIMATOR_ALIASES: dict[str, str] = {
 }
 
 SCENARIO_DEFAULT_ESTIMATORS: dict[str, tuple[str, ...]] = {
+    "main": MAIN_SCENARIO_DEFAULT_ESTIMATORS,
+    "full_control": FULL_CONTROL_SCENARIO_ESTIMATORS,
+}
+
+SCENARIO_ALLOWED_ESTIMATORS: dict[str, tuple[str, ...]] = {
     "main": MAIN_SCENARIO_ESTIMATORS,
     "full_control": FULL_CONTROL_SCENARIO_ESTIMATORS,
 }
@@ -59,6 +79,7 @@ def normalize_estimator_names(
         )
 
     scenario_estimators = SCENARIO_DEFAULT_ESTIMATORS[scenario]
+    allowed_estimators = SCENARIO_ALLOWED_ESTIMATORS[scenario]
     if raw_estimators is None:
         return scenario_estimators
     if isinstance(raw_estimators, str):
@@ -88,9 +109,9 @@ def normalize_estimator_names(
     if not normalized:
         raise ValueError("estimators must contain at least one estimator name")
 
-    unsupported = [name for name in normalized if name not in scenario_estimators]
+    unsupported = [name for name in normalized if name not in allowed_estimators]
     if unsupported:
-        valid = ", ".join(scenario_estimators)
+        valid = ", ".join(allowed_estimators)
         raise ValueError(
             f"Estimator(s) {unsupported} are not supported for scenario {scenario!r}. "
             f"Valid choices: {valid}."
@@ -103,7 +124,9 @@ __all__ = [
     "CANONICAL_ESTIMATORS",
     "ESTIMATOR_ALIASES",
     "FULL_CONTROL_SCENARIO_ESTIMATORS",
+    "MAIN_SCENARIO_DEFAULT_ESTIMATORS",
     "MAIN_SCENARIO_ESTIMATORS",
+    "SCENARIO_ALLOWED_ESTIMATORS",
     "SCENARIO_DEFAULT_ESTIMATORS",
     "normalize_estimator_names",
 ]

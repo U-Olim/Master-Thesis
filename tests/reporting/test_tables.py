@@ -56,6 +56,38 @@ def test_add_estimator_labels_maps_oracle() -> None:
 
     assert labeled.iloc[0]["estimator_label"] == "Oracle IVQR"
 
+
+def test_add_estimator_labels_maps_quantile_post_selection() -> None:
+    summary = pd.DataFrame(
+        [
+            {
+                **make_summary().iloc[0].to_dict(),
+                "estimator": "post_selection_quantile",
+            }
+        ]
+    )
+
+    labeled = add_estimator_labels(summary)
+
+    assert (
+        labeled.iloc[0]["estimator_label"]
+        == "Post-selection IVQR (quantile-specific)"
+    )
+
+def test_add_estimator_labels_maps_aligned_post_selection() -> None:
+    summary = pd.DataFrame(
+        [
+            {
+                **make_summary().iloc[0].to_dict(),
+                "estimator": "post_selection_ivqr_aligned",
+            }
+        ]
+    )
+
+    labeled = add_estimator_labels(summary)
+
+    assert labeled.iloc[0]["estimator_label"] == "Post-selection IVQR (IVQR-aligned)"
+
 def test_filter_summary_filters_values_and_empty_matches() -> None:
     summary = make_summary()
 
@@ -184,6 +216,7 @@ def test_write_tables_writes_expected_csv_files(tmp_path: Path) -> None:
         "mae",
         "coverage",
         "cr_length",
+        "cr_hull_length",
         "runtime",
         "failure_rate",
     }

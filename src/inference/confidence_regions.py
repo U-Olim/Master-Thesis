@@ -15,8 +15,10 @@ FAILED_ALPHA_STATISTIC = 1e12
 __all__ = [
     "FAILED_ALPHA_STATISTIC",
     "ConfidenceRegion",
+    "adjust_critical_value",
     "invert_score_test",
     "critical_value_chi_square",
+    "validate_critical_value_multiplier",
     "sanitize_grid_statistics",
     "argmin_grid",
     "summarize_alpha_grid_diagnostics",
@@ -40,6 +42,9 @@ class ConfidenceRegion:
     covers_true: bool | None
     selected_grid: np.ndarray
     critical_value: float
+    critical_value_nominal: float
+    critical_value_multiplier: float
+    critical_value_adjusted: float
     statistic_reference: float
 
     @property
@@ -102,6 +107,26 @@ def _validate_critical_value(critical_value: float) -> float:
     if not np.isfinite(critical_value) or critical_value <= 0:
         raise ValueError("critical value must be positive and finite")
     return critical_value
+
+
+def validate_critical_value_multiplier(multiplier: float) -> float:
+    """Validate the sensitivity multiplier applied to CR critical values."""
+    if isinstance(multiplier, bool):
+        raise ValueError("critical_value_multiplier must be positive and finite")
+    multiplier = float(multiplier)
+    if not np.isfinite(multiplier) or multiplier <= 0:
+        raise ValueError("critical_value_multiplier must be positive and finite")
+    return multiplier
+
+
+def adjust_critical_value(
+    critical_value: float,
+    critical_value_multiplier: float = 1.0,
+) -> float:
+    """Return the critical value used for CR inversion after sensitivity scaling."""
+    critical_value = _validate_critical_value(critical_value)
+    multiplier = validate_critical_value_multiplier(critical_value_multiplier)
+    return float(critical_value * multiplier)
 
 
 def _validate_statistic_reference(value: float) -> float:
@@ -246,6 +271,7 @@ def invert_score_test(
     alpha_true: float | None = None,
     statistic_reference: float | None = None,
     inversion_type: str = "absolute",
+    critical_value_multiplier: float = 1.0,
 ) -> ConfidenceRegion:
     """Invert a grid-evaluated score test into a confidence region.
 
@@ -258,19 +284,26 @@ def invert_score_test(
         statistics,
         sort_alphas=True,
     )
-    critical_value = _validate_critical_value(critical_value)
+    critical_value_nominal = _validate_critical_value(critical_value)
+    critical_value_multiplier = validate_critical_value_multiplier(
+        critical_value_multiplier
+    )
+    critical_value_adjusted = adjust_critical_value(
+        critical_value_nominal,
+        critical_value_multiplier,
+    )
     if inversion_type != "absolute":
         raise ValueError("Only absolute confidence-region inversion is supported.")
     statistic_reference = 0.0
     statistic_reference = _validate_statistic_reference(statistic_reference)
 
     statistic_values = statistics - statistic_reference
-    accepted_mask = statistic_values <= critical_value
+    accepted_mask = statistic_values <= critical_value_adjusted
     accepted = alphas[accepted_mask]
     blocks = _accepted_blocks_interpolated(
         alphas,
         statistic_values,
-        critical_value,
+        critical_value_adjusted,
         accepted_mask,
     )
     covers_true = _covers_alpha(blocks, alpha_true)
@@ -288,7 +321,10 @@ def invert_score_test(
             disconnected=False,
             covers_true=covers_true,
             selected_grid=_readonly_copy(accepted),
-            critical_value=critical_value,
+            critical_value=critical_value_adjusted,
+            critical_value_nominal=critical_value_nominal,
+            critical_value_multiplier=critical_value_multiplier,
+            critical_value_adjusted=critical_value_adjusted,
             statistic_reference=statistic_reference,
         )
 
@@ -309,7 +345,10 @@ def invert_score_test(
         disconnected=len(blocks) > 1,
         covers_true=covers_true,
         selected_grid=_readonly_copy(accepted),
-        critical_value=critical_value,
+        critical_value=critical_value_adjusted,
+        critical_value_nominal=critical_value_nominal,
+        critical_value_multiplier=critical_value_multiplier,
+        critical_value_adjusted=critical_value_adjusted,
         statistic_reference=statistic_reference,
     )
 
@@ -413,6 +452,9 @@ def summarize_alpha_grid_diagnostics(
     failed_alpha_count: int = 0,
     test_stats: np.ndarray | None = None,
     critical_value: float | None = None,
+    critical_value_nominal: float | None = None,
+    critical_value_multiplier: float | None = None,
+    critical_value_adjusted: float | None = None,
 ) -> dict[str, Any]:
     """Summarize alpha-grid, confidence-region, and boundary diagnostics."""
     alphas = _as_1d_array(alpha_grid, "alpha grid")
@@ -482,6 +524,15 @@ def summarize_alpha_grid_diagnostics(
             if matches.size > 0:
                 test_stat_at_alpha_hat = float(stats[int(matches[0])])
 
+    if critical_value_nominal is None:
+        critical_value_nominal = critical_value
+    if critical_value_multiplier is None:
+        critical_value_multiplier = 1.0 if critical_value_nominal is not None else None
+    if critical_value_adjusted is None:
+        critical_value_adjusted = critical_value
+    if critical_value is None:
+        critical_value = critical_value_adjusted
+
     return {
         "alpha_grid_min": alpha_grid_min,
         "alpha_grid_max": alpha_grid_max,
@@ -508,6 +559,9 @@ def summarize_alpha_grid_diagnostics(
         "max_test_stat": max_test_stat,
         "test_stat_at_alpha_hat": test_stat_at_alpha_hat,
         "critical_value": _optional_float(critical_value),
+        "critical_value_nominal": _optional_float(critical_value_nominal),
+        "critical_value_multiplier": _optional_float(critical_value_multiplier),
+        "critical_value_adjusted": _optional_float(critical_value_adjusted),
     }
 
 

@@ -93,6 +93,14 @@ def _ordered_estimator_columns(columns: pd.Index) -> list[str]:
     preferred = [
         ESTIMATOR_LABELS.get("oracle", "Oracle IVQR"),
         ESTIMATOR_LABELS.get("post_selection_ivqr", "Post-selection IVQR"),
+        ESTIMATOR_LABELS.get(
+            "post_selection_quantile",
+            "Post-selection IVQR (quantile-specific)",
+        ),
+        ESTIMATOR_LABELS.get(
+            "post_selection_ivqr_aligned",
+            "Post-selection IVQR (IVQR-aligned)",
+        ),
         ESTIMATOR_LABELS.get("dml_ivqr", "DML-style IVQR"),
         ESTIMATOR_LABELS.get("full_control_ivqr", "Full-control IVQR"),
     ]

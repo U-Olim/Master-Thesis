@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
@@ -35,6 +36,7 @@ SUMMARY_METRIC_COLUMNS: tuple[str, ...] = (
     "coverage_valid_only",
     "avg_cr_length",
     "avg_cr_length_valid_only",
+    "avg_cr_hull_length",
     "failure_rate",
     "non_convergence_rate",
     "cr_empty_rate",
@@ -43,7 +45,10 @@ SUMMARY_METRIC_COLUMNS: tuple[str, ...] = (
     "alpha_hat_boundary_rate",
     "cr_boundary_hit_rate",
     "mean_failed_alpha_count",
+    "mean_failed_alpha_rate",
     "mean_selected_controls",
+    "critical_value_multiplier",
+    "mean_critical_value_adjusted",
     "mean_runtime_seconds",
     "mean_runtime_total_sec",
     "median_runtime_total_sec",
@@ -51,6 +56,16 @@ SUMMARY_METRIC_COLUMNS: tuple[str, ...] = (
     "mean_runtime_confidence_region_sec",
     "mean_dml_runtime_crossfit_sec",
     "mean_ps_runtime_selection_sec",
+    "mean_psq_runtime_quantile_selection_sec",
+    "mean_psq_runtime_treatment_selection_sec",
+    "mean_psq_runtime_alpha_loop_sec",
+    "mean_psq_runtime_confidence_region_sec",
+    "mean_psq_runtime_diagnostics_sec",
+    "mean_psa_runtime_anchor_selection_sec",
+    "mean_psa_runtime_treatment_selection_sec",
+    "mean_psa_runtime_alpha_loop_sec",
+    "mean_psa_runtime_confidence_region_sec",
+    "mean_psa_runtime_diagnostics_sec",
 )
 
 __all__ = [
@@ -59,6 +74,7 @@ __all__ = [
     "SUMMARY_METRIC_COLUMNS",
     "aggregate_results",
     "aggregate_results_file",
+    "compare_result_files",
     "incomplete_groups",
     "load_raw_results",
     "save_summary",
@@ -219,6 +235,39 @@ def aggregate_results_file(
     if output_path is not None:
         save_summary(summary, output_path)
     return summary
+
+
+def compare_result_files(
+    result_paths: Sequence[str | Path],
+    labels: Sequence[str],
+    expected_replications: int | None = None,
+) -> pd.DataFrame:
+    """Aggregate and label multiple raw result files for sensitivity comparisons."""
+    if isinstance(result_paths, (str, Path)):
+        raise ValueError("result_paths must be a sequence of paths")
+    if isinstance(labels, str):
+        raise ValueError("labels must be a sequence of strings")
+    paths = list(result_paths)
+    labels = list(labels)
+    if not paths:
+        raise ValueError("at least one result path is required")
+    if len(paths) != len(labels):
+        raise ValueError("result_paths and labels must have the same length")
+    if any(not isinstance(label, str) or not label for label in labels):
+        raise ValueError("labels must contain nonempty strings")
+    if len(set(labels)) != len(labels):
+        raise ValueError("labels must not contain duplicates")
+
+    summaries = []
+    for path, label in zip(paths, labels, strict=True):
+        summary = aggregate_results_file(
+            path,
+            expected_replications=expected_replications,
+        )
+        summary.insert(0, "run_label", label)
+        summary.insert(1, "source_file", str(path))
+        summaries.append(summary)
+    return pd.concat(summaries, ignore_index=True)
 
 
 def incomplete_groups(summary: pd.DataFrame) -> pd.DataFrame:

@@ -16,6 +16,10 @@ from estimators.base import EstimationResult
 from estimators.dml_ivqr import estimate_dml_ivqr
 from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import estimate_post_selection_ivqr
+from estimators.post_selection_ivqr_aligned import estimate_post_selection_ivqr_aligned
+from estimators.post_selection_quantile_ivqr import (
+    estimate_post_selection_quantile_ivqr,
+)
 from dgp.designs import Design
 from simulation._validation import (
     validate_alpha_candidates,
@@ -28,6 +32,7 @@ from simulation._validation import (
     validate_nonnegative_float,
     validate_nonnegative_int,
     validate_optional_nonnegative_int,
+    validate_positive_float,
     validate_positive_int,
     validate_probability_quantile,
     validate_unique_sequence,
@@ -36,7 +41,9 @@ from simulation.config import (
     DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN,
     DEFAULT_ALPHA_GRID_SIZE,
+    DEFAULT_MAIN_ESTIMATORS,
     DEFAULT_DML_K_FOLDS,
+    DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
     MAIN_ESTIMATORS,
@@ -51,11 +58,13 @@ from simulation.results import (
 
 EstimatorFn = Callable[..., EstimationResult]
 VALID_ESTIMATORS: tuple[str, ...] = MAIN_ESTIMATORS
-DEFAULT_SIMULATION_ESTIMATORS: tuple[str, ...] = MAIN_ESTIMATORS
+DEFAULT_SIMULATION_ESTIMATORS: tuple[str, ...] = DEFAULT_MAIN_ESTIMATORS
 VALID_DGPS: tuple[str, ...] = DGPS
 ESTIMATOR_OUTPUT_NAMES = {
     "oracle": "oracle",
     "post_selection": "post_selection_ivqr",
+    "post_selection_quantile": "post_selection_quantile",
+    "post_selection_ivqr_aligned": "post_selection_ivqr_aligned",
     "dml": "dml_ivqr",
 }
 DESIGN_KEY_COLUMNS: tuple[str, ...] = ("dgp", "n", "p", "pi", "tau", "rep", "seed")
@@ -93,8 +102,15 @@ def _result_to_row(
     design: Design,
     result: EstimationResult,
     alphas: np.ndarray,
+    critical_value_multiplier: float | None = None,
 ) -> dict[str, object]:
-    return build_simulation_result_row(design, result, alphas)
+    row = build_simulation_result_row(design, result, alphas)
+    if (
+        critical_value_multiplier is not None
+        and pd.isna(row["critical_value_multiplier"])
+    ):
+        row["critical_value_multiplier"] = critical_value_multiplier
+    return row
 
 
 def _short_error_message(exc: Exception) -> str:
@@ -106,6 +122,7 @@ def _failure_rows_for_design(
     estimators: tuple[str, ...],
     alphas: np.ndarray,
     exc: Exception,
+    critical_value_multiplier: float | None = None,
 ) -> list[dict[str, object]]:
     try:
         alpha_true = true_alpha(design.tau, design.dgp)
@@ -114,7 +131,15 @@ def _failure_rows_for_design(
 
     message = f"{type(exc).__name__}: {_short_error_message(exc)}"
     return [
-        _base_failure_row(design, estimator, alphas, alpha_true, exc, message)
+        _base_failure_row(
+            design,
+            estimator,
+            alphas,
+            alpha_true,
+            exc,
+            message,
+            critical_value_multiplier=critical_value_multiplier,
+        )
         for estimator in estimators
     ]
 
@@ -124,9 +149,16 @@ def failure_rows_for_design(
     estimators: tuple[str, ...],
     alphas: np.ndarray,
     exc: Exception,
+    critical_value_multiplier: float | None = None,
 ) -> list[dict[str, object]]:
     """Build failed result rows for every requested estimator."""
-    return _failure_rows_for_design(design, estimators, alphas, exc)
+    return _failure_rows_for_design(
+        design,
+        estimators,
+        alphas,
+        exc,
+        critical_value_multiplier=critical_value_multiplier,
+    )
 
 
 def _base_failure_row(
@@ -136,6 +168,7 @@ def _base_failure_row(
     alpha_true: float | None,
     exc: Exception,
     message: str,
+    critical_value_multiplier: float | None = None,
 ) -> dict[str, object]:
     return build_failure_result_row(
         design=design,
@@ -145,6 +178,7 @@ def _base_failure_row(
         exc=exc,
         message=message,
         max_error_message_length=MAX_ERROR_MESSAGE_LENGTH,
+        critical_value_multiplier=critical_value_multiplier,
     )
 
 
@@ -153,6 +187,7 @@ def _failure_row_for_estimator(
     estimator: str,
     alphas: np.ndarray,
     exc: Exception,
+    critical_value_multiplier: float | None = None,
 ) -> dict[str, object]:
     """Build one failed result row for an unexpected estimator exception."""
     try:
@@ -161,7 +196,15 @@ def _failure_row_for_estimator(
         alpha_true = None
 
     message = f"Unexpected estimator error: {type(exc).__name__}: {_short_error_message(exc)}"
-    return _base_failure_row(design, estimator, alphas, alpha_true, exc, message)
+    return _base_failure_row(
+        design,
+        estimator,
+        alphas,
+        alpha_true,
+        exc,
+        message,
+        critical_value_multiplier=critical_value_multiplier,
+    )
 
 
 def make_simulation_grid(
@@ -235,6 +278,7 @@ def run_single_replication(
     dml_ridge_alpha: float = 1.0,
     dml_fold_random_state: int | None = None,
     gmm_ridge: float = 1e-8,
+    critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     show_quantreg_warnings: bool = False,
 ) -> list[dict[str, object]]:
     """Generate one dataset and run requested estimators on it."""
@@ -249,6 +293,10 @@ def run_single_replication(
     )
     dml_ridge_alpha = validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
     gmm_ridge = validate_nonnegative_float("gmm_ridge", gmm_ridge)
+    critical_value_multiplier = validate_positive_float(
+        "critical_value_multiplier",
+        critical_value_multiplier,
+    )
     show_quantreg_warnings = validate_bool(
         "show_quantreg_warnings", show_quantreg_warnings
     )
@@ -261,6 +309,8 @@ def run_single_replication(
     estimator_map: dict[str, EstimatorFn] = {
         "oracle": estimate_oracle_ivqr,
         "post_selection": estimate_post_selection_ivqr,
+        "post_selection_quantile": estimate_post_selection_quantile_ivqr,
+        "post_selection_ivqr_aligned": estimate_post_selection_ivqr_aligned,
         "dml": estimate_dml_ivqr,
     }
 
@@ -281,6 +331,29 @@ def run_single_replication(
                         selection_max_iter=selection_max_iter,
                         quantreg_max_iter=quantreg_max_iter,
                         selection_random_state=design.seed,
+                        critical_value_multiplier=critical_value_multiplier,
+                    )
+                elif estimator_name == "post_selection_quantile":
+                    result = estimator(
+                        data,
+                        tau=design.tau,
+                        alphas=alphas,
+                        selection_cv=selection_cv,
+                        selection_max_iter=selection_max_iter,
+                        quantreg_max_iter=quantreg_max_iter,
+                        selection_random_state=design.seed,
+                        critical_value_multiplier=critical_value_multiplier,
+                    )
+                elif estimator_name == "post_selection_ivqr_aligned":
+                    result = estimator(
+                        data,
+                        tau=design.tau,
+                        alphas=alphas,
+                        selection_cv=selection_cv,
+                        selection_max_iter=selection_max_iter,
+                        quantreg_max_iter=quantreg_max_iter,
+                        selection_random_state=design.seed,
+                        critical_value_multiplier=critical_value_multiplier,
                     )
                 elif estimator_name == "dml":
                     fold_random_state = (
@@ -297,6 +370,7 @@ def run_single_replication(
                         quantile_penalty=dml_quantile_penalty,
                         ridge_alpha=dml_ridge_alpha,
                         gmm_ridge=gmm_ridge,
+                        critical_value_multiplier=critical_value_multiplier,
                     )
                 elif estimator_name == "oracle":
                     oracle_indices = get_oracle_control_indices(design.dgp, design.p)
@@ -307,12 +381,28 @@ def run_single_replication(
                         oracle_indices=oracle_indices,
                         max_iter=quantreg_max_iter,
                         gmm_ridge=gmm_ridge,
+                        critical_value_multiplier=critical_value_multiplier,
                     )
                 else:
                     raise ValueError(f"Estimator is not available in main runner: {estimator_name}")
-            rows.append(_result_to_row(design, result, alphas))
+            rows.append(
+                _result_to_row(
+                    design,
+                    result,
+                    alphas,
+                    critical_value_multiplier=critical_value_multiplier,
+                )
+            )
         except Exception as exc:
-            rows.append(_failure_row_for_estimator(design, estimator_name, alphas, exc))
+            rows.append(
+                _failure_row_for_estimator(
+                    design,
+                    estimator_name,
+                    alphas,
+                    exc,
+                    critical_value_multiplier=critical_value_multiplier,
+                )
+            )
 
     return rows
 
@@ -337,6 +427,7 @@ def run_small_simulation(
     dml_quantile_penalty: float = 0.01,
     dml_ridge_alpha: float = 1.0,
     gmm_ridge: float = 1e-8,
+    critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     show_quantreg_warnings: bool = False,
 ) -> pd.DataFrame:
     """Run a small simulation and return raw estimator-level rows."""
@@ -366,6 +457,10 @@ def run_small_simulation(
     )
     dml_ridge_alpha = validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
     gmm_ridge = validate_nonnegative_float("gmm_ridge", gmm_ridge)
+    critical_value_multiplier = validate_positive_float(
+        "critical_value_multiplier",
+        critical_value_multiplier,
+    )
     show_quantreg_warnings = validate_bool(
         "show_quantreg_warnings", show_quantreg_warnings
     )
@@ -398,6 +493,7 @@ def run_small_simulation(
                 dml_quantile_penalty=dml_quantile_penalty,
                 dml_ridge_alpha=dml_ridge_alpha,
                 gmm_ridge=gmm_ridge,
+                critical_value_multiplier=critical_value_multiplier,
                 show_quantreg_warnings=show_quantreg_warnings,
             )
         )

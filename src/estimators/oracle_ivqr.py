@@ -18,6 +18,7 @@ _CH_COMPATIBILITY_KWARGS = {
     "alpha_max",
     "alpha_step",
     "confidence_level",
+    "critical_value_multiplier",
     "max_iter",
 }
 

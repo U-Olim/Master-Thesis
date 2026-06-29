@@ -38,6 +38,38 @@ def test_run_small_simulation_estimator_subset() -> None:
     assert set(results["estimator"]) == {"post_selection_ivqr"}
 
 
+def test_run_small_simulation_quantile_post_selection_subset() -> None:
+    results = run_small_simulation(
+        reps=1,
+        n=50,
+        p=4,
+        alphas=np.linspace(0.0, 2.0, 3),
+        estimators=("post_selection_quantile",),
+        selection_cv=2,
+    )
+
+    assert len(results) == 1
+    assert set(results["estimator"]) == {"post_selection_quantile"}
+    assert results.iloc[0]["ps_selection_method"] == "quantile_specific"
+    assert results.iloc[0]["psq_selection_method"] == "quantile_l1_cv"
+
+
+def test_run_small_simulation_aligned_post_selection_subset() -> None:
+    results = run_small_simulation(
+        reps=1,
+        n=50,
+        p=4,
+        alphas=np.linspace(0.0, 2.0, 3),
+        estimators=("post_selection_ivqr_aligned",),
+        selection_cv=2,
+    )
+
+    assert len(results) == 1
+    assert set(results["estimator"]) == {"post_selection_ivqr_aligned"}
+    assert results.iloc[0]["ps_selection_method"] == "ivqr_aligned"
+    assert results.iloc[0]["psa_selection_method"] == "ivqr_aligned_quantile_l1_cv"
+
+
 def test_runner_schema_constants_are_immutable_tuples() -> None:
     assert isinstance(RESULT_COLUMNS, tuple)
     assert isinstance(DESIGN_KEY_COLUMNS, tuple)
@@ -71,9 +103,18 @@ def test_runner_passes_dgp_oracle_support_to_oracle_estimator(
 ) -> None:
     captured: dict[str, object] = {}
 
-    def fake_oracle_estimator(data, tau, alphas, oracle_indices, max_iter, gmm_ridge):
+    def fake_oracle_estimator(
+        data,
+        tau,
+        alphas,
+        oracle_indices,
+        max_iter,
+        gmm_ridge,
+        critical_value_multiplier,
+    ):
         captured["max_iter"] = max_iter
         captured["oracle_indices"] = np.asarray(oracle_indices)
+        captured["critical_value_multiplier"] = critical_value_multiplier
         return EstimationResult(
             estimator="oracle",
             alpha_hat=1.0,
@@ -108,6 +149,7 @@ def test_runner_passes_dgp_oracle_support_to_oracle_estimator(
 
     assert len(rows) == 1
     assert captured["max_iter"] == 123
+    assert captured["critical_value_multiplier"] == pytest.approx(1.0)
     expected_indices = get_oracle_control_indices(dgp, design.p)
     np.testing.assert_array_equal(captured["oracle_indices"], expected_indices)
     assert len(expected_indices) == expected_support_size
@@ -198,6 +240,96 @@ def test_runner_passes_design_seed_to_post_selection_random_state(
     assert captured["selection_random_state"] == design.seed
 
 
+def test_runner_passes_design_seed_to_quantile_post_selection_random_state(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_quantile_post_selection_estimator(data, tau, alphas, **kwargs):
+        captured.update(kwargs)
+        return EstimationResult(
+            estimator="post_selection_quantile",
+            alpha_hat=1.0,
+            alpha_true=data.alpha_true,
+            tau=tau,
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(alphas),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=1,
+            runtime_seconds=0.0,
+        )
+
+    monkeypatch.setattr(
+        runner_module,
+        "estimate_post_selection_quantile_ivqr",
+        fake_quantile_post_selection_estimator,
+    )
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=98765)
+
+    rows = run_single_replication(
+        design,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("post_selection_quantile",),
+    )
+
+    assert len(rows) == 1
+    assert captured["selection_random_state"] == design.seed
+
+
+def test_runner_passes_design_seed_to_aligned_post_selection_random_state(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_aligned_post_selection_estimator(data, tau, alphas, **kwargs):
+        captured.update(kwargs)
+        return EstimationResult(
+            estimator="post_selection_ivqr_aligned",
+            alpha_hat=1.0,
+            alpha_true=data.alpha_true,
+            tau=tau,
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(alphas),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=1,
+            runtime_seconds=0.0,
+        )
+
+    monkeypatch.setattr(
+        runner_module,
+        "estimate_post_selection_ivqr_aligned",
+        fake_aligned_post_selection_estimator,
+    )
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=98765)
+
+    rows = run_single_replication(
+        design,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("post_selection_ivqr_aligned",),
+    )
+
+    assert len(rows) == 1
+    assert captured["selection_random_state"] == design.seed
 def test_make_simulation_grid_size_and_unique_seeds() -> None:
     designs = make_simulation_grid(
         dgps=("dgp1",),

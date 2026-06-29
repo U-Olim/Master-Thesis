@@ -19,6 +19,7 @@ from simulation.config import (
     DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN,
     DEFAULT_BATCH_SIZE,
+    DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     DEFAULT_N_JOBS,
 )
 from simulation.estimators_config import normalize_estimator_names
@@ -78,6 +79,13 @@ def test_default_simulation_estimators_are_main_estimators() -> None:
     assert DEFAULT_SIMULATION_ESTIMATORS == ("oracle", "dml", "post_selection")
 
 
+def test_valid_estimators_includes_quantile_post_selection_experiment() -> None:
+    assert "post_selection_quantile" in VALID_ESTIMATORS
+    assert "post_selection_quantile" not in DEFAULT_SIMULATION_ESTIMATORS
+    assert "post_selection_ivqr_aligned" in VALID_ESTIMATORS
+    assert "post_selection_ivqr_aligned" not in DEFAULT_SIMULATION_ESTIMATORS
+
+
 def test_normalize_estimator_names_defaults_and_aliases() -> None:
     assert normalize_estimator_names(None, scenario="main") == (
         "oracle",
@@ -90,6 +98,25 @@ def test_normalize_estimator_names_defaults_and_aliases() -> None:
     assert normalize_estimator_names(["post-selection"], scenario="main") == (
         "post_selection",
     )
+    assert normalize_estimator_names(["post_selection_quantile"], scenario="main") == (
+        "post_selection_quantile",
+    )
+    assert normalize_estimator_names(["post_selection_q"], scenario="main") == (
+        "post_selection_quantile",
+    )
+    assert normalize_estimator_names(["quantile_post_selection"], scenario="main") == (
+        "post_selection_quantile",
+    )
+    assert normalize_estimator_names(["post_selection_ivqr_aligned"], scenario="main") == (
+        "post_selection_ivqr_aligned",
+    )
+    assert normalize_estimator_names(["post_selection_aligned"], scenario="main") == (
+        "post_selection_ivqr_aligned",
+    )
+    assert normalize_estimator_names(
+        ["ivqr_aligned_post_selection"],
+        scenario="main",
+    ) == ("post_selection_ivqr_aligned",)
     assert normalize_estimator_names(
         ["oracle", "oracle", "post_selection_ivqr"],
         scenario="main",
@@ -124,6 +151,10 @@ def test_default_batch_size_is_ten() -> None:
 
 def test_default_quantreg_max_iter_is_1000() -> None:
     assert DEFAULT_QUANTREG_MAX_ITER == 1000
+
+
+def test_default_critical_value_multiplier_is_one() -> None:
+    assert DEFAULT_CRITICAL_VALUE_MULTIPLIER == pytest.approx(1.0)
 
 
 def test_quantreg_iteration_warning_filter_suppresses_by_default() -> None:
@@ -288,6 +319,47 @@ def test_full_simulation_parser_respects_alpha_grid_overrides(monkeypatch) -> No
     assert args.alpha_min == -0.5
     assert args.alpha_max == 2.5
     assert args.alpha_grid_size == 41
+
+
+def test_full_simulation_parser_supports_experiment_a_wide_grid(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "main_simulation.py",
+            "--mode",
+            "fast",
+            "--n-jobs",
+            "4",
+            "--batch-size",
+            "10",
+            "--alpha-min",
+            "-2",
+            "--alpha-max",
+            "4",
+            "--alpha-grid-size",
+            "31",
+            "--estimators",
+            "oracle",
+            "post_selection",
+            "--output",
+            "results/raw/fast_grid31_wide_oracle_post.csv",
+            "--manifest",
+            "results/raw/fast_grid31_wide_oracle_post_manifest.json",
+        ],
+    )
+
+    args = full_simulation_cli._parse_args()
+    full_simulation_cli._apply_mode_defaults(args)
+
+    assert args.alpha_min == -2.0
+    assert args.alpha_max == 4.0
+    assert args.alpha_grid_size == 31
+    assert (args.alpha_max - args.alpha_min) / (
+        args.alpha_grid_size - 1
+    ) == pytest.approx(0.2)
+    assert args.estimators == ("oracle", "post_selection")
 
 
 def test_full_simulation_parser_estimator_defaults_and_overrides(monkeypatch) -> None:
@@ -523,6 +595,51 @@ def test_full_simulation_parser_quantreg_max_iter_default_and_override(
     args = full_simulation_cli._parse_args()
     assert args.quantreg_max_iter == 2000
     assert args.show_quantreg_warnings is True
+
+
+def test_full_simulation_parser_critical_value_multiplier_default_and_override(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("sys.argv", ["main_simulation.py"])
+    args = full_simulation_cli._parse_args()
+    assert args.critical_value_multiplier == pytest.approx(1.0)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["main_simulation.py", "--critical-value-multiplier", "1.2"],
+    )
+    args = full_simulation_cli._parse_args()
+    assert args.critical_value_multiplier == pytest.approx(1.2)
+
+
+@pytest.mark.parametrize("multiplier", ["0", "-1", "nan", "inf"])
+def test_full_simulation_rejects_invalid_critical_value_multiplier(
+    monkeypatch,
+    multiplier: str,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["main_simulation.py", "--critical-value-multiplier", multiplier],
+    )
+    args = full_simulation_cli._parse_args()
+    full_simulation_cli._apply_mode_defaults(args)
+    with pytest.raises(ValueError, match="critical_value_multiplier"):
+        full_simulation_cli._validate_args(args)
+
+
+def test_full_control_parser_critical_value_multiplier_default_and_override(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("sys.argv", ["full_control_ivqr.py"])
+    args = full_control_cli._parse_args()
+    assert args.critical_value_multiplier == pytest.approx(1.0)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["full_control_ivqr.py", "--critical-value-multiplier", "1.1"],
+    )
+    args = full_control_cli._parse_args()
+    assert args.critical_value_multiplier == pytest.approx(1.1)
 
 
 def test_full_simulation_rejects_invalid_n_jobs(monkeypatch) -> None:

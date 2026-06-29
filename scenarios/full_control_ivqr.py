@@ -44,11 +44,13 @@ from simulation._validation import (  # noqa: E402
     design_key,
     parse_explicit_bool,
     row_design_key,
+    validate_positive_float,
 )
 from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN,
     DEFAULT_BATCH_SIZE,
+    DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
     FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
@@ -103,6 +105,15 @@ def _parse_args() -> argparse.Namespace:
         "--alpha-grid-size",
         type=int,
         default=FULL_CONTROL_BENCHMARK_ALPHA_GRID_SIZE,
+    )
+    parser.add_argument(
+        "--critical-value-multiplier",
+        type=float,
+        default=DEFAULT_CRITICAL_VALUE_MULTIPLIER,
+        help=(
+            "Multiplier applied to the nominal chi-square critical value when "
+            "constructing IVQR confidence regions. Default 1.0."
+        ),
     )
     parser.add_argument(
         "--quantreg-max-iter",
@@ -199,6 +210,10 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--quantreg-max-iter must be at least 1")
     if args.alpha_max <= args.alpha_min:
         raise ValueError("--alpha-max must exceed --alpha-min")
+    args.critical_value_multiplier = validate_positive_float(
+        "critical_value_multiplier",
+        args.critical_value_multiplier,
+    )
 
 
 def _configure_warnings(show_quantreg_warnings: bool) -> None:
@@ -231,6 +246,7 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
         "alpha_min": args.alpha_min,
         "alpha_max": args.alpha_max,
         "alpha_grid_size": args.alpha_grid_size,
+        "critical_value_multiplier": args.critical_value_multiplier,
         "estimators": list(args.estimators),
         "quantreg_max_iter": args.quantreg_max_iter,
     }
@@ -303,6 +319,7 @@ def _print_dry_run(
         extra_lines=(
             f"Running estimators: {', '.join(args.estimators)}",
             f"Rerun failed: {str(args.rerun_failed).lower()}",
+            f"critical_value_multiplier = {args.critical_value_multiplier:g}",
         ),
     )
 
@@ -311,12 +328,22 @@ def _result_to_row(
     design: Design,
     result: EstimationResult,
     alphas: np.ndarray,
+    critical_value_multiplier: float | None = None,
 ) -> dict[str, object]:
-    return build_simulation_result_row(design, result, alphas)
+    row = build_simulation_result_row(design, result, alphas)
+    if (
+        critical_value_multiplier is not None
+        and pd.isna(row["critical_value_multiplier"])
+    ):
+        row["critical_value_multiplier"] = critical_value_multiplier
+    return row
 
 
 def _failure_row(
-    design: Design, alphas: np.ndarray, exc: Exception
+    design: Design,
+    alphas: np.ndarray,
+    exc: Exception,
+    critical_value_multiplier: float | None = None,
 ) -> dict[str, object]:
     try:
         alpha_true = true_alpha(design.tau, design.dgp)
@@ -331,6 +358,7 @@ def _failure_row(
         exc=exc,
         message=message,
         max_error_message_length=MAX_ERROR_MESSAGE_LENGTH,
+        critical_value_multiplier=critical_value_multiplier,
     )
 
 
@@ -338,6 +366,7 @@ def _run_one(
     design: Design,
     alphas: np.ndarray,
     quantreg_max_iter: int,
+    critical_value_multiplier: float,
     show_quantreg_warnings: bool,
 ) -> dict[str, object]:
     try:
@@ -348,16 +377,28 @@ def _run_one(
                 tau=design.tau,
                 alphas=alphas,
                 max_iter=quantreg_max_iter,
+                critical_value_multiplier=critical_value_multiplier,
             )
-        return _result_to_row(design, result, alphas)
+        return _result_to_row(
+            design,
+            result,
+            alphas,
+            critical_value_multiplier=critical_value_multiplier,
+        )
     except Exception as exc:  # noqa: BLE001 - record failed replications.
-        return _failure_row(design, alphas, exc)
+        return _failure_row(
+            design,
+            alphas,
+            exc,
+            critical_value_multiplier=critical_value_multiplier,
+        )
 
 
 def _run_batch(
     designs: list[Design],
     alphas: np.ndarray,
     quantreg_max_iter: int,
+    critical_value_multiplier: float,
     n_jobs: int,
     show_quantreg_warnings: bool,
 ) -> pd.DataFrame:
@@ -367,6 +408,7 @@ def _run_batch(
                 design,
                 alphas,
                 quantreg_max_iter,
+                critical_value_multiplier,
                 show_quantreg_warnings,
             )
             for design in designs
@@ -380,6 +422,7 @@ def _run_batch(
                     design,
                     alphas,
                     quantreg_max_iter,
+                    critical_value_multiplier,
                     show_quantreg_warnings,
                 ): design
                 for design in designs
@@ -388,7 +431,14 @@ def _run_batch(
                 try:
                     rows.append(future.result())
                 except Exception as exc:  # noqa: BLE001 - record worker failure.
-                    rows.append(_failure_row(futures[future], alphas, exc))
+                    rows.append(
+                        _failure_row(
+                            futures[future],
+                            alphas,
+                            exc,
+                            critical_value_multiplier=critical_value_multiplier,
+                        )
+                    )
         rows.sort(
             key=lambda row: (
                 row["dgp"],
@@ -514,6 +564,7 @@ def main() -> None:
             batch,
             alphas,
             args.quantreg_max_iter,
+            args.critical_value_multiplier,
             args.n_jobs,
             args.show_quantreg_warnings,
         )

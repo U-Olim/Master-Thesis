@@ -6,7 +6,12 @@ import numpy as np
 import pytest
 
 from dgp.designs import Design
-from estimators.base import EstimationResult, POST_SELECTION_DIAGNOSTIC_FIELDS
+from estimators.base import (
+    EstimationResult,
+    POST_SELECTION_DIAGNOSTIC_FIELDS,
+    POST_SELECTION_ALIGNED_DIAGNOSTIC_FIELDS,
+    POST_SELECTION_QUANTILE_DIAGNOSTIC_FIELDS,
+)
 from inference.confidence_regions import (
     ConfidenceRegion,
     merge_region_and_grid_diagnostics,
@@ -19,6 +24,8 @@ from simulation.results import (
     build_failure_result_row,
     build_simulation_result_row,
     empty_post_selection_diagnostics,
+    empty_post_selection_aligned_diagnostics,
+    empty_post_selection_quantile_diagnostics,
 )
 from tests.helpers import SIMULATION_RESULT_REQUIRED_KEYS
 from utils.timing import RUNTIME_COLUMNS
@@ -53,6 +60,13 @@ def test_run_small_simulation_returns_dataframe() -> None:
     assert {"cr_disconnected", "failed_alpha_count", "alpha_grid_size"}.issubset(
         results.columns
     )
+    assert {
+        "critical_value_nominal",
+        "critical_value_multiplier",
+        "critical_value_adjusted",
+    }.issubset(results.columns)
+    assert np.allclose(results["critical_value_multiplier"], 1.0)
+    assert np.allclose(results["critical_value"], results["critical_value_adjusted"])
     assert (results["alpha_grid_min"] == 0.0).all()
     assert (results["alpha_grid_max"] == 2.0).all()
     assert (results["alpha_grid_size"] == 5).all()
@@ -123,6 +137,39 @@ def test_run_small_simulation_returns_dataframe() -> None:
     assert dml["dml_runtime_crossfit_sec"].notna().all()
     assert dml["dml_runtime_nuisance_fit_sec"].isna().all()
     assert dml["dml_runtime_nuisance_predict_sec"].isna().all()
+
+
+def test_run_small_simulation_critical_value_multiplier_widens_cr_only() -> None:
+    alphas = np.linspace(0.0, 2.0, 5)
+    common_kwargs = {
+        "reps": 1,
+        "n": 120,
+        "p": 20,
+        "alphas": alphas,
+        "estimators": ("oracle",),
+        "quantreg_max_iter": 200,
+    }
+
+    nominal = run_small_simulation(**common_kwargs, critical_value_multiplier=1.0)
+    adjusted = run_small_simulation(**common_kwargs, critical_value_multiplier=1.2)
+
+    nominal_row = nominal.iloc[0]
+    adjusted_row = adjusted.iloc[0]
+    assert adjusted_row["alpha_hat"] == pytest.approx(nominal_row["alpha_hat"])
+    assert adjusted_row["min_test_stat"] == pytest.approx(nominal_row["min_test_stat"])
+    assert adjusted_row["critical_value_multiplier"] == pytest.approx(1.2)
+    assert adjusted_row["critical_value_nominal"] == pytest.approx(
+        nominal_row["critical_value_nominal"]
+    )
+    assert adjusted_row["critical_value_adjusted"] > nominal_row["critical_value_adjusted"]
+    assert adjusted_row["critical_value"] == pytest.approx(
+        adjusted_row["critical_value_adjusted"]
+    )
+    assert (
+        adjusted_row["cr_accepted_alpha_count"]
+        >= nominal_row["cr_accepted_alpha_count"]
+    )
+    assert adjusted_row["cr_hull_length"] >= nominal_row["cr_hull_length"]
 
 
 def test_run_small_simulation_bias_logic() -> None:
@@ -210,6 +257,39 @@ def test_empty_post_selection_diagnostics_has_all_expected_defaults() -> None:
     assert diagnostics["ps_all_instruments_retained"] is False
 
 
+def test_empty_post_selection_quantile_diagnostics_has_all_expected_defaults() -> None:
+    diagnostics = empty_post_selection_quantile_diagnostics()
+
+    assert set(diagnostics) == set(POST_SELECTION_QUANTILE_DIAGNOSTIC_FIELDS)
+    assert diagnostics["psq_selection_method"] is None
+    assert diagnostics["psq_quantile_tau"] is None
+    assert diagnostics["psq_quantile_alpha_selected"] is None
+    assert diagnostics["psq_quantile_cv_folds"] is None
+    assert diagnostics["psq_n_selected_controls_quantile_y"] is None
+    assert diagnostics["psq_n_selected_controls_treatment_d"] is None
+    assert diagnostics["psq_n_selected_controls_union"] is None
+    assert diagnostics["psq_share_selected_controls_quantile_y"] is None
+    assert diagnostics["psq_share_selected_controls_union"] is None
+    assert diagnostics["psq_selection_failed"] is False
+    assert diagnostics["psq_warning_code"] == ""
+
+
+def test_empty_post_selection_aligned_diagnostics_has_all_expected_defaults() -> None:
+    diagnostics = empty_post_selection_aligned_diagnostics()
+
+    assert set(diagnostics) == set(POST_SELECTION_ALIGNED_DIAGNOSTIC_FIELDS)
+    assert diagnostics["psa_selection_method"] is None
+    assert diagnostics["psa_anchor_rule"] is None
+    assert diagnostics["psa_alpha_anchor_count"] is None
+    assert diagnostics["psa_alpha_anchors"] is None
+    assert diagnostics["psa_n_selected_controls_anchor_union"] is None
+    assert diagnostics["psa_n_selected_controls_treatment"] is None
+    assert diagnostics["psa_n_selected_controls_final_union"] is None
+    assert diagnostics["psa_anchor_selection_failed"] is False
+    assert diagnostics["psa_selected_empty_anchor_union"] is False
+    assert diagnostics["psa_selected_empty_final"] is False
+
+
 def test_merge_region_and_grid_diagnostics_preserves_grid_boundary_fields() -> None:
     grid_diagnostics = {
         "cr_lower": -1.0,
@@ -247,6 +327,9 @@ def test_merge_region_and_grid_diagnostics_preserves_grid_boundary_fields() -> N
         covers_true=True,
         selected_grid=np.array([-0.5, 0.0, 1.75, 2.5]),
         critical_value=3.84,
+        critical_value_nominal=3.84,
+        critical_value_multiplier=1.0,
+        critical_value_adjusted=3.84,
         statistic_reference=0.0,
     )
 
@@ -300,6 +383,107 @@ def test_build_simulation_result_row_defaults_and_extra_fields() -> None:
     assert row["custom_field"] == "kept"
     assert row["ps_n_selected_controls"] is None
     assert row["ps_selection_failed"] is False
+    assert row["psq_selection_method"] is None
+    assert row["psq_selection_failed"] is False
+    assert row["psa_selection_method"] is None
+    assert row["psa_anchor_selection_failed"] is False
+    assert set(RESULT_COLUMNS).issubset(row)
+
+
+def test_build_simulation_result_row_includes_quantile_post_selection_fields() -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    result = EstimationResult(
+        estimator="post_selection_quantile",
+        alpha_hat=0.4,
+        alpha_true=0.2,
+        tau=0.5,
+        converged=True,
+        failed=False,
+        message="ok",
+        objective_value=0.0,
+        at_grid_boundary=False,
+        alpha_grid_size=3,
+        failed_alpha_count=0,
+        cr_lower=0.0,
+        cr_upper=1.0,
+        cr_length=1.0,
+        cr_covers_true=True,
+        cr_empty=False,
+        cr_disconnected=False,
+        selected_controls=2,
+        runtime_seconds=0.1,
+        ps_selection_method="quantile_specific",
+        ps_n_selected_controls=2,
+        psq_selection_method="quantile_l1_cv",
+        psq_quantile_tau=0.5,
+        psq_quantile_alpha_selected=0.01,
+        psq_quantile_cv_folds=3,
+        psq_n_selected_controls_quantile_y=1,
+        psq_n_selected_controls_treatment_d=1,
+        psq_n_selected_controls_union=2,
+        psq_share_selected_controls_quantile_y=0.2,
+        psq_share_selected_controls_union=0.4,
+        psq_selection_failed=False,
+    )
+
+    row = build_simulation_result_row(design, result, np.array([0.0, 0.5, 1.0]))
+
+    assert row["estimator"] == "post_selection_quantile"
+    assert row["ps_selection_method"] == "quantile_specific"
+    assert row["psq_selection_method"] == "quantile_l1_cv"
+    assert row["psq_quantile_tau"] == pytest.approx(0.5)
+    assert row["psq_quantile_alpha_selected"] == pytest.approx(0.01)
+    assert row["psq_n_selected_controls_union"] == 2
+    assert set(RESULT_COLUMNS).issubset(row)
+
+
+def test_build_simulation_result_row_includes_aligned_post_selection_fields() -> None:
+    design = Design("dgp1", n=80, p=5, pi=1.0, tau=0.5, rep=0, seed=123)
+    result = EstimationResult(
+        estimator="post_selection_ivqr_aligned",
+        alpha_hat=0.4,
+        alpha_true=0.2,
+        tau=0.5,
+        converged=True,
+        failed=False,
+        message="ok",
+        objective_value=0.0,
+        at_grid_boundary=False,
+        alpha_grid_size=3,
+        failed_alpha_count=0,
+        cr_lower=0.0,
+        cr_upper=1.0,
+        cr_length=1.0,
+        cr_covers_true=True,
+        cr_empty=False,
+        cr_disconnected=False,
+        selected_controls=2,
+        runtime_seconds=0.1,
+        ps_selection_method="ivqr_aligned",
+        ps_n_selected_controls=2,
+        psa_selection_method="ivqr_aligned_quantile_l1_cv",
+        psa_anchor_rule="grid_quartiles",
+        psa_alpha_anchor_count=3,
+        psa_alpha_anchors="0;1;2",
+        psa_n_selected_controls_anchor_union=1,
+        psa_n_selected_controls_treatment=1,
+        psa_n_selected_controls_final_union=2,
+        psa_share_selected_controls_final_union=0.4,
+        psa_anchor_selection_failed=False,
+        psa_n_failed_anchors=0,
+        psa_quantile_cv_folds=3,
+        psa_quantile_penalty_grid="0.001;0.01",
+        psa_selected_penalties_by_anchor="0:0.01;1:0.01;2:0.01",
+    )
+
+    row = build_simulation_result_row(design, result, np.array([0.0, 0.5, 1.0]))
+
+    assert row["estimator"] == "post_selection_ivqr_aligned"
+    assert row["ps_selection_method"] == "ivqr_aligned"
+    assert row["psa_selection_method"] == "ivqr_aligned_quantile_l1_cv"
+    assert row["psa_anchor_rule"] == "grid_quartiles"
+    assert row["psa_alpha_anchors"] == "0;1;2"
+    assert row["psa_n_selected_controls_final_union"] == 2
     assert set(RESULT_COLUMNS).issubset(row)
 
 

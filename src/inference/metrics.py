@@ -186,6 +186,18 @@ def average_cr_length(df: pd.DataFrame) -> float:
     return average_cr_length_valid_only(df)
 
 
+def average_cr_hull_length(df: pd.DataFrame) -> float:
+    """Return mean valid nonnegative CR hull length over successful rows."""
+    validate_metric_input(df)
+    if "cr_hull_length" not in df.columns:
+        return float(np.nan)
+    successful = _successful_rows(df)
+    values = _to_nonnegative_numeric(successful["cr_hull_length"]).dropna()
+    if values.empty:
+        return float(np.nan)
+    return float(values.mean())
+
+
 def failure_rate(df: pd.DataFrame) -> float:
     """Return the mean failed indicator across all rows."""
     validate_metric_input(df)
@@ -266,11 +278,40 @@ def mean_failed_alpha_count(df: pd.DataFrame) -> float:
     return _mean_nonnegative_numeric(df["failed_alpha_count"])
 
 
+def mean_failed_alpha_rate(df: pd.DataFrame) -> float:
+    validate_metric_input(df)
+    if "failed_alpha_rate" not in df.columns:
+        return float(np.nan)
+    return _mean_nonnegative_numeric(df["failed_alpha_rate"])
+
+
 def mean_selected_controls(df: pd.DataFrame) -> float:
     validate_metric_input(df)
     if "selected_controls" not in df.columns:
         return float(np.nan)
     return _mean_nonnegative_numeric(df["selected_controls"])
+
+
+def critical_value_multiplier(df: pd.DataFrame) -> float:
+    validate_metric_input(df)
+    if "critical_value_multiplier" not in df.columns:
+        return float(np.nan)
+    values = _to_nonnegative_numeric(df["critical_value_multiplier"]).dropna()
+    if values.empty:
+        return float(np.nan)
+    unique_values = values.unique()
+    if unique_values.size == 1:
+        return float(unique_values[0])
+    return float(values.mean())
+
+
+def mean_critical_value_adjusted(df: pd.DataFrame) -> float:
+    validate_metric_input(df)
+    if "critical_value_adjusted" in df.columns:
+        return _mean_nonnegative_numeric(df["critical_value_adjusted"])
+    if "critical_value" in df.columns:
+        return _mean_nonnegative_numeric(df["critical_value"])
+    return float(np.nan)
 
 
 def mean_runtime_seconds(df: pd.DataFrame) -> float:
@@ -319,6 +360,46 @@ def mean_ps_runtime_selection_sec(df: pd.DataFrame) -> float:
     return _mean_optional_nonnegative(df, "ps_runtime_selection_sec")
 
 
+def mean_psq_runtime_quantile_selection_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "psq_runtime_quantile_selection_sec")
+
+
+def mean_psq_runtime_treatment_selection_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "psq_runtime_treatment_selection_sec")
+
+
+def mean_psq_runtime_alpha_loop_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "psq_runtime_alpha_loop_sec")
+
+
+def mean_psq_runtime_confidence_region_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "psq_runtime_confidence_region_sec")
+
+
+def mean_psq_runtime_diagnostics_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "psq_runtime_diagnostics_sec")
+
+
+def mean_psa_runtime_anchor_selection_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "psa_runtime_anchor_selection_sec")
+
+
+def mean_psa_runtime_treatment_selection_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "psa_runtime_treatment_selection_sec")
+
+
+def mean_psa_runtime_alpha_loop_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "psa_runtime_alpha_loop_sec")
+
+
+def mean_psa_runtime_confidence_region_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "psa_runtime_confidence_region_sec")
+
+
+def mean_psa_runtime_diagnostics_sec(df: pd.DataFrame) -> float:
+    return _mean_optional_nonnegative(df, "psa_runtime_diagnostics_sec")
+
+
 def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
     """Summarize one group using successful rows for estimation and CR metrics.
 
@@ -340,6 +421,7 @@ def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
         "coverage_valid_only": coverage_valid_only(df),
         "avg_cr_length": average_cr_length_all(df),
         "avg_cr_length_valid_only": average_cr_length_valid_only(df),
+        "avg_cr_hull_length": average_cr_hull_length(df),
         "failure_rate": failure_rate(df),
         "non_convergence_rate": non_convergence_rate(df),
         "cr_empty_rate": cr_empty_rate(df),
@@ -348,7 +430,10 @@ def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
         "alpha_hat_boundary_rate": alpha_hat_boundary_rate(df),
         "cr_boundary_hit_rate": cr_boundary_hit_rate(df),
         "mean_failed_alpha_count": mean_failed_alpha_count(df),
+        "mean_failed_alpha_rate": mean_failed_alpha_rate(df),
         "mean_selected_controls": mean_selected_controls(df),
+        "critical_value_multiplier": critical_value_multiplier(df),
+        "mean_critical_value_adjusted": mean_critical_value_adjusted(df),
         "mean_runtime_seconds": mean_runtime_seconds(df),
         "mean_runtime_total_sec": mean_runtime_total_sec(df),
         "median_runtime_total_sec": median_runtime_total_sec(df),
@@ -356,6 +441,28 @@ def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
         "mean_runtime_confidence_region_sec": mean_runtime_confidence_region_sec(df),
         "mean_dml_runtime_crossfit_sec": mean_dml_runtime_crossfit_sec(df),
         "mean_ps_runtime_selection_sec": mean_ps_runtime_selection_sec(df),
+        "mean_psq_runtime_quantile_selection_sec": (
+            mean_psq_runtime_quantile_selection_sec(df)
+        ),
+        "mean_psq_runtime_treatment_selection_sec": (
+            mean_psq_runtime_treatment_selection_sec(df)
+        ),
+        "mean_psq_runtime_alpha_loop_sec": mean_psq_runtime_alpha_loop_sec(df),
+        "mean_psq_runtime_confidence_region_sec": (
+            mean_psq_runtime_confidence_region_sec(df)
+        ),
+        "mean_psq_runtime_diagnostics_sec": mean_psq_runtime_diagnostics_sec(df),
+        "mean_psa_runtime_anchor_selection_sec": (
+            mean_psa_runtime_anchor_selection_sec(df)
+        ),
+        "mean_psa_runtime_treatment_selection_sec": (
+            mean_psa_runtime_treatment_selection_sec(df)
+        ),
+        "mean_psa_runtime_alpha_loop_sec": mean_psa_runtime_alpha_loop_sec(df),
+        "mean_psa_runtime_confidence_region_sec": (
+            mean_psa_runtime_confidence_region_sec(df)
+        ),
+        "mean_psa_runtime_diagnostics_sec": mean_psa_runtime_diagnostics_sec(df),
     }
 
 
@@ -372,6 +479,7 @@ __all__ = [
     "average_cr_length_valid_only",
     "average_cr_length_all",
     "average_cr_length",
+    "average_cr_hull_length",
     "failure_rate",
     "non_convergence_rate",
     "cr_empty_rate",
@@ -382,7 +490,10 @@ __all__ = [
     "cr_lower_boundary_hit_rate",
     "cr_upper_boundary_hit_rate",
     "mean_failed_alpha_count",
+    "mean_failed_alpha_rate",
     "mean_selected_controls",
+    "critical_value_multiplier",
+    "mean_critical_value_adjusted",
     "mean_runtime_seconds",
     "mean_runtime_total_sec",
     "median_runtime_total_sec",
@@ -390,5 +501,15 @@ __all__ = [
     "mean_runtime_confidence_region_sec",
     "mean_dml_runtime_crossfit_sec",
     "mean_ps_runtime_selection_sec",
+    "mean_psq_runtime_quantile_selection_sec",
+    "mean_psq_runtime_treatment_selection_sec",
+    "mean_psq_runtime_alpha_loop_sec",
+    "mean_psq_runtime_confidence_region_sec",
+    "mean_psq_runtime_diagnostics_sec",
+    "mean_psa_runtime_anchor_selection_sec",
+    "mean_psa_runtime_treatment_selection_sec",
+    "mean_psa_runtime_alpha_loop_sec",
+    "mean_psa_runtime_confidence_region_sec",
+    "mean_psa_runtime_diagnostics_sec",
     "summarize_group",
 ]

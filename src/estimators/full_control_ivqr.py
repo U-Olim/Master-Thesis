@@ -16,6 +16,7 @@ import numpy as np
 from dgp.designs import SimData
 from estimators.base import EstimationResult
 from estimators.ch_inverse_ivqr import estimate_ch_ivqr_controls
+from inference.confidence_regions import validate_critical_value_multiplier
 from inference.alpha_grid import (
     DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN,
@@ -90,6 +91,7 @@ def estimate_full_control_ivqr(
     alpha_max: float = DEFAULT_ALPHA_MAX,
     alpha_step: float = DEFAULT_ALPHA_STEP,
     confidence_level: float = 0.95,
+    critical_value_multiplier: float = 1.0,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     gmm_ridge: float = 1e-8,
 ) -> EstimationResult:
@@ -107,6 +109,9 @@ def estimate_full_control_ivqr(
     max_iter = _validate_positive_int("max_iter", max_iter)
     gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
     confidence_level = _validate_confidence_level(confidence_level)
+    critical_value_multiplier = validate_critical_value_multiplier(
+        critical_value_multiplier
+    )
     _ = gmm_ridge  # compatibility only; CH inverse-IVQR does not use this ridge.
     if alphas is None:
         alpha_min, alpha_max, alpha_step = _validate_alpha_grid_bounds(
@@ -126,6 +131,7 @@ def estimate_full_control_ivqr(
         alpha_max=alpha_max,
         alpha_step=alpha_step,
         confidence_level=confidence_level,
+        critical_value_multiplier=critical_value_multiplier,
         max_iter=max_iter,
         selected_controls=x.shape[1],
     )

@@ -29,12 +29,14 @@ from sklearn.preprocessing import StandardScaler
 from dgp.designs import SimData
 from estimators.base import EstimationResult, estimation_result_diagnostic_kwargs
 from inference.confidence_regions import (
+    adjust_critical_value,
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
     merge_region_and_grid_diagnostics,
     sanitize_grid_statistics,
     summarize_alpha_grid_diagnostics,
+    validate_critical_value_multiplier,
 )
 from inference.alpha_grid import (
     DEFAULT_ALPHA_MAX,
@@ -551,6 +553,7 @@ def estimate_dml_ivqr(
     alpha_max: float = DEFAULT_ALPHA_MAX,
     alpha_step: float = DEFAULT_ALPHA_STEP,
     confidence_level: float = 0.95,
+    critical_value_multiplier: float = 1.0,
     k_folds: int = 5,
     fold_random_state: int | None = 123,
     quantile_penalty: float = 0.01,
@@ -568,6 +571,9 @@ def estimate_dml_ivqr(
     crossfit_sec = float("nan")
     alpha_loop_sec = float("nan")
     validate_tau(tau)
+    critical_value_multiplier = validate_critical_value_multiplier(
+        critical_value_multiplier
+    )
     if not isinstance(use_cache, bool):
         raise ValueError("use_cache must be a boolean")
     fold_random_state = _validate_optional_random_state(fold_random_state)
@@ -693,19 +699,24 @@ def estimate_dml_ivqr(
     confidence_region_start = perf_counter()
     alpha_hat, min_statistic, at_boundary = argmin_grid(alphas, statistics)
     critical = critical_value_chi_square(confidence_level, df=1)
-    accepted_mask = statistics <= critical
+    adjusted_critical = adjust_critical_value(critical, critical_value_multiplier)
+    accepted_mask = statistics <= adjusted_critical
     diagnostics = summarize_alpha_grid_diagnostics(
         alpha_grid=alphas,
         accepted_mask=accepted_mask,
         alpha_hat=alpha_hat,
         failed_alpha_count=num_failed,
         test_stats=statistics,
-        critical_value=critical,
+        critical_value=adjusted_critical,
+        critical_value_nominal=critical,
+        critical_value_multiplier=critical_value_multiplier,
+        critical_value_adjusted=adjusted_critical,
     )
     region = invert_score_test(
         alphas=alphas,
         statistics=statistics,
         critical_value=critical,
+        critical_value_multiplier=critical_value_multiplier,
         alpha_true=data.alpha_true,
         statistic_reference=None,
         inversion_type="absolute",

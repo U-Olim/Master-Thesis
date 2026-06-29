@@ -21,10 +21,11 @@ from simulation._validation import (
     validate_k_folds_for_designs,
     validate_nonnegative_float,
     validate_optional_nonnegative_int,
+    validate_positive_float,
     validate_output_file_path,
     validate_positive_int,
 )
-from simulation.config import DEFAULT_N_JOBS
+from simulation.config import DEFAULT_CRITICAL_VALUE_MULTIPLIER, DEFAULT_N_JOBS
 from simulation.runner import (
     DEFAULT_SIMULATION_ESTIMATORS,
     DESIGN_KEY_COLUMNS,
@@ -59,6 +60,7 @@ class SimulationWorkerArgs:
     dml_ridge_alpha: float
     dml_fold_random_state: int | None
     gmm_ridge: float
+    critical_value_multiplier: float
     show_quantreg_warnings: bool
 
 
@@ -76,6 +78,7 @@ def _run_design_worker(args: SimulationWorkerArgs) -> list[dict[str, object]]:
         dml_ridge_alpha=args.dml_ridge_alpha,
         dml_fold_random_state=args.dml_fold_random_state,
         gmm_ridge=args.gmm_ridge,
+        critical_value_multiplier=args.critical_value_multiplier,
         show_quantreg_warnings=args.show_quantreg_warnings,
     )
 
@@ -119,6 +122,7 @@ def run_simulation_batch(
     dml_ridge_alpha: float = 1.0,
     dml_fold_random_state: int | None = None,
     gmm_ridge: float = 1e-8,
+    critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     n_jobs: int = DEFAULT_N_JOBS,
     show_quantreg_warnings: bool = False,
 ) -> pd.DataFrame:
@@ -135,6 +139,10 @@ def run_simulation_batch(
     )
     dml_ridge_alpha = validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
     gmm_ridge = validate_nonnegative_float("gmm_ridge", gmm_ridge)
+    critical_value_multiplier = validate_positive_float(
+        "critical_value_multiplier",
+        critical_value_multiplier,
+    )
     append = validate_bool("append", append)
     show_quantreg_warnings = validate_bool(
         "show_quantreg_warnings", show_quantreg_warnings
@@ -163,6 +171,7 @@ def run_simulation_batch(
             dml_ridge_alpha=dml_ridge_alpha,
             dml_fold_random_state=dml_fold_random_state,
             gmm_ridge=gmm_ridge,
+            critical_value_multiplier=critical_value_multiplier,
             show_quantreg_warnings=show_quantreg_warnings,
         )
         for design in designs
@@ -174,7 +183,13 @@ def run_simulation_batch(
                 rows.extend(_run_design_worker(args))
             except Exception as exc:
                 rows.extend(
-                    failure_rows_for_design(args.design, estimators, alphas, exc)
+                    failure_rows_for_design(
+                        args.design,
+                        estimators,
+                        alphas,
+                        exc,
+                        critical_value_multiplier=critical_value_multiplier,
+                    )
                 )
     else:
         max_workers = min(n_jobs, len(worker_args))
@@ -188,7 +203,15 @@ def run_simulation_batch(
                 try:
                     rows.extend(future.result())
                 except Exception as exc:
-                    rows.extend(failure_rows_for_design(design, estimators, alphas, exc))
+                    rows.extend(
+                        failure_rows_for_design(
+                            design,
+                            estimators,
+                            alphas,
+                            exc,
+                            critical_value_multiplier=critical_value_multiplier,
+                        )
+                    )
 
     if n_jobs > 1:
         rows.sort(key=_row_sort_key)

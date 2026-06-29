@@ -10,6 +10,7 @@ from reporting.summaries import (
     SUMMARY_METRIC_COLUMNS,
     aggregate_results,
     aggregate_results_file,
+    compare_result_files,
     incomplete_groups,
     load_raw_results,
     save_summary,
@@ -36,6 +37,7 @@ def test_aggregate_results_includes_strict_and_valid_only_length_metrics() -> No
 
     assert row["avg_cr_length"] == pytest.approx(1.5)
     assert row["avg_cr_length_valid_only"] == pytest.approx(1.5)
+    assert row["avg_cr_hull_length"] == pytest.approx(1.8)
 
 def test_aggregate_results_dml_metrics() -> None:
     summary = aggregate_results(raw_results(), expected_replications=2)
@@ -53,6 +55,7 @@ def test_aggregate_results_dml_metrics() -> None:
     assert row["boundary_rate"] == pytest.approx(0.5)
     assert row["alpha_hat_boundary_rate"] == pytest.approx(0.5)
     assert row["cr_boundary_hit_rate"] == pytest.approx(0.5)
+    assert row["mean_failed_alpha_rate"] == pytest.approx(0.0)
     assert row["observed_replications"] == 2
     assert row["expected_replications"] == 2
     assert row["completion_rate"] == pytest.approx(1.0)
@@ -70,6 +73,7 @@ def test_aggregate_results_post_selection_metrics() -> None:
     assert row["coverage_valid_only"] == pytest.approx(0.0)
     assert row["alpha_hat_boundary_rate"] == pytest.approx(0.0)
     assert row["cr_boundary_hit_rate"] == pytest.approx(1.0)
+    assert row["mean_failed_alpha_rate"] == pytest.approx(0.1)
     assert row["mean_selected_controls"] == pytest.approx(3.5)
 
 def test_aggregate_results_ignores_status_failed_rows_for_performance_metrics() -> None:
@@ -130,6 +134,33 @@ def test_aggregate_results_file_writes_summary_csv(tmp_path: Path) -> None:
     assert len(summary) == 2
     assert len(written) == 2
     assert set(written["estimator"]) == {"dml_ivqr", "post_selection_ivqr"}
+
+def test_compare_result_files_labels_separate_and_combined_raw_files(
+    tmp_path: Path,
+) -> None:
+    baseline = raw_results().loc[
+        lambda df: df["estimator"] == "post_selection_ivqr"
+    ].copy()
+    wide = raw_results().copy()
+    baseline_path = tmp_path / "baseline_post.csv"
+    wide_path = tmp_path / "wide_combined.csv"
+    baseline.to_csv(baseline_path, index=False)
+    wide.to_csv(wide_path, index=False)
+
+    comparison = compare_result_files(
+        [baseline_path, wide_path],
+        ["grid21_post", "grid31_wide"],
+        expected_replications=2,
+    )
+
+    assert comparison["run_label"].tolist() == [
+        "grid21_post",
+        "grid31_wide",
+        "grid31_wide",
+    ]
+    assert set(comparison["estimator"]) == {"dml_ivqr", "post_selection_ivqr"}
+    assert "avg_cr_hull_length" in comparison.columns
+    assert "mean_failed_alpha_rate" in comparison.columns
 
 def test_incomplete_groups_returns_completion_rate_below_one() -> None:
     summary = aggregate_results(raw_results(), expected_replications=3)

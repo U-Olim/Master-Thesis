@@ -6,12 +6,14 @@ import pytest
 from inference.confidence_regions import (
     ConfidenceRegion,
     FAILED_ALPHA_STATISTIC,
+    adjust_critical_value,
     argmin_grid,
     critical_value_chi_square,
     invert_score_test,
     merge_region_and_grid_diagnostics,
     sanitize_grid_statistics,
     summarize_alpha_grid_diagnostics,
+    validate_critical_value_multiplier,
 )
 
 
@@ -31,6 +33,25 @@ def test_critical_value_chi_square_validates_level(level: float) -> None:
 def test_critical_value_chi_square_validates_df(df: int) -> None:
     with pytest.raises(ValueError):
         critical_value_chi_square(level=0.95, df=df)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("multiplier", [1.0, 1.1])
+def test_validate_critical_value_multiplier_accepts_positive_finite(
+    multiplier: float,
+) -> None:
+    assert validate_critical_value_multiplier(multiplier) == pytest.approx(multiplier)
+
+
+@pytest.mark.parametrize("multiplier", [True, 0.0, -1.0, np.nan, np.inf])
+def test_validate_critical_value_multiplier_rejects_invalid(
+    multiplier: float,
+) -> None:
+    with pytest.raises(ValueError, match="critical_value_multiplier"):
+        validate_critical_value_multiplier(multiplier)
+
+
+def test_adjust_critical_value_multiplies_nominal_threshold() -> None:
+    assert adjust_critical_value(2.0, 1.5) == pytest.approx(3.0)
 
 
 def test_argmin_grid_returns_interior_minimum() -> None:
@@ -144,6 +165,9 @@ def test_alpha_grid_diagnostics_test_statistics() -> None:
     assert diagnostics["max_test_stat"] == pytest.approx(5.0)
     assert diagnostics["test_stat_at_alpha_hat"] == pytest.approx(1.0)
     assert diagnostics["critical_value"] == pytest.approx(3.84)
+    assert diagnostics["critical_value_nominal"] == pytest.approx(3.84)
+    assert diagnostics["critical_value_multiplier"] == pytest.approx(1.0)
+    assert diagnostics["critical_value_adjusted"] == pytest.approx(3.84)
 
 
 def _confidence_region(
@@ -168,6 +192,9 @@ def _confidence_region(
         covers_true=None,
         selected_grid=np.array([], dtype=float),
         critical_value=3.84,
+        critical_value_nominal=3.84,
+        critical_value_multiplier=1.0,
+        critical_value_adjusted=3.84,
         statistic_reference=0.0,
     )
 
@@ -297,6 +324,48 @@ def test_invert_score_test_connected_region_includes_critical_boundary() -> None
     assert region.is_disconnected is False
     assert region.covers_true is True
     assert region.critical_value == pytest.approx(4.0)
+    assert region.critical_value_nominal == pytest.approx(4.0)
+    assert region.critical_value_multiplier == pytest.approx(1.0)
+    assert region.critical_value_adjusted == pytest.approx(4.0)
+
+
+def test_invert_score_test_uses_adjusted_critical_value_for_acceptance() -> None:
+    alphas = np.array([0.0, 1.0, 2.0])
+    stats = np.array([1.0, 2.0, 3.0])
+
+    nominal = invert_score_test(alphas, stats, critical_value=2.0)
+    adjusted = invert_score_test(
+        alphas,
+        stats,
+        critical_value=2.0,
+        critical_value_multiplier=1.5,
+    )
+
+    assert nominal.accepted_alphas == (0.0, 1.0)
+    assert adjusted.accepted_alphas == (0.0, 1.0, 2.0)
+    assert adjusted.critical_value == pytest.approx(3.0)
+    assert adjusted.critical_value_nominal == pytest.approx(2.0)
+    assert adjusted.critical_value_multiplier == pytest.approx(1.5)
+    assert adjusted.critical_value_adjusted == pytest.approx(3.0)
+    assert adjusted.length >= nominal.length
+
+
+def test_critical_value_multiplier_does_not_change_argmin_grid() -> None:
+    alphas = np.array([0.0, 1.0, 2.0])
+    stats = np.array([2.0, 0.5, 3.0])
+
+    alpha_hat_nominal, min_nominal, _ = argmin_grid(alphas, stats)
+    _ = invert_score_test(alphas, stats, critical_value=1.0)
+    _ = invert_score_test(
+        alphas,
+        stats,
+        critical_value=1.0,
+        critical_value_multiplier=3.0,
+    )
+    alpha_hat_adjusted, min_adjusted, _ = argmin_grid(alphas, stats)
+
+    assert alpha_hat_adjusted == pytest.approx(alpha_hat_nominal)
+    assert min_adjusted == pytest.approx(min_nominal)
 
 
 def test_invert_score_test_singleton_region() -> None:

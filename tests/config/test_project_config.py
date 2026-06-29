@@ -9,10 +9,15 @@ from simulation.config import (
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_ALPHA_MIN,
     DEFAULT_BATCH_SIZE,
+    DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     DEFAULT_DML_K_FOLDS,
+    DEFAULT_MAIN_ESTIMATORS,
     DEFAULT_N_JOBS,
     DEFAULT_OUTPUT,
+    DEFAULT_QUANTILE_SELECTION_ALPHAS,
+    DEFAULT_QUANTILE_SELECTION_CV_FOLDS,
     DEFAULT_QUANTREG_MAX_ITER,
+    DEFAULT_SELECTION_COEF_TOL,
     FAST_FIGURES_DIR,
     FAST_OUTPUT,
     FAST_SUMMARY_OUTPUT,
@@ -153,6 +158,16 @@ def test_estimation_execution_defaults_are_positive_integers() -> None:
     assert DEFAULT_BATCH_SIZE == 10
 
 
+def test_quantile_selection_defaults_are_small_and_positive() -> None:
+    assert DEFAULT_QUANTILE_SELECTION_ALPHAS == (0.001, 0.003, 0.01, 0.03, 0.1)
+    assert DEFAULT_QUANTILE_SELECTION_CV_FOLDS == 3
+    assert DEFAULT_SELECTION_COEF_TOL == pytest.approx(1e-10)
+
+
+def test_default_critical_value_multiplier_is_nominal() -> None:
+    assert DEFAULT_CRITICAL_VALUE_MULTIPLIER == pytest.approx(1.0)
+
+
 def test_full_control_benchmark_design_constants() -> None:
     assert FULL_CONTROL_BENCHMARK_DGPS == ("dgp1",)
     assert FULL_CONTROL_BENCHMARK_N_VALUES == (500, 1000)
@@ -190,7 +205,14 @@ def test_main_simulation_design_values() -> None:
 
 
 def test_estimator_name_constants() -> None:
-    assert MAIN_ESTIMATORS == ("oracle", "dml", "post_selection")
+    assert DEFAULT_MAIN_ESTIMATORS == ("oracle", "dml", "post_selection")
+    assert MAIN_ESTIMATORS == (
+        "oracle",
+        "dml",
+        "post_selection",
+        "post_selection_quantile",
+        "post_selection_ivqr_aligned",
+    )
     assert FULL_CONTROL_BENCHMARK_ESTIMATOR == "full_control_ivqr"
 
 

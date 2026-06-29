@@ -42,6 +42,7 @@ from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_MIN,
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_BATCH_SIZE,
+    DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     DEFAULT_DML_K_FOLDS,
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
@@ -61,6 +62,7 @@ from simulation.config import (  # noqa: E402
     R_MAIN,
     TAUS,
 )
+from simulation._validation import validate_positive_float  # noqa: E402
 from simulation.estimators_config import (  # noqa: E402
     MAIN_SCENARIO_ESTIMATORS,
     normalize_estimator_names,
@@ -98,6 +100,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--alpha-min", type=float, default=DEFAULT_ALPHA_MIN)
     parser.add_argument("--alpha-max", type=float, default=DEFAULT_ALPHA_MAX)
     parser.add_argument("--alpha-grid-size", type=int, default=None)
+    parser.add_argument(
+        "--critical-value-multiplier",
+        type=float,
+        default=DEFAULT_CRITICAL_VALUE_MULTIPLIER,
+        help=(
+            "Multiplier applied to the nominal chi-square critical value when "
+            "constructing IVQR confidence regions. Default 1.0."
+        ),
+    )
     parser.add_argument("--dml-k-folds", type=int, default=DEFAULT_DML_K_FOLDS)
     parser.add_argument(
         "--quantreg-max-iter", type=int, default=DEFAULT_QUANTREG_MAX_ITER
@@ -187,6 +198,10 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--quantreg-max-iter must be at least 1")
     if args.alpha_max <= args.alpha_min:
         raise ValueError("--alpha-max must exceed --alpha-min")
+    args.critical_value_multiplier = validate_positive_float(
+        "critical_value_multiplier",
+        args.critical_value_multiplier,
+    )
 
 
 def _count_rows(path: Path) -> int | None:
@@ -213,6 +228,7 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
         "alpha_min": args.alpha_min,
         "alpha_max": args.alpha_max,
         "alpha_grid_size": args.alpha_grid_size,
+        "critical_value_multiplier": args.critical_value_multiplier,
         "estimators": list(args.estimators),
         "dml_k_folds": args.dml_k_folds,
         "quantreg_max_iter": args.quantreg_max_iter,
@@ -241,7 +257,10 @@ def _print_dry_run(
         alpha_grid_size=alpha_grid_size,
         output=args.output,
         resume=args.resume,
-        extra_lines=(f"Running estimators: {', '.join(args.estimators)}",),
+        extra_lines=(
+            f"Running estimators: {', '.join(args.estimators)}",
+            f"critical_value_multiplier = {args.critical_value_multiplier:g}",
+        ),
     )
 
 
@@ -364,6 +383,7 @@ def main() -> None:
             append=append,
             quantreg_max_iter=args.quantreg_max_iter,
             dml_k_folds=args.dml_k_folds,
+            critical_value_multiplier=args.critical_value_multiplier,
             n_jobs=args.n_jobs,
             show_quantreg_warnings=args.show_quantreg_warnings,
         )

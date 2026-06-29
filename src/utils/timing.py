@@ -41,6 +41,26 @@ POST_SELECTION_RUNTIME_STAGES: tuple[str, ...] = (
     "ps_runtime_diagnostics_sec",
 )
 
+POST_SELECTION_QUANTILE_RUNTIME_STAGES: tuple[str, ...] = (
+    "psq_runtime_total_sec",
+    "psq_runtime_quantile_selection_sec",
+    "psq_runtime_treatment_selection_sec",
+    "psq_runtime_alpha_loop_sec",
+    "psq_runtime_score_eval_sec",
+    "psq_runtime_confidence_region_sec",
+    "psq_runtime_diagnostics_sec",
+)
+
+POST_SELECTION_ALIGNED_RUNTIME_STAGES: tuple[str, ...] = (
+    "psa_runtime_total_sec",
+    "psa_runtime_anchor_selection_sec",
+    "psa_runtime_treatment_selection_sec",
+    "psa_runtime_alpha_loop_sec",
+    "psa_runtime_score_eval_sec",
+    "psa_runtime_confidence_region_sec",
+    "psa_runtime_diagnostics_sec",
+)
+
 ORACLE_RUNTIME_STAGES: tuple[str, ...] = (
     "oracle_runtime_total_sec",
     "oracle_runtime_alpha_loop_sec",
@@ -59,6 +79,8 @@ RUNTIME_COLUMNS: tuple[str, ...] = (
     GENERAL_RUNTIME_STAGES
     + DML_RUNTIME_STAGES
     + POST_SELECTION_RUNTIME_STAGES
+    + POST_SELECTION_QUANTILE_RUNTIME_STAGES
+    + POST_SELECTION_ALIGNED_RUNTIME_STAGES
     + ORACLE_RUNTIME_STAGES
     + FULL_CONTROL_RUNTIME_STAGES
 )
@@ -88,6 +110,20 @@ class RuntimeDiagnosticColumns(TypedDict, total=False):
     ps_runtime_score_eval_sec: float
     ps_runtime_confidence_region_sec: float
     ps_runtime_diagnostics_sec: float
+    psq_runtime_total_sec: float
+    psq_runtime_quantile_selection_sec: float
+    psq_runtime_treatment_selection_sec: float
+    psq_runtime_alpha_loop_sec: float
+    psq_runtime_score_eval_sec: float
+    psq_runtime_confidence_region_sec: float
+    psq_runtime_diagnostics_sec: float
+    psa_runtime_total_sec: float
+    psa_runtime_anchor_selection_sec: float
+    psa_runtime_treatment_selection_sec: float
+    psa_runtime_alpha_loop_sec: float
+    psa_runtime_score_eval_sec: float
+    psa_runtime_confidence_region_sec: float
+    psa_runtime_diagnostics_sec: float
     oracle_runtime_total_sec: float
     oracle_runtime_alpha_loop_sec: float
     oracle_runtime_score_eval_sec: float
@@ -150,6 +186,20 @@ def empty_runtime_columns() -> RuntimeDiagnosticColumns:
         "ps_runtime_score_eval_sec": missing,
         "ps_runtime_confidence_region_sec": missing,
         "ps_runtime_diagnostics_sec": missing,
+        "psq_runtime_total_sec": missing,
+        "psq_runtime_quantile_selection_sec": missing,
+        "psq_runtime_treatment_selection_sec": missing,
+        "psq_runtime_alpha_loop_sec": missing,
+        "psq_runtime_score_eval_sec": missing,
+        "psq_runtime_confidence_region_sec": missing,
+        "psq_runtime_diagnostics_sec": missing,
+        "psa_runtime_total_sec": missing,
+        "psa_runtime_anchor_selection_sec": missing,
+        "psa_runtime_treatment_selection_sec": missing,
+        "psa_runtime_alpha_loop_sec": missing,
+        "psa_runtime_score_eval_sec": missing,
+        "psa_runtime_confidence_region_sec": missing,
+        "psa_runtime_diagnostics_sec": missing,
         "oracle_runtime_total_sec": missing,
         "oracle_runtime_alpha_loop_sec": missing,
         "oracle_runtime_score_eval_sec": missing,
@@ -182,6 +232,9 @@ def estimator_runtime_columns(
     selection_sec: float = np.nan,
     first_stage_sec: float = np.nan,
     diagnostics_sec: float = np.nan,
+    quantile_selection_sec: float = np.nan,
+    treatment_selection_sec: float = np.nan,
+    anchor_selection_sec: float = np.nan,
 ) -> RuntimeDiagnosticColumns:
     """Build complete runtime columns for one estimator result."""
     total_sec = _nonnegative_or_nan(total_sec)
@@ -195,6 +248,9 @@ def estimator_runtime_columns(
     selection_sec = _nonnegative_or_nan(selection_sec)
     first_stage_sec = _nonnegative_or_nan(first_stage_sec)
     diagnostics_sec = _nonnegative_or_nan(diagnostics_sec)
+    quantile_selection_sec = _nonnegative_or_nan(quantile_selection_sec)
+    treatment_selection_sec = _nonnegative_or_nan(treatment_selection_sec)
+    anchor_selection_sec = _nonnegative_or_nan(anchor_selection_sec)
 
     columns = empty_runtime_columns()
     columns["runtime_total_sec"] = total_sec
@@ -212,6 +268,9 @@ def estimator_runtime_columns(
         selection_sec,
         first_stage_sec,
         diagnostics_sec,
+        quantile_selection_sec,
+        treatment_selection_sec,
+        anchor_selection_sec,
         crossfit_sec,
     ]
     finite_known = [value for value in known if np.isfinite(value)]
@@ -243,6 +302,30 @@ def estimator_runtime_columns(
                 "ps_runtime_diagnostics_sec": diagnostics_sec,
             }
         )
+    elif estimator == "post_selection_quantile":
+        columns.update(
+            {
+                "psq_runtime_total_sec": total_sec,
+                "psq_runtime_quantile_selection_sec": quantile_selection_sec,
+                "psq_runtime_treatment_selection_sec": treatment_selection_sec,
+                "psq_runtime_alpha_loop_sec": alpha_loop_sec,
+                "psq_runtime_score_eval_sec": score_eval_sec,
+                "psq_runtime_confidence_region_sec": confidence_region_sec,
+                "psq_runtime_diagnostics_sec": diagnostics_sec,
+            }
+        )
+    elif estimator == "post_selection_ivqr_aligned":
+        columns.update(
+            {
+                "psa_runtime_total_sec": total_sec,
+                "psa_runtime_anchor_selection_sec": anchor_selection_sec,
+                "psa_runtime_treatment_selection_sec": treatment_selection_sec,
+                "psa_runtime_alpha_loop_sec": alpha_loop_sec,
+                "psa_runtime_score_eval_sec": score_eval_sec,
+                "psa_runtime_confidence_region_sec": confidence_region_sec,
+                "psa_runtime_diagnostics_sec": diagnostics_sec,
+            }
+        )
     elif estimator == "oracle":
         columns.update(
             {
@@ -270,6 +353,8 @@ __all__ = [
     "GENERAL_RUNTIME_STAGES",
     "ORACLE_RUNTIME_STAGES",
     "POST_SELECTION_RUNTIME_STAGES",
+    "POST_SELECTION_QUANTILE_RUNTIME_STAGES",
+    "POST_SELECTION_ALIGNED_RUNTIME_STAGES",
     "RUNTIME_COLUMNS",
     "RuntimeDiagnosticColumns",
     "RuntimeProfile",
