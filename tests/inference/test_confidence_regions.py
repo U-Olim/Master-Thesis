@@ -113,6 +113,15 @@ def test_alpha_grid_diagnostics_one_contiguous_confidence_region() -> None:
     assert diagnostics["cr_disconnected"] is False
 
 
+def test_alpha_grid_diagnostics_rejects_non_bool_accepted_mask() -> None:
+    with pytest.raises(ValueError, match="accepted_mask must be boolean"):
+        summarize_alpha_grid_diagnostics(
+            alpha_grid=np.array([-1.0, 0.0, 1.0]),
+            accepted_mask=np.array([0, 1, 0]),
+            alpha_hat=0.0,
+        )
+
+
 def test_alpha_grid_diagnostics_two_disconnected_blocks() -> None:
     diagnostics = summarize_alpha_grid_diagnostics(
         alpha_grid=np.array([-1.0, 0.0, 1.0, 2.0, 3.0]),
@@ -465,7 +474,7 @@ def test_invert_score_test_sorts_unsorted_alpha_grid_with_aligned_statistics() -
     assert region.covers_true is True
 
 
-def test_invert_score_test_absolute_ignores_statistic_reference() -> None:
+def test_invert_score_test_defaults_statistic_reference_to_zero() -> None:
     alphas = np.array([0.0, 1.0, 2.0])
     stats = np.array([10.0, 1.0, 10.0])
 
@@ -473,12 +482,37 @@ def test_invert_score_test_absolute_ignores_statistic_reference() -> None:
         alphas,
         stats,
         critical_value=3.84,
-        statistic_reference=1.0,
         inversion_type="absolute",
     )
 
     assert region.selected_grid.tolist() == [1.0]
     assert region.statistic_reference == pytest.approx(0.0)
+
+
+def test_invert_score_test_honors_provided_statistic_reference() -> None:
+    alphas = np.array([0.0, 1.0, 2.0, 3.0])
+    stats = np.array([4.0, 4.5, 5.0, 7.0])
+
+    nominal = invert_score_test(
+        alphas,
+        stats,
+        critical_value=4.0,
+        statistic_reference=0.0,
+        inversion_type="absolute",
+    )
+    shifted = invert_score_test(
+        alphas,
+        stats,
+        critical_value=4.0,
+        statistic_reference=1.0,
+        inversion_type="absolute",
+    )
+
+    assert nominal.selected_grid.tolist() == [0.0]
+    assert shifted.selected_grid.tolist() == [0.0, 1.0, 2.0]
+    assert nominal.blocks == ((0.0, 0.0),)
+    assert shifted.blocks == ((0.0, 2.0),)
+    assert shifted.statistic_reference == pytest.approx(1.0)
 
 
 def test_invert_score_test_absolute_accepts_statistics_at_or_below_critical_value() -> None:
@@ -489,12 +523,24 @@ def test_invert_score_test_absolute_accepts_statistics_at_or_below_critical_valu
         alphas,
         stats,
         critical_value=2.0,
-        statistic_reference=True,
         inversion_type="absolute",
     )
 
     assert region.selected_grid.tolist() == [0.0, 2.0]
     assert region.statistic_reference == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("statistic_reference", [True, np.nan, np.inf, -np.inf])
+def test_invert_score_test_rejects_invalid_statistic_reference(
+    statistic_reference: float,
+) -> None:
+    with pytest.raises(ValueError, match="statistic_reference must be finite"):
+        invert_score_test(
+            np.array([0.0, 1.0, 2.0]),
+            np.array([1.0, 2.0, 3.0]),
+            critical_value=2.0,
+            statistic_reference=statistic_reference,
+        )
 
 
 def test_invert_score_test_rejects_unsupported_inversion_type() -> None:

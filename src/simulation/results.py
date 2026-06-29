@@ -314,7 +314,7 @@ def post_selection_aligned_diagnostics(result: EstimationResult) -> dict[str, An
 
 def runtime_diagnostics(result: EstimationResult) -> dict[str, Any]:
     """Return runtime diagnostics with missing stage timings filled."""
-    diagnostics = empty_runtime_diagnostics()
+    diagnostics: dict[str, Any] = dict(empty_runtime_diagnostics())
     for name in RUNTIME_COLUMNS:
         value = getattr(result, name)
         if value is not None:

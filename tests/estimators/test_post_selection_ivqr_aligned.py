@@ -7,6 +7,7 @@ from dgp import generate_data
 from dgp.designs import Design
 import estimators.post_selection_ivqr_aligned as psa_module
 from estimators.post_selection_ivqr_aligned import (
+    AnchorSelectionResult,
     estimate_post_selection_ivqr_aligned,
     select_controls_ivqr_aligned,
     summarize_aligned_post_selection_diagnostics,
@@ -75,6 +76,45 @@ def test_summarize_aligned_post_selection_diagnostics() -> None:
     assert diagnostics["psa_share_selected_controls_final_union"] == pytest.approx(0.3)
     assert diagnostics["psa_quantile_cv_folds"] == 3
     assert diagnostics["psa_quantile_penalty_grid"] == "0.001;0.01"
+
+
+def test_summarize_aligned_post_selection_formats_optional_anchor_penalties() -> None:
+    diagnostics = summarize_aligned_post_selection_diagnostics(
+        n_controls=5,
+        alpha_anchors=np.array([0.0, 1.0, 2.0]),
+        selected_anchor_union=[0],
+        selected_treatment=[1],
+        selected_final=[0, 1],
+        anchor_results=(
+            AnchorSelectionResult(
+                alpha_anchor=0.0,
+                selected_indices=np.array([0]),
+                penalty_selected=0.01,
+                failed=False,
+                message="ok",
+            ),
+            AnchorSelectionResult(
+                alpha_anchor=1.0,
+                selected_indices=np.array([], dtype=int),
+                penalty_selected=None,
+                failed=True,
+                message="forced failure",
+            ),
+            AnchorSelectionResult(
+                alpha_anchor=2.0,
+                selected_indices=np.array([1]),
+                penalty_selected=None,
+                failed=False,
+                message="ok without penalty",
+            ),
+        ),
+        quantile_cv_folds=3,
+        quantile_penalty_grid=(0.001, 0.01),
+    )
+
+    assert diagnostics["psa_selected_penalties_by_anchor"] == (
+        "0:0.01;1:failed;2:missing"
+    )
 
 
 def test_estimate_post_selection_ivqr_aligned_returns_diagnostics() -> None:

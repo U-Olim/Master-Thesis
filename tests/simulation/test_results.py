@@ -26,6 +26,7 @@ from simulation.results import (
     empty_post_selection_diagnostics,
     empty_post_selection_aligned_diagnostics,
     empty_post_selection_quantile_diagnostics,
+    runtime_diagnostics,
 )
 from tests.helpers import SIMULATION_RESULT_REQUIRED_KEYS
 from utils.timing import RUNTIME_COLUMNS
@@ -216,6 +217,37 @@ def test_result_row_uses_authoritative_region_geometry() -> None:
     assert row["cr_disconnected"] is True
     assert "cr_accepted_alpha_count" in row
     assert "cr_hits_any_boundary" in row
+
+
+def test_runtime_diagnostics_returns_plain_dict() -> None:
+    result = EstimationResult(
+        estimator="oracle",
+        alpha_hat=0.0,
+        alpha_true=0.0,
+        tau=0.5,
+        converged=True,
+        failed=False,
+        message="ok",
+        objective_value=0.0,
+        at_grid_boundary=False,
+        alpha_grid_size=3,
+        failed_alpha_count=0,
+        cr_lower=0.0,
+        cr_upper=1.0,
+        cr_length=1.0,
+        cr_covers_true=True,
+        cr_empty=False,
+        cr_disconnected=False,
+        selected_controls=5,
+        runtime_seconds=0.1,
+        runtime_total_sec=0.1,
+    )
+
+    diagnostics = runtime_diagnostics(result)
+
+    assert isinstance(diagnostics, dict)
+    assert set(RUNTIME_COLUMNS).issubset(diagnostics)
+    assert diagnostics["runtime_total_sec"] == pytest.approx(0.1)
 
 
 def test_empty_post_selection_diagnostics_has_all_expected_defaults() -> None:

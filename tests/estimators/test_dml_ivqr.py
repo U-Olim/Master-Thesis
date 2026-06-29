@@ -682,6 +682,8 @@ def test_estimate_dml_ivqr_cache_failure_is_terminal(
     assert result.failed is True
     assert "Fold cache construction failed: forced cache failure" in result.message
     assert calls == {"cache": 1, "uncached": 0}
+    assert result.dml_runtime_crossfit_sec is not None
+    assert np.isfinite(result.dml_runtime_crossfit_sec)
 
 
 @pytest.mark.parametrize(

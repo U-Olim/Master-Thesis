@@ -72,6 +72,13 @@ _VALID_QUANTILE_SOLVERS: tuple[QuantileSolver, ...] = (
 )
 
 
+def _elapsed_since(start: float | None) -> float:
+    """Return elapsed seconds since start, or NaN if the timer was not started."""
+    if start is None:
+        return float("nan")
+    return perf_counter() - start
+
+
 def _validate_nonnegative_float(name: str, value: float) -> float:
     if isinstance(value, bool):
         raise ValueError(f"{name} must be a finite nonnegative number")
@@ -570,6 +577,7 @@ def estimate_dml_ivqr(
     start = perf_counter()
     crossfit_sec = float("nan")
     alpha_loop_sec = float("nan")
+    crossfit_start: float | None = None
     validate_tau(tau)
     critical_value_multiplier = validate_critical_value_multiplier(
         critical_value_multiplier
@@ -608,7 +616,7 @@ def estimate_dml_ivqr(
                 random_state=fold_random_state,
                 ridge_alpha=ridge_alpha,
             )
-            crossfit_sec = perf_counter() - crossfit_start
+            crossfit_sec = _elapsed_since(crossfit_start)
         except RuntimeError as exc:
             runtime_seconds = perf_counter() - start
             return _failed_result(
@@ -621,7 +629,7 @@ def estimate_dml_ivqr(
                 runtime_diagnostics=estimator_runtime_columns(
                     estimator="dml_ivqr",
                     total_sec=runtime_seconds,
-                    crossfit_sec=perf_counter() - crossfit_start,
+                    crossfit_sec=_elapsed_since(crossfit_start),
                 ),
             )
     else:

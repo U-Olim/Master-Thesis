@@ -294,8 +294,11 @@ def invert_score_test(
     )
     if inversion_type != "absolute":
         raise ValueError("Only absolute confidence-region inversion is supported.")
-    statistic_reference = 0.0
-    statistic_reference = _validate_statistic_reference(statistic_reference)
+    statistic_reference = (
+        0.0
+        if statistic_reference is None
+        else _validate_statistic_reference(statistic_reference)
+    )
 
     statistic_values = statistics - statistic_reference
     accepted_mask = statistic_values <= critical_value_adjusted

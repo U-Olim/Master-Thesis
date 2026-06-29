@@ -92,9 +92,14 @@ class AlignedSelectionResult:
 
 
 def _selected_penalties_string(anchor_results: tuple[AnchorSelectionResult, ...]) -> str:
-    entries = []
+    entries: list[str] = []
     for result in anchor_results:
-        penalty = "failed" if result.failed else f"{float(result.penalty_selected):g}"
+        if result.failed:
+            penalty = "failed"
+        elif result.penalty_selected is None:
+            penalty = "missing"
+        else:
+            penalty = f"{float(result.penalty_selected):g}"
         entries.append(f"{result.alpha_anchor:g}:{penalty}")
     return ";".join(entries)
 
