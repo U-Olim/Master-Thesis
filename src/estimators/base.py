@@ -1,5 +1,7 @@
 """Common estimator result objects."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -60,46 +62,13 @@ POST_SELECTION_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
     "ps_warning_code",
 )
 
-POST_SELECTION_QUANTILE_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
-    "psq_selection_method",
-    "psq_quantile_tau",
-    "psq_quantile_alpha_selected",
-    "psq_quantile_cv_folds",
-    "psq_n_selected_controls_quantile_y",
-    "psq_n_selected_controls_treatment_d",
-    "psq_n_selected_controls_union",
-    "psq_share_selected_controls_quantile_y",
-    "psq_share_selected_controls_union",
-    "psq_selection_failed",
-    "psq_warning_code",
-)
-
-POST_SELECTION_ALIGNED_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
-    "psa_selection_method",
-    "psa_anchor_rule",
-    "psa_alpha_anchor_count",
-    "psa_alpha_anchors",
-    "psa_n_selected_controls_anchor_union",
-    "psa_share_selected_controls_anchor_union",
-    "psa_n_selected_controls_treatment",
-    "psa_n_selected_controls_final_union",
-    "psa_share_selected_controls_final_union",
-    "psa_anchor_selection_failed",
-    "psa_n_failed_anchors",
-    "psa_selected_empty_anchor_union",
-    "psa_selected_empty_final",
-    "psa_quantile_cv_folds",
-    "psa_quantile_penalty_grid",
-    "psa_selected_penalties_by_anchor",
-)
-
 RUNTIME_DIAGNOSTIC_FIELDS: tuple[str, ...] = RUNTIME_COLUMNS
 
 
 def estimation_result_diagnostic_kwargs(
     diagnostics: dict[str, Any],
 ) -> dict[str, Any]:
-    """Return diagnostic fields accepted by EstimationResult."""
+    """Return common diagnostic fields accepted by EstimationResult."""
     return {name: diagnostics[name] for name in RESULT_DIAGNOSTIC_FIELDS}
 
 
@@ -110,28 +79,11 @@ def post_selection_result_diagnostic_kwargs(
     return {name: diagnostics[name] for name in POST_SELECTION_DIAGNOSTIC_FIELDS}
 
 
-def post_selection_quantile_result_diagnostic_kwargs(
-    diagnostics: dict[str, Any],
-) -> dict[str, Any]:
-    """Return quantile post-selection fields accepted by EstimationResult."""
-    return {
-        name: diagnostics[name]
-        for name in POST_SELECTION_QUANTILE_DIAGNOSTIC_FIELDS
-    }
-
-
-def post_selection_aligned_result_diagnostic_kwargs(
-    diagnostics: dict[str, Any],
-) -> dict[str, Any]:
-    """Return IVQR-aligned post-selection fields accepted by EstimationResult."""
-    return {name: diagnostics[name] for name in POST_SELECTION_ALIGNED_DIAGNOSTIC_FIELDS}
-
-
 @dataclass
 class EstimationResult:
     """Standard result object returned by every estimator.
 
-    All estimator implementations must return this object so simulation,
+    The four retained estimators use this common object so simulation,
     aggregation, and reporting code can consume results uniformly.
     """
 
@@ -203,20 +155,6 @@ class EstimationResult:
     ps_runtime_score_eval_sec: float | None = None
     ps_runtime_confidence_region_sec: float | None = None
     ps_runtime_diagnostics_sec: float | None = None
-    psq_runtime_total_sec: float | None = None
-    psq_runtime_quantile_selection_sec: float | None = None
-    psq_runtime_treatment_selection_sec: float | None = None
-    psq_runtime_alpha_loop_sec: float | None = None
-    psq_runtime_score_eval_sec: float | None = None
-    psq_runtime_confidence_region_sec: float | None = None
-    psq_runtime_diagnostics_sec: float | None = None
-    psa_runtime_total_sec: float | None = None
-    psa_runtime_anchor_selection_sec: float | None = None
-    psa_runtime_treatment_selection_sec: float | None = None
-    psa_runtime_alpha_loop_sec: float | None = None
-    psa_runtime_score_eval_sec: float | None = None
-    psa_runtime_confidence_region_sec: float | None = None
-    psa_runtime_diagnostics_sec: float | None = None
     oracle_runtime_total_sec: float | None = None
     oracle_runtime_alpha_loop_sec: float | None = None
     oracle_runtime_score_eval_sec: float | None = None
@@ -253,32 +191,3 @@ class EstimationResult:
     ps_first_stage_failed: bool | None = None
     ps_rank_deficient: bool | None = None
     ps_warning_code: str | None = None
-
-    psq_selection_method: str | None = None
-    psq_quantile_tau: float | None = None
-    psq_quantile_alpha_selected: float | None = None
-    psq_quantile_cv_folds: int | None = None
-    psq_n_selected_controls_quantile_y: int | None = None
-    psq_n_selected_controls_treatment_d: int | None = None
-    psq_n_selected_controls_union: int | None = None
-    psq_share_selected_controls_quantile_y: float | None = None
-    psq_share_selected_controls_union: float | None = None
-    psq_selection_failed: bool | None = None
-    psq_warning_code: str | None = None
-
-    psa_selection_method: str | None = None
-    psa_anchor_rule: str | None = None
-    psa_alpha_anchor_count: int | None = None
-    psa_alpha_anchors: str | None = None
-    psa_n_selected_controls_anchor_union: int | None = None
-    psa_share_selected_controls_anchor_union: float | None = None
-    psa_n_selected_controls_treatment: int | None = None
-    psa_n_selected_controls_final_union: int | None = None
-    psa_share_selected_controls_final_union: float | None = None
-    psa_anchor_selection_failed: bool | None = None
-    psa_n_failed_anchors: int | None = None
-    psa_selected_empty_anchor_union: bool | None = None
-    psa_selected_empty_final: bool | None = None
-    psa_quantile_cv_folds: int | None = None
-    psa_quantile_penalty_grid: str | None = None
-    psa_selected_penalties_by_anchor: str | None = None

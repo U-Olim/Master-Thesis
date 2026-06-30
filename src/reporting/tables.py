@@ -14,33 +14,24 @@ TABLE_GROUP_COLUMNS: tuple[str, ...] = ("dgp", "n", "p", "pi", "tau")
 ESTIMATOR_COLUMN: str = "estimator"
 ESTIMATOR_ORDER: tuple[str, ...] = (
     "oracle",
-    "oracle_ivqr",
     "post_selection_ivqr",
-    "post_selection_quantile",
-    "post_selection_ivqr_aligned",
-    "dml_ivqr",
     "full_control_ivqr",
+    "dml_ivqr",
 )
 ESTIMATOR_LABELS = MappingProxyType(
     {
-        "oracle_ivqr": "Oracle IVQR",
         "oracle": "Oracle IVQR",
         "post_selection_ivqr": "Post-selection IVQR",
-        "post_selection_quantile": "Post-selection IVQR (quantile-specific)",
-        "post_selection_ivqr_aligned": "Post-selection IVQR (IVQR-aligned)",
-        "dml_ivqr": "DML-style IVQR",
         "full_control_ivqr": "Full-control IVQR",
+        "dml_ivqr": "DML-style IVQR",
     }
 )
 ESTIMATOR_COLUMN_NAMES = MappingProxyType(
     {
         "oracle": "oracle",
-        "oracle_ivqr": "oracle_ivqr",
         "post_selection_ivqr": "post_selection",
-        "post_selection_quantile": "post_selection_quantile",
-        "post_selection_ivqr_aligned": "post_selection_ivqr_aligned",
-        "dml_ivqr": "dml",
         "full_control_ivqr": "full_control",
+        "dml_ivqr": "dml",
     }
 )
 CORE_METRICS: tuple[str, ...] = (
@@ -83,16 +74,6 @@ DIAGNOSTIC_COLUMNS: tuple[str, ...] = (
     "mean_runtime_confidence_region_sec",
     "mean_dml_runtime_crossfit_sec",
     "mean_ps_runtime_selection_sec",
-    "mean_psq_runtime_quantile_selection_sec",
-    "mean_psq_runtime_treatment_selection_sec",
-    "mean_psq_runtime_alpha_loop_sec",
-    "mean_psq_runtime_confidence_region_sec",
-    "mean_psq_runtime_diagnostics_sec",
-    "mean_psa_runtime_anchor_selection_sec",
-    "mean_psa_runtime_treatment_selection_sec",
-    "mean_psa_runtime_alpha_loop_sec",
-    "mean_psa_runtime_confidence_region_sec",
-    "mean_psa_runtime_diagnostics_sec",
 )
 WIDE_TABLE_METRICS = MappingProxyType(
     {
@@ -478,3 +459,4 @@ def write_tables(
         key = filename.removesuffix("_wide.csv").removesuffix(".csv")
         written[key] = path
     return written
+

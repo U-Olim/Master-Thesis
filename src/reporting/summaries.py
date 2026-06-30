@@ -9,7 +9,7 @@ from typing import cast
 import numpy as np
 import pandas as pd
 
-from inference.metrics import summarize_group, validate_metric_input
+from ivqr.metrics import summarize_group, validate_metric_input
 
 
 GROUP_COLUMNS: tuple[str, ...] = ("dgp", "n", "p", "pi", "tau", "estimator")
@@ -56,16 +56,6 @@ SUMMARY_METRIC_COLUMNS: tuple[str, ...] = (
     "mean_runtime_confidence_region_sec",
     "mean_dml_runtime_crossfit_sec",
     "mean_ps_runtime_selection_sec",
-    "mean_psq_runtime_quantile_selection_sec",
-    "mean_psq_runtime_treatment_selection_sec",
-    "mean_psq_runtime_alpha_loop_sec",
-    "mean_psq_runtime_confidence_region_sec",
-    "mean_psq_runtime_diagnostics_sec",
-    "mean_psa_runtime_anchor_selection_sec",
-    "mean_psa_runtime_treatment_selection_sec",
-    "mean_psa_runtime_alpha_loop_sec",
-    "mean_psa_runtime_confidence_region_sec",
-    "mean_psa_runtime_diagnostics_sec",
 )
 
 __all__ = [
@@ -280,3 +270,4 @@ def incomplete_groups(summary: pd.DataFrame) -> pd.DataFrame:
     if completion.dropna().empty:
         return summary.iloc[0:0].copy()
     return summary.loc[completion < 1].copy()
+

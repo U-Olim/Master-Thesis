@@ -1,4 +1,10 @@
-"""True structural quantile treatment effects for the Monte Carlo design."""
+"""True structural coefficients and oracle supports for the Monte Carlo design.
+
+DGP1 and DGP2 use Gaussian structural shocks, while DGP3 uses a
+variance-normalized Student-t shock. The returned `alpha_true` is the target
+structural quantile coefficient alpha_tau used to evaluate bias, RMSE, and
+coverage.
+"""
 
 from math import sqrt
 
@@ -111,3 +117,4 @@ def true_sparse_coefficients(dgp: str, p: int) -> tuple[np.ndarray, np.ndarray]:
         beta[:s] = values
         gamma[:s] = values
     return beta, gamma
+

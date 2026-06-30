@@ -1,4 +1,4 @@
-"""Shared result-row construction utilities for simulation outputs."""
+"""Result-row construction utilities for simulation outputs."""
 
 from __future__ import annotations
 
@@ -7,21 +7,9 @@ from typing import Any
 import numpy as np
 
 from dgp.designs import Design
-from estimators.base import (
-    EstimationResult,
-    POST_SELECTION_DIAGNOSTIC_FIELDS,
-    POST_SELECTION_QUANTILE_DIAGNOSTIC_FIELDS,
-    POST_SELECTION_ALIGNED_DIAGNOSTIC_FIELDS,
-)
-from inference.confidence_regions import (
-    merge_region_and_grid_diagnostics,
-    summarize_alpha_grid_diagnostics,
-)
-from utils.timing import (
-    RUNTIME_COLUMNS,
-    RuntimeDiagnosticColumns,
-    empty_runtime_columns,
-)
+from estimators.base import EstimationResult, POST_SELECTION_DIAGNOSTIC_FIELDS
+from ivqr.confidence_regions import summarize_alpha_grid_diagnostics
+from utils.timing import RUNTIME_COLUMNS, empty_runtime_columns
 
 
 POST_SELECTION_WARNING_NONE = ""
@@ -42,10 +30,23 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "absolute_error",
     "squared_error",
     "status",
-    "error_type",
-    "error_message",
     "failed",
     "converged",
+    "error_type",
+    "error_message",
+    "cr_lower",
+    "cr_upper",
+    "cr_length",
+    "cr_empty",
+    "cr_covers_true",
+    "cr_hits_lower_boundary",
+    "cr_hits_upper_boundary",
+    "cr_hits_any_boundary",
+    "cr_accepted_alpha_count",
+    "cr_acceptance_rate",
+    "cr_n_blocks",
+    "cr_disconnected",
+    "cr_hull_length",
     "alpha_grid_min",
     "alpha_grid_max",
     "alpha_grid_size",
@@ -53,22 +54,6 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "alpha_hat_at_lower_boundary",
     "alpha_hat_at_upper_boundary",
     "alpha_hat_at_any_boundary",
-    "cr_lower",
-    "cr_upper",
-    "cr_length",
-    "cr_hits_lower_boundary",
-    "cr_hits_upper_boundary",
-    "cr_hits_any_boundary",
-    "cr_empty",
-    "cr_accepted_alpha_count",
-    "cr_acceptance_rate",
-    "cr_n_blocks",
-    "cr_disconnected",
-    "cr_hull_length",
-    "cr_covers_true",
-    "selected_controls",
-    "runtime_seconds",
-    *RUNTIME_COLUMNS,
     "failed_alpha_count",
     "failed_alpha_rate",
     "min_test_stat",
@@ -78,6 +63,9 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "critical_value_nominal",
     "critical_value_multiplier",
     "critical_value_adjusted",
+    "selected_controls",
+    "runtime_seconds",
+    *RUNTIME_COLUMNS,
     "ps_n_selected_controls",
     "ps_n_selected_instruments",
     "ps_n_selected_total",
@@ -105,33 +93,6 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "ps_first_stage_failed",
     "ps_rank_deficient",
     "ps_warning_code",
-    "psq_selection_method",
-    "psq_quantile_tau",
-    "psq_quantile_alpha_selected",
-    "psq_quantile_cv_folds",
-    "psq_n_selected_controls_quantile_y",
-    "psq_n_selected_controls_treatment_d",
-    "psq_n_selected_controls_union",
-    "psq_share_selected_controls_quantile_y",
-    "psq_share_selected_controls_union",
-    "psq_selection_failed",
-    "psq_warning_code",
-    "psa_selection_method",
-    "psa_anchor_rule",
-    "psa_alpha_anchor_count",
-    "psa_alpha_anchors",
-    "psa_n_selected_controls_anchor_union",
-    "psa_share_selected_controls_anchor_union",
-    "psa_n_selected_controls_treatment",
-    "psa_n_selected_controls_final_union",
-    "psa_share_selected_controls_final_union",
-    "psa_anchor_selection_failed",
-    "psa_n_failed_anchors",
-    "psa_selected_empty_anchor_union",
-    "psa_selected_empty_final",
-    "psa_quantile_cv_folds",
-    "psa_quantile_penalty_grid",
-    "psa_selected_penalties_by_anchor",
     "message",
 )
 
@@ -169,54 +130,27 @@ def empty_post_selection_diagnostics() -> dict[str, Any]:
     }
 
 
-def empty_post_selection_quantile_diagnostics() -> dict[str, Any]:
-    """Return neutral diagnostics for non-quantile post-selection rows."""
-    return {
-        "psq_selection_method": None,
-        "psq_quantile_tau": None,
-        "psq_quantile_alpha_selected": None,
-        "psq_quantile_cv_folds": None,
-        "psq_n_selected_controls_quantile_y": None,
-        "psq_n_selected_controls_treatment_d": None,
-        "psq_n_selected_controls_union": None,
-        "psq_share_selected_controls_quantile_y": None,
-        "psq_share_selected_controls_union": None,
-        "psq_selection_failed": False,
-        "psq_warning_code": POST_SELECTION_WARNING_NONE,
-    }
+def post_selection_diagnostics(result: EstimationResult) -> dict[str, Any]:
+    """Return post-selection diagnostics with non-applicable defaults filled."""
+    diagnostics = empty_post_selection_diagnostics()
+    for name in POST_SELECTION_DIAGNOSTIC_FIELDS:
+        value = getattr(result, name)
+        if value is not None:
+            diagnostics[name] = value
+    return diagnostics
 
 
-def empty_post_selection_aligned_diagnostics() -> dict[str, Any]:
-    """Return neutral diagnostics for non-IVQR-aligned post-selection rows."""
-    return {
-        "psa_selection_method": None,
-        "psa_anchor_rule": None,
-        "psa_alpha_anchor_count": None,
-        "psa_alpha_anchors": None,
-        "psa_n_selected_controls_anchor_union": None,
-        "psa_share_selected_controls_anchor_union": None,
-        "psa_n_selected_controls_treatment": None,
-        "psa_n_selected_controls_final_union": None,
-        "psa_share_selected_controls_final_union": None,
-        "psa_anchor_selection_failed": False,
-        "psa_n_failed_anchors": None,
-        "psa_selected_empty_anchor_union": False,
-        "psa_selected_empty_final": False,
-        "psa_quantile_cv_folds": None,
-        "psa_quantile_penalty_grid": None,
-        "psa_selected_penalties_by_anchor": None,
-    }
+def runtime_diagnostics(result: EstimationResult) -> dict[str, Any]:
+    """Return runtime diagnostics with missing stage timings filled."""
+    diagnostics: dict[str, Any] = dict(empty_runtime_columns())
+    for name in RUNTIME_COLUMNS:
+        value = getattr(result, name)
+        if value is not None:
+            diagnostics[name] = value
+    return diagnostics
 
 
-def empty_runtime_diagnostics() -> RuntimeDiagnosticColumns:
-    """Return neutral runtime diagnostics for rows without stage timing."""
-    return empty_runtime_columns()
-
-
-def result_diagnostics(
-    result: EstimationResult,
-    alphas: np.ndarray,
-) -> dict[str, Any]:
+def result_diagnostics(result: EstimationResult, alphas: np.ndarray) -> dict[str, Any]:
     """Build alpha-grid and confidence-region diagnostics for a result row."""
     failed_alpha_count = result.failed_alpha_count
     diagnostics = summarize_alpha_grid_diagnostics(
@@ -255,14 +189,10 @@ def result_diagnostics(
         diagnostics[name] = _diagnostic_value(result, name, diagnostics[name])
 
     diagnostics["alpha_grid_size"] = _diagnostic_value(
-        result,
-        "alpha_grid_size",
-        diagnostics["alpha_grid_size"],
+        result, "alpha_grid_size", diagnostics["alpha_grid_size"]
     )
     diagnostics["failed_alpha_count"] = _diagnostic_value(
-        result,
-        "failed_alpha_count",
-        diagnostics["failed_alpha_count"],
+        result, "failed_alpha_count", diagnostics["failed_alpha_count"]
     )
     diagnostics["cr_lower"] = (
         result.cr_lower if result.cr_lower is not None else diagnostics["cr_lower"]
@@ -282,53 +212,12 @@ def result_diagnostics(
     return diagnostics
 
 
-def post_selection_diagnostics(result: EstimationResult) -> dict[str, Any]:
-    """Return post-selection diagnostics with non-applicable defaults filled."""
-    diagnostics = empty_post_selection_diagnostics()
-    for name in POST_SELECTION_DIAGNOSTIC_FIELDS:
-        value = getattr(result, name)
-        if value is not None:
-            diagnostics[name] = value
-    return diagnostics
-
-
-def post_selection_quantile_diagnostics(result: EstimationResult) -> dict[str, Any]:
-    """Return PSQ diagnostics with non-applicable defaults filled."""
-    diagnostics = empty_post_selection_quantile_diagnostics()
-    for name in POST_SELECTION_QUANTILE_DIAGNOSTIC_FIELDS:
-        value = getattr(result, name)
-        if value is not None:
-            diagnostics[name] = value
-    return diagnostics
-
-
-def post_selection_aligned_diagnostics(result: EstimationResult) -> dict[str, Any]:
-    """Return PSA diagnostics with non-applicable defaults filled."""
-    diagnostics = empty_post_selection_aligned_diagnostics()
-    for name in POST_SELECTION_ALIGNED_DIAGNOSTIC_FIELDS:
-        value = getattr(result, name)
-        if value is not None:
-            diagnostics[name] = value
-    return diagnostics
-
-
-def runtime_diagnostics(result: EstimationResult) -> dict[str, Any]:
-    """Return runtime diagnostics with missing stage timings filled."""
-    diagnostics: dict[str, Any] = dict(empty_runtime_diagnostics())
-    for name in RUNTIME_COLUMNS:
-        value = getattr(result, name)
-        if value is not None:
-            diagnostics[name] = value
-    return diagnostics
-
-
 def build_simulation_result_row(
     design: Design,
     result: EstimationResult,
     alphas: np.ndarray,
     *,
     max_error_message_length: int = MAX_ERROR_MESSAGE_LENGTH,
-    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build one standardized estimator result row."""
     bias = None
@@ -355,6 +244,8 @@ def build_simulation_result_row(
         "absolute_error": absolute_error,
         "squared_error": squared_error,
         "status": "failed" if result.failed else "ok",
+        "failed": result.failed,
+        "converged": result.converged,
         "error_type": (
             result.error_type
             if result.failed and result.error_type is not None
@@ -363,8 +254,19 @@ def build_simulation_result_row(
         "error_message": (
             result.message[:max_error_message_length] if result.failed else None
         ),
-        "failed": result.failed,
-        "converged": result.converged,
+        "cr_lower": diagnostics["cr_lower"],
+        "cr_upper": diagnostics["cr_upper"],
+        "cr_length": diagnostics["cr_length"],
+        "cr_empty": diagnostics["cr_empty"],
+        "cr_covers_true": result.cr_covers_true,
+        "cr_hits_lower_boundary": diagnostics["cr_hits_lower_boundary"],
+        "cr_hits_upper_boundary": diagnostics["cr_hits_upper_boundary"],
+        "cr_hits_any_boundary": diagnostics["cr_hits_any_boundary"],
+        "cr_accepted_alpha_count": diagnostics["cr_accepted_alpha_count"],
+        "cr_acceptance_rate": diagnostics["cr_acceptance_rate"],
+        "cr_n_blocks": diagnostics["cr_n_blocks"],
+        "cr_disconnected": diagnostics["cr_disconnected"],
+        "cr_hull_length": diagnostics["cr_hull_length"],
         "alpha_grid_min": diagnostics["alpha_grid_min"],
         "alpha_grid_max": diagnostics["alpha_grid_max"],
         "alpha_grid_size": diagnostics["alpha_grid_size"],
@@ -372,22 +274,6 @@ def build_simulation_result_row(
         "alpha_hat_at_lower_boundary": diagnostics["alpha_hat_at_lower_boundary"],
         "alpha_hat_at_upper_boundary": diagnostics["alpha_hat_at_upper_boundary"],
         "alpha_hat_at_any_boundary": diagnostics["alpha_hat_at_any_boundary"],
-        "cr_lower": diagnostics["cr_lower"],
-        "cr_upper": diagnostics["cr_upper"],
-        "cr_length": diagnostics["cr_length"],
-        "cr_hits_lower_boundary": diagnostics["cr_hits_lower_boundary"],
-        "cr_hits_upper_boundary": diagnostics["cr_hits_upper_boundary"],
-        "cr_hits_any_boundary": diagnostics["cr_hits_any_boundary"],
-        "cr_empty": diagnostics["cr_empty"],
-        "cr_accepted_alpha_count": diagnostics["cr_accepted_alpha_count"],
-        "cr_acceptance_rate": diagnostics["cr_acceptance_rate"],
-        "cr_n_blocks": diagnostics["cr_n_blocks"],
-        "cr_disconnected": diagnostics["cr_disconnected"],
-        "cr_hull_length": diagnostics["cr_hull_length"],
-        "cr_covers_true": result.cr_covers_true,
-        "selected_controls": result.selected_controls,
-        "runtime_seconds": result.runtime_seconds,
-        **runtime_diagnostics(result),
         "failed_alpha_count": diagnostics["failed_alpha_count"],
         "failed_alpha_rate": diagnostics["failed_alpha_rate"],
         "min_test_stat": diagnostics["min_test_stat"],
@@ -397,13 +283,12 @@ def build_simulation_result_row(
         "critical_value_nominal": diagnostics["critical_value_nominal"],
         "critical_value_multiplier": diagnostics["critical_value_multiplier"],
         "critical_value_adjusted": diagnostics["critical_value_adjusted"],
+        "selected_controls": result.selected_controls,
+        "runtime_seconds": result.runtime_seconds,
+        **runtime_diagnostics(result),
         **post_selection_diagnostics(result),
-        **post_selection_quantile_diagnostics(result),
-        **post_selection_aligned_diagnostics(result),
         "message": result.message,
     }
-    if extra:
-        row.update(extra)
     return ensure_result_schema(row)
 
 
@@ -429,63 +314,32 @@ def build_failure_result_row(
     diagnostics["failed_alpha_rate"] = np.nan
     if critical_value_multiplier is not None:
         diagnostics["critical_value_multiplier"] = float(critical_value_multiplier)
-    row = {
-        "dgp": design.dgp,
-        "n": design.n,
-        "p": design.p,
-        "pi": design.pi,
-        "tau": design.tau,
-        "rep": design.rep,
-        "seed": design.seed,
-        "estimator": estimator,
-        "alpha_hat": None,
-        "alpha_true": alpha_true,
-        "bias": None,
-        "absolute_error": None,
-        "squared_error": None,
-        "status": "failed",
-        "error_type": type(exc).__name__,
-        "error_message": str(exc)[:max_error_message_length],
-        "failed": True,
-        "converged": False,
-        "alpha_grid_min": diagnostics["alpha_grid_min"],
-        "alpha_grid_max": diagnostics["alpha_grid_max"],
-        "alpha_grid_size": diagnostics["alpha_grid_size"],
-        "alpha_grid_step": diagnostics["alpha_grid_step"],
-        "alpha_hat_at_lower_boundary": diagnostics["alpha_hat_at_lower_boundary"],
-        "alpha_hat_at_upper_boundary": diagnostics["alpha_hat_at_upper_boundary"],
-        "alpha_hat_at_any_boundary": diagnostics["alpha_hat_at_any_boundary"],
-        "cr_lower": diagnostics["cr_lower"],
-        "cr_upper": diagnostics["cr_upper"],
-        "cr_length": diagnostics["cr_length"],
-        "cr_hits_lower_boundary": diagnostics["cr_hits_lower_boundary"],
-        "cr_hits_upper_boundary": diagnostics["cr_hits_upper_boundary"],
-        "cr_hits_any_boundary": diagnostics["cr_hits_any_boundary"],
-        "cr_empty": diagnostics["cr_empty"],
-        "cr_accepted_alpha_count": diagnostics["cr_accepted_alpha_count"],
-        "cr_acceptance_rate": diagnostics["cr_acceptance_rate"],
-        "cr_n_blocks": diagnostics["cr_n_blocks"],
-        "cr_disconnected": diagnostics["cr_disconnected"],
-        "cr_hull_length": diagnostics["cr_hull_length"],
-        "cr_covers_true": None,
-        "selected_controls": None,
-        "runtime_seconds": None,
-        **empty_runtime_diagnostics(),
-        "failed_alpha_count": diagnostics["failed_alpha_count"],
-        "failed_alpha_rate": diagnostics["failed_alpha_rate"],
-        "min_test_stat": diagnostics["min_test_stat"],
-        "max_test_stat": diagnostics["max_test_stat"],
-        "test_stat_at_alpha_hat": diagnostics["test_stat_at_alpha_hat"],
-        "critical_value": diagnostics["critical_value"],
-        "critical_value_nominal": diagnostics["critical_value_nominal"],
-        "critical_value_multiplier": diagnostics["critical_value_multiplier"],
-        "critical_value_adjusted": diagnostics["critical_value_adjusted"],
-        **empty_post_selection_diagnostics(),
-        **empty_post_selection_quantile_diagnostics(),
-        **empty_post_selection_aligned_diagnostics(),
-        "message": message,
-    }
-    return ensure_result_schema(row)
+    result = EstimationResult(
+        estimator=estimator,
+        alpha_hat=None,
+        alpha_true=alpha_true,
+        tau=design.tau,
+        converged=False,
+        failed=True,
+        message=message,
+        objective_value=None,
+        at_grid_boundary=False,
+        alpha_grid_size=int(alphas.size),
+        failed_alpha_count=None,
+        cr_lower=None,
+        cr_upper=None,
+        cr_length=None,
+        cr_covers_true=None,
+        cr_empty=True,
+        cr_disconnected=None,
+        selected_controls=None,
+        runtime_seconds=float("nan"),
+        error_type=type(exc).__name__,
+    )
+    row = build_simulation_result_row(design, result, alphas)
+    row["error_message"] = str(exc)[:max_error_message_length]
+    row["critical_value_multiplier"] = diagnostics["critical_value_multiplier"]
+    return row
 
 
 def ensure_result_schema(row: dict[str, Any]) -> dict[str, Any]:
@@ -493,7 +347,7 @@ def ensure_result_schema(row: dict[str, Any]) -> dict[str, Any]:
     completed = dict(row)
     for column in RESULT_COLUMNS:
         completed.setdefault(column, None)
-    return completed
+    return {column: completed[column] for column in RESULT_COLUMNS}
 
 
 def _diagnostic_value(
@@ -511,14 +365,8 @@ __all__ = [
     "build_failure_result_row",
     "build_simulation_result_row",
     "empty_post_selection_diagnostics",
-    "empty_post_selection_aligned_diagnostics",
-    "empty_post_selection_quantile_diagnostics",
-    "empty_runtime_diagnostics",
     "ensure_result_schema",
-    "merge_region_and_grid_diagnostics",
     "post_selection_diagnostics",
-    "post_selection_aligned_diagnostics",
-    "post_selection_quantile_diagnostics",
     "result_diagnostics",
     "runtime_diagnostics",
 ]

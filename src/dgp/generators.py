@@ -165,3 +165,4 @@ def generate_data(design: Design) -> SimData:
     y = _structural_outcome(x, beta, u, d)
 
     return SimData(y=y, d=d, z=z, x=x, alpha_true=alpha, u=u, v=v)
+

@@ -1,53 +1,37 @@
-"""Monte Carlo runner utilities."""
+"""Single Monte Carlo simulation engine."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import contextmanager
-from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 import warnings
 
 import numpy as np
 import pandas as pd
 from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
+from dgp.designs import Design
 from dgp.generators import generate_data
 from dgp.true_parameters import get_oracle_control_indices, true_alpha
 from estimators.base import EstimationResult
-from estimators.dml_ivqr import estimate_dml_ivqr
-from estimators.full_control_ivqr import estimate_full_control_ivqr
-from estimators.oracle_ivqr import estimate_oracle_ivqr
-from estimators.post_selection_ivqr import estimate_post_selection_ivqr
-from estimators.post_selection_ivqr_aligned import estimate_post_selection_ivqr_aligned
-from estimators.post_selection_quantile_ivqr import (
-    estimate_post_selection_quantile_ivqr,
-)
-from dgp.designs import Design
-from simulation._validation import (
-    validate_alpha_candidates,
-    validate_bool,
-    validate_design,
-    validate_dgps,
-    validate_estimators,
-    validate_finite_float,
-    validate_k_folds_for_designs,
-    validate_nonnegative_float,
-    validate_nonnegative_int,
-    validate_optional_nonnegative_int,
-    validate_positive_float,
-    validate_positive_int,
-    validate_probability_quantile,
-    validate_unique_sequence,
-)
+from estimators.dml import estimate_dml_ivqr
+from estimators.full_control import estimate_full_control_ivqr
+from estimators.oracle import estimate_oracle_ivqr
+from estimators.post_selection import estimate_post_selection_ivqr
 from simulation.config import (
+    DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN,
-    DEFAULT_ALPHA_GRID_SIZE,
-    DEFAULT_MAIN_ESTIMATORS,
-    DEFAULT_DML_K_FOLDS,
     DEFAULT_CRITICAL_VALUE_MULTIPLIER,
+    DEFAULT_DML_K_FOLDS,
+    DEFAULT_ESTIMATORS,
+    DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
-    MAIN_ESTIMATORS,
+    ESTIMATORS,
 )
 from simulation.results import (
     MAX_ERROR_MESSAGE_LENGTH,
@@ -55,19 +39,34 @@ from simulation.results import (
     build_failure_result_row,
     build_simulation_result_row,
 )
+from utils.validation import validate_alpha_grid, validate_positive_int, validate_tau
 
 
-EstimatorFn = Callable[..., EstimationResult]
-VALID_ESTIMATORS: tuple[str, ...] = MAIN_ESTIMATORS
-DEFAULT_SIMULATION_ESTIMATORS: tuple[str, ...] = DEFAULT_MAIN_ESTIMATORS
+VALID_ESTIMATORS: tuple[str, ...] = ESTIMATORS
+DEFAULT_SIMULATION_ESTIMATORS: tuple[str, ...] = DEFAULT_ESTIMATORS
 VALID_DGPS: tuple[str, ...] = DGPS
-ESTIMATOR_OUTPUT_NAMES = {
+ESTIMATOR_OUTPUT_NAMES: dict[str, str] = {
     "oracle": "oracle",
     "post_selection": "post_selection_ivqr",
-    "post_selection_quantile": "post_selection_quantile",
-    "post_selection_ivqr_aligned": "post_selection_ivqr_aligned",
-    "dml": "dml_ivqr",
     "full_control": "full_control_ivqr",
+    "dml": "dml_ivqr",
+}
+ESTIMATOR_ALIASES: dict[str, str] = {
+    "oracle": "oracle",
+    "oracle_ivqr": "oracle",
+    "post_selection": "post_selection",
+    "post_selection_ivqr": "post_selection",
+    "post-selection": "post_selection",
+    "post-selection-ivqr": "post_selection",
+    "post_selection-ivqr": "post_selection",
+    "full_control": "full_control",
+    "full_control_ivqr": "full_control",
+    "full-control": "full_control",
+    "full-control-ivqr": "full_control",
+    "full_control-ivqr": "full_control",
+    "dml": "dml",
+    "dml_ivqr": "dml",
+    "dml-ivqr": "dml",
 }
 DESIGN_KEY_COLUMNS: tuple[str, ...] = ("dgp", "n", "p", "pi", "tau", "rep", "seed")
 
@@ -75,17 +74,32 @@ DESIGN_KEY_COLUMNS: tuple[str, ...] = ("dgp", "n", "p", "pi", "tau", "rep", "see
 __all__ = [
     "DEFAULT_SIMULATION_ESTIMATORS",
     "DESIGN_KEY_COLUMNS",
+    "ESTIMATOR_ALIASES",
     "ESTIMATOR_OUTPUT_NAMES",
-    "MAX_ERROR_MESSAGE_LENGTH",
     "RESULT_COLUMNS",
     "VALID_DGPS",
     "VALID_ESTIMATORS",
-    "failure_rows_for_design",
+    "filter_completed_designs",
     "make_simulation_grid",
+    "normalize_estimator_names",
     "quantreg_iteration_warning_filter",
+    "run_simulation_batch",
+    "run_simulation_design",
     "run_single_replication",
     "run_small_simulation",
 ]
+
+
+@dataclass(frozen=True)
+class WorkerArgs:
+    design: Design
+    alphas: np.ndarray
+    estimators: tuple[str, ...]
+    quantreg_max_iter: int
+    dml_k_folds: int
+    gmm_ridge: float
+    critical_value_multiplier: float
+    show_quantreg_warnings: bool
 
 
 @contextmanager
@@ -94,118 +108,125 @@ def quantreg_iteration_warning_filter(show_warnings: bool = False):
     if show_warnings:
         yield
         return
-
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=IterationLimitWarning)
+        warnings.filterwarnings("ignore", message=r"Maximum number of iterations reached.*")
         yield
 
 
-def _result_to_row(
-    design: Design,
-    result: EstimationResult,
-    alphas: np.ndarray,
-    critical_value_multiplier: float | None = None,
-) -> dict[str, object]:
-    row = build_simulation_result_row(design, result, alphas)
-    if (
-        critical_value_multiplier is not None
-        and pd.isna(row["critical_value_multiplier"])
-    ):
-        row["critical_value_multiplier"] = critical_value_multiplier
-    return row
+def normalize_estimator_names(raw_estimators: Sequence[str] | None) -> tuple[str, ...]:
+    """Normalize estimator names and aliases to canonical four-estimator names."""
+    if raw_estimators is None:
+        return DEFAULT_SIMULATION_ESTIMATORS
+    if isinstance(raw_estimators, str):
+        raise ValueError("estimators must be a sequence of estimator names")
 
-
-def _short_error_message(exc: Exception) -> str:
-    return str(exc)[:MAX_ERROR_MESSAGE_LENGTH]
-
-
-def _failure_rows_for_design(
-    design: Design,
-    estimators: tuple[str, ...],
-    alphas: np.ndarray,
-    exc: Exception,
-    critical_value_multiplier: float | None = None,
-) -> list[dict[str, object]]:
-    try:
-        alpha_true = true_alpha(design.tau, design.dgp)
-    except Exception:
-        alpha_true = None
-
-    message = f"{type(exc).__name__}: {_short_error_message(exc)}"
-    return [
-        _base_failure_row(
-            design,
-            estimator,
-            alphas,
-            alpha_true,
-            exc,
-            message,
-            critical_value_multiplier=critical_value_multiplier,
+    normalized: list[str] = []
+    invalid: list[str] = []
+    for raw in raw_estimators:
+        if not isinstance(raw, str) or not raw.strip():
+            invalid.append(str(raw))
+            continue
+        token = raw.strip().lower().replace(" ", "_")
+        canonical = ESTIMATOR_ALIASES.get(token)
+        if canonical is None:
+            invalid.append(raw)
+            continue
+        if canonical not in normalized:
+            normalized.append(canonical)
+    if invalid:
+        valid = ", ".join(VALID_ESTIMATORS)
+        aliases = ", ".join(sorted(ESTIMATOR_ALIASES))
+        raise ValueError(
+            f"Unknown estimator name(s): {invalid}. "
+            f"Valid estimators: {valid}. Supported aliases: {aliases}."
         )
-        for estimator in estimators
-    ]
+    if not normalized:
+        raise ValueError("estimators must contain at least one estimator name")
+    return tuple(normalized)
 
 
-def failure_rows_for_design(
-    design: Design,
-    estimators: tuple[str, ...],
-    alphas: np.ndarray,
-    exc: Exception,
-    critical_value_multiplier: float | None = None,
-) -> list[dict[str, object]]:
-    """Build failed result rows for every requested estimator."""
-    return _failure_rows_for_design(
-        design,
-        estimators,
-        alphas,
-        exc,
-        critical_value_multiplier=critical_value_multiplier,
-    )
+def _validate_estimators(estimators: Sequence[str]) -> tuple[str, ...]:
+    estimators = normalize_estimator_names(estimators)
+    invalid = sorted(set(estimators) - set(VALID_ESTIMATORS))
+    if invalid:
+        valid = ", ".join(VALID_ESTIMATORS)
+        raise ValueError(f"Unknown estimator(s): {invalid}. Valid estimators: {valid}")
+    return estimators
 
 
-def _base_failure_row(
-    design: Design,
-    estimator: str,
-    alphas: np.ndarray,
-    alpha_true: float | None,
-    exc: Exception,
-    message: str,
-    critical_value_multiplier: float | None = None,
-) -> dict[str, object]:
-    return build_failure_result_row(
-        design=design,
-        estimator=ESTIMATOR_OUTPUT_NAMES[estimator],
-        alphas=alphas,
-        alpha_true=alpha_true,
-        exc=exc,
-        message=message,
-        max_error_message_length=MAX_ERROR_MESSAGE_LENGTH,
-        critical_value_multiplier=critical_value_multiplier,
-    )
-
-
-def _failure_row_for_estimator(
-    design: Design,
-    estimator: str,
-    alphas: np.ndarray,
-    exc: Exception,
-    critical_value_multiplier: float | None = None,
-) -> dict[str, object]:
-    """Build one failed result row for an unexpected estimator exception."""
+def _validate_unique_sequence(name: str, values: Sequence[object]) -> tuple[object, ...]:
+    if isinstance(values, (str, bytes)):
+        raise ValueError(f"{name} must be a sequence")
     try:
-        alpha_true = true_alpha(design.tau, design.dgp)
-    except Exception:
-        alpha_true = None
+        values_tuple = tuple(values)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be a sequence") from exc
+    if not values_tuple:
+        raise ValueError(f"{name} must not be empty")
+    if len(set(values_tuple)) != len(values_tuple):
+        raise ValueError(f"{name} must not contain duplicates")
+    return values_tuple
 
-    message = f"Unexpected estimator error: {type(exc).__name__}: {_short_error_message(exc)}"
-    return _base_failure_row(
-        design,
-        estimator,
-        alphas,
-        alpha_true,
-        exc,
-        message,
-        critical_value_multiplier=critical_value_multiplier,
+
+def _validate_float(name: str, value: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    value = float(value)
+    if not np.isfinite(value):
+        raise ValueError(f"{name} must be finite")
+    return value
+
+
+def _validate_positive_float(name: str, value: float) -> float:
+    value = _validate_float(name, value)
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
+def _validate_nonnegative_float(name: str, value: float) -> float:
+    value = _validate_float(name, value)
+    if value < 0:
+        raise ValueError(f"{name} must be nonnegative")
+    return value
+
+
+def _validate_nonnegative_int(name: str, value: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if value < 0:
+        raise ValueError(f"{name} must be nonnegative")
+    return value
+
+
+def _validate_design(design: Design) -> Design:
+    if not isinstance(design, Design):
+        raise ValueError("design must be a Design object")
+    if design.dgp not in VALID_DGPS:
+        raise ValueError(f"Unknown DGP: {design.dgp}")
+    validate_positive_int("n", design.n)
+    validate_positive_int("p", design.p)
+    _validate_nonnegative_float("pi", design.pi)
+    validate_tau(design.tau)
+    _validate_nonnegative_int("rep", design.rep)
+    _validate_nonnegative_int("seed", design.seed)
+    return design
+
+
+def _design_key(design: Design) -> tuple[object, ...]:
+    return (design.dgp, design.n, design.p, design.pi, design.tau, design.rep, design.seed)
+
+
+def _row_design_key(row: pd.Series) -> tuple[object, ...]:
+    return (
+        str(row["dgp"]),
+        int(row["n"]),
+        int(row["p"]),
+        float(row["pi"]),
+        float(row["tau"]),
+        int(row["rep"]),
+        int(row["seed"]),
     )
 
 
@@ -219,19 +240,18 @@ def make_simulation_grid(
     base_seed: int = 12345,
 ) -> list[Design]:
     """Create the deterministic full Monte Carlo design grid."""
-    dgps = validate_dgps(dgps)
-    n_values = validate_unique_sequence("n_values", n_values)
-    p_values = validate_unique_sequence("p_values", p_values)
-    pi_values = validate_unique_sequence("pi_values", pi_values)
-    taus = validate_unique_sequence("taus", taus)
+    dgps = tuple(str(dgp) for dgp in _validate_unique_sequence("dgps", dgps))
+    invalid_dgps = sorted(set(dgps) - set(VALID_DGPS))
+    if invalid_dgps:
+        raise ValueError(f"Unknown DGP(s): {invalid_dgps}")
+    n_values = tuple(validate_positive_int("n", int(n)) for n in _validate_unique_sequence("n_values", n_values))
+    p_values = tuple(validate_positive_int("p", int(p)) for p in _validate_unique_sequence("p_values", p_values))
+    pi_values = tuple(_validate_nonnegative_float("pi", float(pi)) for pi in _validate_unique_sequence("pi_values", pi_values))
+    taus = tuple(validate_tau(float(tau)) for tau in _validate_unique_sequence("taus", taus))
     reps = validate_positive_int("reps", reps)
     if reps >= 1000:
         raise ValueError("reps must be less than 1000 under the deterministic seed schedule")
-    base_seed = validate_nonnegative_int("base_seed", base_seed)
-    n_values = tuple(validate_positive_int("n", n) for n in n_values)
-    p_values = tuple(validate_positive_int("p", p) for p in p_values)
-    pi_values = tuple(validate_nonnegative_float("pi", pi) for pi in pi_values)
-    taus = tuple(validate_probability_quantile("tau", tau) for tau in taus)
+    base_seed = _validate_nonnegative_int("base_seed", base_seed)
 
     designs: list[Design] = []
     seeds: set[int] = set()
@@ -250,264 +270,277 @@ def make_simulation_grid(
                                 + tau_idx * 1_000
                                 + rep
                             )
-                            designs.append(
-                                Design(
-                                    dgp=dgp,
-                                    n=n,
-                                    p=p,
-                                    pi=pi,
-                                    tau=tau,
-                                    rep=rep,
-                                    seed=seed,
-                                )
-                            )
+                            designs.append(Design(dgp, n, p, pi, tau, rep, seed))
                             seeds.add(seed)
-
     if len(seeds) != len(designs):
         raise ValueError("generated seeds are not unique")
     return designs
 
 
-def run_single_replication(
+def _result_to_row(
+    design: Design,
+    result: EstimationResult,
+    alphas: np.ndarray,
+    critical_value_multiplier: float,
+) -> dict[str, object]:
+    row = build_simulation_result_row(design, result, alphas)
+    if pd.isna(row["critical_value_multiplier"]):
+        row["critical_value_multiplier"] = critical_value_multiplier
+    return row
+
+
+def _failure_row_for_estimator(
+    design: Design,
+    estimator: str,
+    alphas: np.ndarray,
+    exc: Exception,
+    critical_value_multiplier: float,
+) -> dict[str, object]:
+    try:
+        alpha_true = true_alpha(design.tau, design.dgp)
+    except Exception:
+        alpha_true = None
+    message = f"Unexpected estimator error: {type(exc).__name__}: {str(exc)[:MAX_ERROR_MESSAGE_LENGTH]}"
+    return build_failure_result_row(
+        design=design,
+        estimator=ESTIMATOR_OUTPUT_NAMES[estimator],
+        alphas=alphas,
+        alpha_true=alpha_true,
+        exc=exc,
+        message=message,
+        critical_value_multiplier=critical_value_multiplier,
+    )
+
+
+def run_simulation_design(
     design: Design,
     alphas: np.ndarray,
     estimators: tuple[str, ...] = DEFAULT_SIMULATION_ESTIMATORS,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
-    selection_cv: int = 3,
-    selection_max_iter: int = 10000,
     dml_k_folds: int = DEFAULT_DML_K_FOLDS,
-    dml_quantile_penalty: float = 0.01,
-    dml_ridge_alpha: float = 1.0,
-    dml_fold_random_state: int | None = None,
     gmm_ridge: float = 1e-8,
     critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     show_quantreg_warnings: bool = False,
 ) -> list[dict[str, object]]:
     """Generate one dataset and run requested estimators on it."""
-    design = validate_design(design)
-    estimators = validate_estimators(estimators)
+    design = _validate_design(design)
+    estimators = _validate_estimators(estimators)
     quantreg_max_iter = validate_positive_int("quantreg_max_iter", quantreg_max_iter)
-    selection_cv = validate_positive_int("selection_cv", selection_cv)
-    selection_max_iter = validate_positive_int("selection_max_iter", selection_max_iter)
-    dml_k_folds = validate_k_folds_for_designs(dml_k_folds, [design])
-    dml_quantile_penalty = validate_nonnegative_float(
-        "dml_quantile_penalty", dml_quantile_penalty
+    dml_k_folds = validate_positive_int("dml_k_folds", dml_k_folds)
+    if dml_k_folds < 2 or dml_k_folds > design.n:
+        raise ValueError("dml_k_folds must satisfy 2 <= dml_k_folds <= n")
+    gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
+    critical_value_multiplier = _validate_positive_float(
+        "critical_value_multiplier", critical_value_multiplier
     )
-    dml_ridge_alpha = validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
-    gmm_ridge = validate_nonnegative_float("gmm_ridge", gmm_ridge)
-    critical_value_multiplier = validate_positive_float(
-        "critical_value_multiplier",
-        critical_value_multiplier,
-    )
-    show_quantreg_warnings = validate_bool(
-        "show_quantreg_warnings", show_quantreg_warnings
-    )
-    dml_fold_random_state = validate_optional_nonnegative_int(
-        "dml_fold_random_state", dml_fold_random_state
-    )
-    alphas = validate_alpha_candidates(alphas)
+    alphas = validate_alpha_grid(alphas)
 
     data = generate_data(design)
-    estimator_map: dict[str, EstimatorFn] = {
-        "oracle": estimate_oracle_ivqr,
-        "post_selection": estimate_post_selection_ivqr,
-        "post_selection_quantile": estimate_post_selection_quantile_ivqr,
-        "post_selection_ivqr_aligned": estimate_post_selection_ivqr_aligned,
-        "dml": estimate_dml_ivqr,
-        "full_control": estimate_full_control_ivqr,
-    }
-
     rows: list[dict[str, object]] = []
     for estimator_name in estimators:
-        if estimator_name not in estimator_map:
-            raise ValueError(f"Unknown estimator: {estimator_name}")
-
         try:
-            estimator = estimator_map[estimator_name]
             with quantreg_iteration_warning_filter(show_quantreg_warnings):
-                if estimator_name == "post_selection":
-                    result = estimator(
+                if estimator_name == "oracle":
+                    result = estimate_oracle_ivqr(
                         data,
                         tau=design.tau,
                         alphas=alphas,
-                        selection_cv=selection_cv,
-                        selection_max_iter=selection_max_iter,
+                        oracle_indices=get_oracle_control_indices(design.dgp, design.p),
+                        max_iter=quantreg_max_iter,
+                        gmm_ridge=gmm_ridge,
+                        critical_value_multiplier=critical_value_multiplier,
+                    )
+                elif estimator_name == "post_selection":
+                    result = estimate_post_selection_ivqr(
+                        data,
+                        tau=design.tau,
+                        alphas=alphas,
+                        selection_cv=3,
+                        selection_max_iter=10000,
                         quantreg_max_iter=quantreg_max_iter,
                         selection_random_state=design.seed,
                         critical_value_multiplier=critical_value_multiplier,
                     )
-                elif estimator_name == "post_selection_quantile":
-                    result = estimator(
+                elif estimator_name == "full_control":
+                    result = estimate_full_control_ivqr(
                         data,
                         tau=design.tau,
                         alphas=alphas,
-                        selection_cv=selection_cv,
-                        selection_max_iter=selection_max_iter,
-                        quantreg_max_iter=quantreg_max_iter,
-                        selection_random_state=design.seed,
-                        critical_value_multiplier=critical_value_multiplier,
-                    )
-                elif estimator_name == "post_selection_ivqr_aligned":
-                    result = estimator(
-                        data,
-                        tau=design.tau,
-                        alphas=alphas,
-                        selection_cv=selection_cv,
-                        selection_max_iter=selection_max_iter,
-                        quantreg_max_iter=quantreg_max_iter,
-                        selection_random_state=design.seed,
+                        max_iter=quantreg_max_iter,
+                        gmm_ridge=gmm_ridge,
                         critical_value_multiplier=critical_value_multiplier,
                     )
                 elif estimator_name == "dml":
-                    fold_random_state = (
-                        design.seed
-                        if dml_fold_random_state is None
-                        else dml_fold_random_state
-                    )
-                    result = estimator(
+                    result = estimate_dml_ivqr(
                         data,
                         tau=design.tau,
                         alphas=alphas,
                         k_folds=dml_k_folds,
-                        fold_random_state=fold_random_state,
-                        quantile_penalty=dml_quantile_penalty,
-                        ridge_alpha=dml_ridge_alpha,
-                        gmm_ridge=gmm_ridge,
-                        critical_value_multiplier=critical_value_multiplier,
-                    )
-                elif estimator_name == "oracle":
-                    oracle_indices = get_oracle_control_indices(design.dgp, design.p)
-                    result = estimator(
-                        data,
-                        tau=design.tau,
-                        alphas=alphas,
-                        oracle_indices=oracle_indices,
-                        max_iter=quantreg_max_iter,
-                        gmm_ridge=gmm_ridge,
-                        critical_value_multiplier=critical_value_multiplier,
-                    )
-                elif estimator_name == "full_control":
-                    result = estimator(
-                        data,
-                        tau=design.tau,
-                        alphas=alphas,
-                        max_iter=quantreg_max_iter,
+                        fold_random_state=design.seed,
+                        quantile_penalty=0.01,
+                        ridge_alpha=1.0,
                         gmm_ridge=gmm_ridge,
                         critical_value_multiplier=critical_value_multiplier,
                     )
                 else:
-                    raise ValueError(f"Estimator is not available in main runner: {estimator_name}")
+                    raise ValueError(f"Unknown estimator: {estimator_name}")
             rows.append(
                 _result_to_row(
-                    design,
-                    result,
-                    alphas,
-                    critical_value_multiplier=critical_value_multiplier,
+                    design, result, alphas, critical_value_multiplier
                 )
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - record failed replications.
             rows.append(
                 _failure_row_for_estimator(
-                    design,
-                    estimator_name,
-                    alphas,
-                    exc,
-                    critical_value_multiplier=critical_value_multiplier,
+                    design, estimator_name, alphas, exc, critical_value_multiplier
                 )
             )
-
     return rows
+
+
+def run_single_replication(*args, **kwargs) -> list[dict[str, object]]:
+    """Backward-compatible alias for run_simulation_design."""
+    return run_simulation_design(*args, **kwargs)
+
+
+def _run_worker(args: WorkerArgs) -> list[dict[str, object]]:
+    return run_simulation_design(
+        args.design,
+        args.alphas,
+        estimators=args.estimators,
+        quantreg_max_iter=args.quantreg_max_iter,
+        dml_k_folds=args.dml_k_folds,
+        gmm_ridge=args.gmm_ridge,
+        critical_value_multiplier=args.critical_value_multiplier,
+        show_quantreg_warnings=args.show_quantreg_warnings,
+    )
+
+
+def _row_sort_key(row: dict[str, object]) -> tuple[object, ...]:
+    return tuple(row[column] for column in (*DESIGN_KEY_COLUMNS, "estimator"))
+
+
+def run_simulation_batch(
+    designs: list[Design],
+    alphas: np.ndarray,
+    estimators: tuple[str, ...] = DEFAULT_SIMULATION_ESTIMATORS,
+    output_path: str | Path | None = None,
+    append: bool = False,
+    quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
+    dml_k_folds: int = DEFAULT_DML_K_FOLDS,
+    gmm_ridge: float = 1e-8,
+    critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
+    n_jobs: int = DEFAULT_N_JOBS,
+    show_quantreg_warnings: bool = False,
+) -> pd.DataFrame:
+    """Run a batch of designs and optionally persist the raw rows to CSV."""
+    designs = [_validate_design(design) for design in designs]
+    estimators = _validate_estimators(estimators)
+    alphas = validate_alpha_grid(alphas)
+    n_jobs = validate_positive_int("n_jobs", n_jobs)
+
+    worker_args = [
+        WorkerArgs(
+            design=design,
+            alphas=alphas,
+            estimators=estimators,
+            quantreg_max_iter=quantreg_max_iter,
+            dml_k_folds=dml_k_folds,
+            gmm_ridge=gmm_ridge,
+            critical_value_multiplier=critical_value_multiplier,
+            show_quantreg_warnings=show_quantreg_warnings,
+        )
+        for design in designs
+    ]
+    rows: list[dict[str, object]] = []
+    if n_jobs == 1 or len(worker_args) <= 1:
+        for args in worker_args:
+            rows.extend(_run_worker(args))
+    else:
+        with ProcessPoolExecutor(max_workers=min(n_jobs, len(worker_args))) as executor:
+            futures = {executor.submit(_run_worker, args): args for args in worker_args}
+            for future in as_completed(futures):
+                rows.extend(future.result())
+        rows.sort(key=_row_sort_key)
+
+    results = pd.DataFrame(rows, columns=RESULT_COLUMNS)
+    if output_path is not None:
+        path = Path(output_path)
+        if path.exists() and path.is_dir():
+            raise ValueError("output_path must be a file path")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        results.to_csv(
+            path,
+            mode="a" if append else "w",
+            header=not (append and path.exists()),
+            index=False,
+        )
+    return results
+
+
+def _completed_successes(existing: pd.DataFrame, rerun_failed: bool) -> pd.DataFrame:
+    if not rerun_failed or "failed" not in existing.columns:
+        return existing
+    failed = existing["failed"].astype(str).str.lower().isin({"true", "1", "yes"})
+    return existing.loc[~failed]
+
+
+def filter_completed_designs(
+    designs: list[Design],
+    results_path: str | Path,
+    estimators: tuple[str, ...],
+    rerun_failed: bool = False,
+) -> list[Design]:
+    """Return designs that do not yet have all requested estimator rows."""
+    path = Path(results_path)
+    if not path.exists():
+        return designs
+    required = list(DESIGN_KEY_COLUMNS) + ["estimator"]
+    if rerun_failed:
+        required.append("failed")
+    existing = _completed_successes(pd.read_csv(path, usecols=required), rerun_failed)
+    expected = {ESTIMATOR_OUTPUT_NAMES[name] for name in _validate_estimators(estimators)}
+    completed: dict[tuple[object, ...], set[str]] = {}
+    for _, row in existing.iterrows():
+        completed.setdefault(_row_design_key(row), set()).add(str(row["estimator"]))
+    return [
+        design
+        for design in designs
+        if not expected.issubset(completed.get(_design_key(design), set()))
+    ]
 
 
 def run_small_simulation(
     dgp: str = "dgp1",
-    n: int = 250,
-    p: int = 200,
+    n: int = 80,
+    p: int = 5,
     pi: float = 1.0,
     tau: float = 0.5,
-    reps: int = 10,
+    reps: int = 1,
     base_seed: int = 12345,
     alphas: np.ndarray | None = None,
     estimators: tuple[str, ...] = DEFAULT_SIMULATION_ESTIMATORS,
     alpha_grid_size: int = DEFAULT_ALPHA_GRID_SIZE,
     alpha_min: float = DEFAULT_ALPHA_MIN,
     alpha_max: float = DEFAULT_ALPHA_MAX,
-    quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
-    selection_cv: int = 3,
-    selection_max_iter: int = 10000,
-    dml_k_folds: int = DEFAULT_DML_K_FOLDS,
-    dml_quantile_penalty: float = 0.01,
-    dml_ridge_alpha: float = 1.0,
-    gmm_ridge: float = 1e-8,
-    critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
-    show_quantreg_warnings: bool = False,
+    **kwargs,
 ) -> pd.DataFrame:
     """Run a small simulation and return raw estimator-level rows."""
-    dgp = validate_dgps((dgp,))[0]
-    n = validate_positive_int("n", n)
-    p = validate_positive_int("p", p)
-    pi = validate_nonnegative_float("pi", pi)
-    tau = validate_probability_quantile("tau", tau)
-    reps = validate_positive_int("reps", reps)
-    base_seed = validate_nonnegative_int("base_seed", base_seed)
-    alpha_grid_size = validate_positive_int("alpha_grid_size", alpha_grid_size)
-    if alpha_grid_size < 3:
-        raise ValueError("alpha_grid_size must be at least 3")
-    alpha_min = validate_finite_float("alpha_min", alpha_min)
-    alpha_max = validate_finite_float("alpha_max", alpha_max)
-    if alpha_max <= alpha_min:
-        raise ValueError("alpha_max must be greater than alpha_min")
-    quantreg_max_iter = validate_positive_int("quantreg_max_iter", quantreg_max_iter)
-    selection_cv = validate_positive_int("selection_cv", selection_cv)
-    selection_max_iter = validate_positive_int("selection_max_iter", selection_max_iter)
-    dml_k_folds = validate_k_folds_for_designs(
-        dml_k_folds,
-        [Design(dgp, n, p, pi, tau, rep=0, seed=base_seed)],
-    )
-    dml_quantile_penalty = validate_nonnegative_float(
-        "dml_quantile_penalty", dml_quantile_penalty
-    )
-    dml_ridge_alpha = validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
-    gmm_ridge = validate_nonnegative_float("gmm_ridge", gmm_ridge)
-    critical_value_multiplier = validate_positive_float(
-        "critical_value_multiplier",
-        critical_value_multiplier,
-    )
-    show_quantreg_warnings = validate_bool(
-        "show_quantreg_warnings", show_quantreg_warnings
-    )
-    estimators = validate_estimators(estimators)
-
     if alphas is None:
         alphas = np.linspace(alpha_min, alpha_max, alpha_grid_size)
-    alphas = validate_alpha_candidates(alphas)
-
-    rows: list[dict[str, object]] = []
-    for rep in range(reps):
-        design = Design(
-            dgp=dgp,
-            n=n,
-            p=p,
-            pi=pi,
-            tau=tau,
-            rep=rep,
-            seed=base_seed + rep,
-        )
-        rows.extend(
-            run_single_replication(
-                design,
-                alphas,
-                estimators=estimators,
-                quantreg_max_iter=quantreg_max_iter,
-                selection_cv=selection_cv,
-                selection_max_iter=selection_max_iter,
-                dml_k_folds=dml_k_folds,
-                dml_quantile_penalty=dml_quantile_penalty,
-                dml_ridge_alpha=dml_ridge_alpha,
-                gmm_ridge=gmm_ridge,
-                critical_value_multiplier=critical_value_multiplier,
-                show_quantreg_warnings=show_quantreg_warnings,
-            )
-        )
-
-    return pd.DataFrame(rows, columns=RESULT_COLUMNS)
+    designs = make_simulation_grid(
+        dgps=(dgp,),
+        n_values=(n,),
+        p_values=(p,),
+        pi_values=(pi,),
+        taus=(tau,),
+        reps=reps,
+        base_seed=base_seed,
+    )
+    return run_simulation_batch(
+        designs,
+        alphas,
+        estimators=estimators,
+        n_jobs=1,
+        **kwargs,
+    )

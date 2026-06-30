@@ -150,3 +150,4 @@ def validate_nonempty_sequence(name: str, value: Sequence[Any]) -> Sequence[Any]
     except TypeError as exc:
         raise ValueError(f"{name} must be a sequence") from exc
     return value
+

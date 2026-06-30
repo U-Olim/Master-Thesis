@@ -93,16 +93,8 @@ def _ordered_estimator_columns(columns: pd.Index) -> list[str]:
     preferred = [
         ESTIMATOR_LABELS.get("oracle", "Oracle IVQR"),
         ESTIMATOR_LABELS.get("post_selection_ivqr", "Post-selection IVQR"),
-        ESTIMATOR_LABELS.get(
-            "post_selection_quantile",
-            "Post-selection IVQR (quantile-specific)",
-        ),
-        ESTIMATOR_LABELS.get(
-            "post_selection_ivqr_aligned",
-            "Post-selection IVQR (IVQR-aligned)",
-        ),
-        ESTIMATOR_LABELS.get("dml_ivqr", "DML-style IVQR"),
         ESTIMATOR_LABELS.get("full_control_ivqr", "Full-control IVQR"),
+        ESTIMATOR_LABELS.get("dml_ivqr", "DML-style IVQR"),
     ]
     existing = [label for label in preferred if label in columns]
     remaining = sorted(str(label) for label in columns if label not in set(existing))
@@ -210,3 +202,4 @@ def write_figures(
         path = output / filename
         written[metric] = make_metric_figure(summary, metric, path, title=title)
     return written
+
