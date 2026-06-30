@@ -97,6 +97,12 @@ Tiny smoke:
 pixi run python scenarios/run_simulation.py --mode fast --estimators full_control --reps 1 --dgps dgp1 --n-values 80 --p-values 5 --pi-values 1.0 --taus 0.5 --max-designs 1 --n-jobs 1 --alpha-grid-size 5 --no-reports --output results/raw/smoke_full_control.csv --manifest results/raw/smoke_full_control_manifest.json
 ```
 
+Tiny all-estimator smoke:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post_selection full_control dml --reps 1 --dgps dgp1 --n-values 80 --p-values 20 --pi-values 1.0 --taus 0.5 --max-designs 1 --n-jobs 1 --alpha-grid-size 5 --no-reports --output results/raw/smoke_all_estimators.csv --manifest results/raw/smoke_all_estimators_manifest.json
+```
+
 Dry run:
 
 ```powershell

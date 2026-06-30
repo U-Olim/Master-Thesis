@@ -32,6 +32,9 @@ class Design:
 class SimData:
     """Container for one simulated IVQR dataset.
 
+    Shapes are `y: (n,)`, `d: (n,)`, `z: (n,)` for the current single
+    excluded instrument, and `x: (n, p)`. The true active controls used by the
+    oracle benchmark are obtained from the DGP-specific coefficient support.
     `alpha_true` is the target structural coefficient for the requested DGP and
     quantile. Optional `u` and `v` store structural and first-stage shocks for
     diagnostics.

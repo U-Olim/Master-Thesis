@@ -38,8 +38,19 @@ def test_help_works(tmp_path: Path) -> None:
 def test_default_estimators_and_aliases() -> None:
     assert normalize_estimator_names(None) == ("oracle", "post_selection", "dml")
     assert normalize_estimator_names(["full_control_ivqr"]) == ("full_control",)
+    assert normalize_estimator_names(["full-control-ivqr"]) == ("full_control",)
+    assert normalize_estimator_names(["dml-ivqr"]) == ("dml",)
     with pytest.raises(ValueError):
         normalize_estimator_names(["bad"])
+
+
+def test_dry_run_uses_default_estimators(tmp_path: Path) -> None:
+    result = _run_cli(tmp_path, "--mode", "fast", "--dry-run")
+    assert result.returncode == 0
+    assert "Replications per design: 10" in result.stdout
+    assert "Estimators: oracle, post_selection, dml" in result.stdout
+    assert "Expected design rows:" in result.stdout
+    assert "Reports: generated after successful run" in result.stdout
 
 
 def test_dry_run_accepts_full_control(tmp_path: Path) -> None:

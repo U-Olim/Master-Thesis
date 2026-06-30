@@ -191,3 +191,35 @@ class EstimationResult:
     ps_first_stage_failed: bool | None = None
     ps_rank_deficient: bool | None = None
     ps_warning_code: str | None = None
+
+    @property
+    def status(self) -> str:
+        """Return the public estimator status used in simulation CSV rows."""
+        return "failed" if self.failed else "ok"
+
+    @property
+    def confidence_region(self) -> dict[str, Any]:
+        """Return confidence-region fields in one stable public mapping."""
+        return {
+            "lower": self.cr_lower,
+            "upper": self.cr_upper,
+            "length": self.cr_length,
+            "empty": self.cr_empty,
+            "covers_true": self.cr_covers_true,
+            "hits_lower_boundary": self.cr_hits_lower_boundary,
+            "hits_upper_boundary": self.cr_hits_upper_boundary,
+            "hits_any_boundary": self.cr_hits_any_boundary,
+            "n_blocks": self.cr_n_blocks,
+            "disconnected": self.cr_disconnected,
+            "hull_length": self.cr_hull_length,
+        }
+
+    @property
+    def diagnostics(self) -> dict[str, Any]:
+        """Return all standard diagnostic fields with explicit missing values."""
+        names = (
+            RESULT_DIAGNOSTIC_FIELDS
+            + POST_SELECTION_DIAGNOSTIC_FIELDS
+            + RUNTIME_DIAGNOSTIC_FIELDS
+        )
+        return {name: getattr(self, name) for name in names}

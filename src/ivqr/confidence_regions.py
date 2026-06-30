@@ -1,4 +1,13 @@
-"""Inference routines for IVQR simulation outputs."""
+"""Grid-based confidence-region inversion for IVQR simulation outputs.
+
+The project convention is
+
+    CR_tau = {a in A : T_n(a) <= c_tau}.
+
+Boundary-hit diagnostics are true only when an accepted grid point touches an
+endpoint of A. Disconnected regions mean more than one accepted block on the
+alpha grid.
+"""
 
 from __future__ import annotations
 
@@ -315,8 +324,8 @@ def invert_score_test(
         return ConfidenceRegion(
             lower=None,
             upper=None,
-            length=0.0,
-            hull_length=0.0,
+            length=float("nan"),
+            hull_length=float("nan"),
             blocks=(),
             accepted_alphas=(),
             n_blocks=0,

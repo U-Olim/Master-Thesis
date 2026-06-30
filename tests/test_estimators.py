@@ -11,7 +11,7 @@ from estimators import (
 
 
 def _tiny_data():
-    return generate_data(Design("dgp1", 80, 10, 1.0, 0.5, rep=0, seed=321))
+    return generate_data(Design("dgp1", 80, 20, 1.0, 0.5, rep=0, seed=321))
 
 
 def test_estimators_return_estimation_results_with_expected_names() -> None:
@@ -42,3 +42,11 @@ def test_estimators_return_estimation_results_with_expected_names() -> None:
         "full_control_ivqr",
         "dml_ivqr",
     ]
+    for result in results:
+        assert result.status in {"ok", "failed"}
+        assert isinstance(result.message, str)
+        assert isinstance(result.diagnostics, dict)
+        assert isinstance(result.confidence_region, dict)
+        assert "failed_alpha_rate" in result.diagnostics
+        assert "ps_n_selected_controls" in result.diagnostics
+        assert "runtime_total_sec" in result.diagnostics

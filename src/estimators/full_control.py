@@ -4,9 +4,9 @@ This estimator applies the Chernozhukov-Hansen inverse-IVQR procedure
 using every observed control column in X. It is included as a benchmark
 against oracle, post-selection, and DML-style residualized IVQR estimators.
 
-It evaluates the full-control structural equation
+It evaluates the full-control structural quantile condition
 
-    Y = D alpha_tau + X' beta_tau + U_tau
+    P(Y <= D alpha_tau + X' beta_tau | X, Z) = tau
 
 Because it uses all controls without selection or regularization, it can be
 computationally slow, numerically unstable, or infeasible when the number of
