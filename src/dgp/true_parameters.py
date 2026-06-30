@@ -58,7 +58,7 @@ def true_alpha(tau: float, dgp: str, df: int = 5) -> float:
 
 def _active_control_count(dgp: str) -> int:
     normalized_dgp = _normalize_dgp(dgp)
-    return 20 if normalized_dgp == "dgp2" else 10
+    return 10 if normalized_dgp == "dgp2" else 5
 
 
 def get_oracle_control_indices(
@@ -78,7 +78,8 @@ def get_oracle_control_indices(
     required = _active_control_count(dgp_name)
     if p < required:
         raise ValueError(
-            f"{dgp_name} oracle support requires at least {required} controls; "
+            f"{dgp_name} requires p >= {required} because it uses "
+            f"{required} active controls; "
             f"received p={p}."
         )
 
@@ -95,8 +96,8 @@ def get_oracle_control_count(dgp_name: str, p: int) -> int:
 def true_sparse_coefficients(dgp: str, p: int) -> tuple[np.ndarray, np.ndarray]:
     """Return true exact-sparse outcome and first-stage coefficient vectors.
 
-    DGP2 is the denser exact-sparse design with up to 20 active controls.
-    DGP1 and DGP3 have up to 10 active controls.
+    DGP2 is the denser exact-sparse selection-stress design with 10 active
+    controls. DGP1 and DGP3 have 5 active controls.
     """
     normalized_dgp = _normalize_dgp(dgp)
     if p <= 0:
@@ -106,12 +107,12 @@ def true_sparse_coefficients(dgp: str, p: int) -> tuple[np.ndarray, np.ndarray]:
     gamma = np.zeros(p)
 
     if normalized_dgp == "dgp2":
-        s = min(20, p)
+        s = min(10, p)
         indices = np.arange(1, s + 1, dtype=float)
         beta[:s] = 0.5 / np.sqrt(indices)
         gamma[:s] = 0.4 / np.sqrt(indices)
     else:
-        s = min(10, p)
+        s = min(5, p)
         indices = np.arange(1, s + 1)
         values = 0.5 / indices
         beta[:s] = values

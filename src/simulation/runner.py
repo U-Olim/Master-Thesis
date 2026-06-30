@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 import warnings
 
@@ -25,6 +26,7 @@ from simulation.config import (
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN,
+    DEFAULT_BASE_SEED,
     DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     DEFAULT_DML_K_FOLDS,
     DEFAULT_ESTIMATORS,
@@ -69,6 +71,10 @@ ESTIMATOR_ALIASES: dict[str, str] = {
     "dml-ivqr": "dml",
 }
 DESIGN_KEY_COLUMNS: tuple[str, ...] = ("dgp", "n", "p", "pi", "tau", "rep", "seed")
+SEED_RULE_TEXT = (
+    "seed = sha256(base_seed, dgp, n, p, pi, tau, rep), "
+    "independent of estimator and execution order"
+)
 
 
 __all__ = [
@@ -80,6 +86,7 @@ __all__ = [
     "VALID_DGPS",
     "VALID_ESTIMATORS",
     "filter_completed_designs",
+    "make_design_seed",
     "make_simulation_grid",
     "normalize_estimator_names",
     "quantreg_iteration_warning_filter",
@@ -87,6 +94,7 @@ __all__ = [
     "run_simulation_design",
     "run_single_replication",
     "run_small_simulation",
+    "SEED_RULE_TEXT",
 ]
 
 
@@ -200,6 +208,35 @@ def _validate_nonnegative_int(name: str, value: int) -> int:
     return value
 
 
+def make_design_seed(
+    *,
+    base_seed: int,
+    dgp: str,
+    n: int,
+    p: int,
+    pi: float,
+    tau: float,
+    rep: int,
+) -> int:
+    """Return a stable design-cell seed independent of estimator execution."""
+    base_seed = _validate_nonnegative_int("base_seed", base_seed)
+    dgp = str(dgp).lower()
+    if dgp not in VALID_DGPS:
+        raise ValueError(f"Unknown DGP: {dgp}")
+    n = validate_positive_int("n", int(n))
+    p = validate_positive_int("p", int(p))
+    pi = _validate_nonnegative_float("pi", float(pi))
+    tau = validate_tau(float(tau))
+    rep = _validate_nonnegative_int("rep", rep)
+
+    key = f"{base_seed}|{dgp}|{n}|{p}|{pi:.12g}|{tau:.12g}|{rep}"
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    # Use a 63-bit positive seed to make collisions negligible on the full
+    # Monte Carlo grid while remaining portable in CSV/JSON integer fields.
+    seed = int(digest[:16], 16) % (2**63 - 1)
+    return seed if seed != 0 else 1
+
+
 def _validate_design(design: Design) -> Design:
     if not isinstance(design, Design):
         raise ValueError("design must be a Design object")
@@ -237,9 +274,14 @@ def make_simulation_grid(
     pi_values: tuple[float, ...],
     taus: tuple[float, ...],
     reps: int,
-    base_seed: int = 12345,
+    base_seed: int = DEFAULT_BASE_SEED,
 ) -> list[Design]:
-    """Create the deterministic full Monte Carlo design grid."""
+    """Create the deterministic full Monte Carlo design grid.
+
+    Each design seed is a stable hash of the design cell, so data generation is
+    independent of estimator list, estimator order, workers, batch size, and
+    resume status.
+    """
     dgps = tuple(str(dgp) for dgp in _validate_unique_sequence("dgps", dgps))
     invalid_dgps = sorted(set(dgps) - set(VALID_DGPS))
     if invalid_dgps:
@@ -249,26 +291,24 @@ def make_simulation_grid(
     pi_values = tuple(_validate_nonnegative_float("pi", float(pi)) for pi in _validate_unique_sequence("pi_values", pi_values))
     taus = tuple(validate_tau(float(tau)) for tau in _validate_unique_sequence("taus", taus))
     reps = validate_positive_int("reps", reps)
-    if reps >= 1000:
-        raise ValueError("reps must be less than 1000 under the deterministic seed schedule")
     base_seed = _validate_nonnegative_int("base_seed", base_seed)
 
     designs: list[Design] = []
     seeds: set[int] = set()
-    for dgp_idx, dgp in enumerate(dgps):
-        for n_idx, n in enumerate(n_values):
-            for p_idx, p in enumerate(p_values):
-                for pi_idx, pi in enumerate(pi_values):
-                    for tau_idx, tau in enumerate(taus):
+    for dgp in dgps:
+        for n in n_values:
+            for p in p_values:
+                for pi in pi_values:
+                    for tau in taus:
                         for rep in range(reps):
-                            seed = (
-                                base_seed
-                                + dgp_idx * 10_000_000
-                                + n_idx * 1_000_000
-                                + p_idx * 100_000
-                                + pi_idx * 10_000
-                                + tau_idx * 1_000
-                                + rep
+                            seed = make_design_seed(
+                                base_seed=base_seed,
+                                dgp=dgp,
+                                n=n,
+                                p=p,
+                                pi=pi,
+                                tau=tau,
+                                rep=rep,
                             )
                             designs.append(Design(dgp, n, p, pi, tau, rep, seed))
                             seeds.add(seed)
@@ -312,6 +352,11 @@ def _failure_row_for_estimator(
     )
 
 
+def _estimator_random_state(design_seed: int) -> int:
+    """Return a deterministic sklearn-compatible random state for estimators."""
+    return int(design_seed % (2**32 - 1))
+
+
 def run_simulation_design(
     design: Design,
     alphas: np.ndarray,
@@ -336,6 +381,7 @@ def run_simulation_design(
     alphas = validate_alpha_grid(alphas)
 
     data = generate_data(design)
+    estimator_random_state = _estimator_random_state(design.seed)
     rows: list[dict[str, object]] = []
     for estimator_name in estimators:
         try:
@@ -358,7 +404,7 @@ def run_simulation_design(
                         selection_cv=3,
                         selection_max_iter=10000,
                         quantreg_max_iter=quantreg_max_iter,
-                        selection_random_state=design.seed,
+                        selection_random_state=estimator_random_state,
                         critical_value_multiplier=critical_value_multiplier,
                     )
                 elif estimator_name == "full_control":
@@ -376,7 +422,7 @@ def run_simulation_design(
                         tau=design.tau,
                         alphas=alphas,
                         k_folds=dml_k_folds,
-                        fold_random_state=design.seed,
+                        fold_random_state=estimator_random_state,
                         quantile_penalty=0.01,
                         ridge_alpha=1.0,
                         gmm_ridge=gmm_ridge,
@@ -517,7 +563,7 @@ def run_small_simulation(
     pi: float = 1.0,
     tau: float = 0.5,
     reps: int = 1,
-    base_seed: int = 12345,
+    base_seed: int = DEFAULT_BASE_SEED,
     alphas: np.ndarray | None = None,
     estimators: tuple[str, ...] = DEFAULT_SIMULATION_ESTIMATORS,
     alpha_grid_size: int = DEFAULT_ALPHA_GRID_SIZE,

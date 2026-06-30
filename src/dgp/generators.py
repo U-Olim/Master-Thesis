@@ -9,18 +9,18 @@ The common structural design is
     Y_i = Y_i(D_i),
     alpha_0(tau) = 1 + Q_U(tau).
 
-DGP1 is the baseline exact-sparse Gaussian IVQR design. It combines sparse
-high-dimensional controls with Gaussian U and V shocks. Positive correlation
-between U and V induces endogeneity, while pi controls excluded-instrument
-strength.
+DGP1 is the baseline sparse Gaussian IVQR design with 5 active controls.
+Positive correlation between U and V induces endogeneity, while pi controls
+excluded-instrument strength.
 
-DGP2 is the denser exact-sparse Gaussian IVQR design with slower coefficient
-decay. Its 20 active controls make control selection harder than in DGP1, but
-all coefficients outside the active set remain exactly zero.
+DGP2 is the denser sparse Gaussian selection-stress design with 10 active
+controls and slower coefficient decay. It remains harder than DGP1, but all
+coefficients outside the active set remain exactly zero.
 
 DGP3 is the heavy-tailed Gaussian-copula IVQR design with scaled Student-t
-structural shocks. It uses the same sparse coefficient support as DGP1 while
-giving U and V heavy-tailed, variance-normalized Student-t marginals. The
+structural shocks and 5 active controls. It uses the same sparse coefficient
+support size as DGP1 while giving U and V heavy-tailed, variance-normalized
+Student-t marginals. The
 parameter rho_uv is the latent Gaussian-copula correlation and need not equal
 the Pearson correlation of the transformed shocks. With the project's
 quartile and median targets, DGP3 is a heavy-tail robustness design rather
@@ -69,8 +69,8 @@ def generate_x(
 def generate_coefficients(dgp: str, p: int) -> dict[str, np.ndarray]:
     """Generate exact-sparse outcome and first-stage coefficient vectors.
 
-    DGP1 and DGP3 have 10 active controls. DGP2 is the denser exact-sparse
-    design and has 20 active controls, subject to the available dimension.
+    DGP1 and DGP3 have 5 active controls. DGP2 is the denser sparse
+    selection-stress design and has 10 active controls.
     """
     beta, gamma = true_sparse_coefficients(dgp, p)
     return {"beta": beta, "gamma": gamma}

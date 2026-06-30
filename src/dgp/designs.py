@@ -1,8 +1,9 @@
 """Design and data containers for IVQR simulations.
 
-The simulation compares DGP1, DGP2, and DGP3. DGP1 is the sparse Gaussian
-baseline, DGP2 is a denser sparse Gaussian design, and DGP3 keeps sparse
-controls but uses heavy-tailed structural shocks.
+The simulation compares DGP1, DGP2, and DGP3. DGP1 is the baseline sparse
+Gaussian design with 5 active controls, DGP2 is the denser sparse
+selection-stress design with 10 active controls, and DGP3 is the heavy-tail
+sparse robustness design with 5 active controls.
 """
 
 from dataclasses import dataclass

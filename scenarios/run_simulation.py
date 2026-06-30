@@ -24,6 +24,7 @@ from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN,
+    DEFAULT_BASE_SEED,
     DEFAULT_BATCH_SIZE,
     DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     DEFAULT_DML_K_FOLDS,
@@ -46,6 +47,7 @@ from simulation.config import (  # noqa: E402
     TAUS,
 )
 from simulation.runner import (  # noqa: E402
+    SEED_RULE_TEXT,
     filter_completed_designs,
     make_simulation_grid,
     normalize_estimator_names,
@@ -75,7 +77,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--reps", type=int, default=None)
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-    parser.add_argument("--base-seed", type=int, default=12345)
+    parser.add_argument("--base-seed", type=int, default=DEFAULT_BASE_SEED)
     parser.add_argument("--alpha-min", type=float, default=DEFAULT_ALPHA_MIN)
     parser.add_argument("--alpha-max", type=float, default=DEFAULT_ALPHA_MAX)
     parser.add_argument("--alpha-grid-size", type=int, default=DEFAULT_ALPHA_GRID_SIZE)
@@ -163,8 +165,6 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
         "taus": list(args.taus),
         "reps": args.reps,
         "base_seed": args.base_seed,
-        "batch_size": args.batch_size,
-        "n_jobs": args.n_jobs,
         "alpha_min": args.alpha_min,
         "alpha_max": args.alpha_max,
         "alpha_grid_size": args.alpha_grid_size,
@@ -201,6 +201,8 @@ def _write_manifest(
         "timestamp": datetime.now(UTC).isoformat(),
         "parameters": vars(args),
         "resume_signature": _resume_signature(args),
+        "base_seed": args.base_seed,
+        "seed_rule": SEED_RULE_TEXT,
         "total_designs": total_designs,
         "pending_designs": pending_designs,
         "designs_in_run": designs_in_run,
@@ -216,9 +218,17 @@ def _write_manifest(
     args.manifest.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 
-def _print_dry_run(args: argparse.Namespace, designs_in_run: int, alphas: np.ndarray) -> None:
+def _print_dry_run(
+    args: argparse.Namespace,
+    designs_in_run: int,
+    alphas: np.ndarray,
+    first_design_seed: int | None,
+) -> None:
     print(f"Mode: {args.mode}")
     print(f"Replications per design: {args.reps}")
+    print(f"Base seed: {args.base_seed}")
+    print("Seed rule: deterministic by design cell, independent of estimator/order")
+    print(f"First design seed: {first_design_seed}")
     print(f"DGPs: {', '.join(args.dgps)}")
     print(f"n values: {', '.join(map(str, args.n_values))}")
     print(f"p values: {', '.join(map(str, args.p_values))}")
@@ -297,7 +307,8 @@ def main(argv: list[str] | None = None) -> None:
     designs_to_run = pending_designs[: args.max_designs] if args.max_designs else pending_designs
 
     if args.dry_run:
-        _print_dry_run(args, len(designs_to_run), alphas)
+        first_design_seed = designs_to_run[0].seed if designs_to_run else None
+        _print_dry_run(args, len(designs_to_run), alphas, first_design_seed)
         return
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -62,6 +62,12 @@ identification and should be reported as a diagnostic rather than hidden.
 
 # Design Grid
 
+| DGP | Role | Active controls |
+|---|---|---:|
+| dgp1 | Baseline sparse Gaussian design | 5 |
+| dgp2 | Denser sparse selection-stress design | 10 |
+| dgp3 | Heavy-tail sparse robustness design | 5 |
+
 | Component | Values |
 |---|---|
 | DGPs | dgp1, dgp2, dgp3 |
@@ -73,6 +79,10 @@ identification and should be reported as a diagnostic rather than hidden.
 The parameter $\pi$ controls instrument strength. Smaller values of $\pi$
 correspond to weaker instruments and are expected to produce wider, less stable,
 or more irregular confidence regions.
+
+The reduced sparsity keeps the baseline design cleaner while high
+dimensionality is maintained through $p = 200$ and $p = 500$. Weak-instrument
+difficulty is still controlled by $\pi$.
 
 # Main Diagnostics
 

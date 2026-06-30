@@ -1,6 +1,7 @@
 """Simulation grid, execution, and result-row utilities."""
 
 __all__ = [
+    "make_design_seed",
     "make_simulation_grid",
     "run_simulation_batch",
     "run_simulation_design",

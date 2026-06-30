@@ -62,6 +62,18 @@ pixi run test_slow
 Default estimators are `oracle post_selection dml`. `full_control` is available
 but must be requested explicitly because it can be slow when `p` is large.
 
+## Design Grid
+
+| DGP | Role | Active controls |
+|---|---|---:|
+| `dgp1` | Baseline sparse Gaussian design | 5 |
+| `dgp2` | Denser sparse selection-stress design | 10 |
+| `dgp3` | Heavy-tail sparse robustness design | 5 |
+
+The reduced sparsity keeps the baseline design cleaner while high dimensionality
+is maintained through `p = 200` and `p = 500`. Weak-instrument difficulty is
+still controlled by `pi`.
+
 ## Main Commands
 
 Fast default:
@@ -98,6 +110,35 @@ Dry run:
 
 ```powershell
 pixi run python scenarios/run_simulation.py --mode fast --dry-run
+```
+
+## Reproducibility and Separate Estimator Runs
+
+The project uses a fixed default base seed, `12345`. Each design cell has a
+deterministic seed derived from `base_seed`, `dgp`, `n`, `p`, `pi`, `tau`, and
+`rep`.
+
+The design seed does not depend on estimator name, estimator order, number of
+workers, or batch size. Therefore, estimators can be run separately on different
+PCs and later merged, as long as they use the same mode, design settings, and
+base seed. These runs generate identical data for matching design cells.
+
+Oracle only:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --base-seed 12345 --output results/raw/fast_oracle.csv --manifest results/raw/fast_oracle_manifest.json
+```
+
+DML only:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --estimators dml --base-seed 12345 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
+```
+
+All estimators:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post_selection full_control dml --base-seed 12345 --output results/raw/fast_all.csv --manifest results/raw/fast_all_manifest.json
 ```
 
 ## Output Folders

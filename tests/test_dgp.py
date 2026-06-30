@@ -1,7 +1,11 @@
 import numpy as np
 
 from dgp import Design, generate_data, get_oracle_control_indices, true_alpha
+from dgp.true_parameters import true_sparse_coefficients
 from simulation.config import DGPS, TAUS
+
+
+EXPECTED_ACTIVE_CONTROLS = {"dgp1": 5, "dgp2": 10, "dgp3": 5}
 
 
 def test_design_validation_works_through_generator() -> None:
@@ -29,19 +33,27 @@ def test_true_alpha_is_finite_for_all_design_quantiles() -> None:
 
 
 def test_oracle_control_indices_are_valid() -> None:
-    p = 25
+    p = 20
     for dgp in DGPS:
         indices = get_oracle_control_indices(dgp, p)
         assert indices.ndim == 1
-        assert len(indices) > 0
+        assert len(indices) == EXPECTED_ACTIVE_CONTROLS[dgp]
         assert np.all(indices >= 0)
         assert np.all(indices < p)
 
 
+def test_sparse_coefficient_vectors_have_expected_active_counts() -> None:
+    p = 20
+    for dgp, expected in EXPECTED_ACTIVE_CONTROLS.items():
+        beta, gamma = true_sparse_coefficients(dgp, p)
+        active = np.flatnonzero((np.abs(beta) > 1e-12) | (np.abs(gamma) > 1e-12))
+        assert len(active) == expected
+
+
 def test_oracle_control_indices_reject_too_small_p_helpfully() -> None:
     try:
-        get_oracle_control_indices("dgp1", 5)
+        get_oracle_control_indices("dgp2", 5)
     except ValueError as exc:
-        assert "requires at least 10 controls" in str(exc)
+        assert "requires p >= 10 because it uses 10 active controls" in str(exc)
     else:
-        raise AssertionError("Expected dgp1 oracle support to reject p=5")
+        raise AssertionError("Expected dgp2 oracle support to reject p=5")
