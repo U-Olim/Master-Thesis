@@ -14,7 +14,7 @@ The project compares four estimators:
 The only simulation entry point is:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast
+pixi run fast
 ```
 
 ## Structure
@@ -47,8 +47,11 @@ tests/
 Pixi is the only project manager used by this repository.
 
 ```powershell
+pixi run fast
+pixi run full
 pixi run import_check
 pixi run test
+pixi run test_slow
 ```
 
 ## Simulation Modes
@@ -64,19 +67,13 @@ but must be requested explicitly because it can be slow when `p` is large.
 Fast default:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_results.csv --manifest results/raw/fast_manifest.json
+pixi run fast
 ```
 
-Fast DML only:
+Full default:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators dml --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
-```
-
-Fast full-control only:
-
-```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators full_control --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_full_control.csv --manifest results/raw/fast_full_control_manifest.json
+pixi run full
 ```
 
 Fast all estimators:
@@ -85,22 +82,16 @@ Fast all estimators:
 pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post_selection full_control dml --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_all.csv --manifest results/raw/fast_all_manifest.json
 ```
 
-Full default:
+Full default with explicit output:
 
 ```powershell
 pixi run python scenarios/run_simulation.py --mode full --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/full_results.csv --manifest results/raw/full_manifest.json
 ```
 
-Tiny smoke:
+Fast DML only:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators full_control --reps 1 --dgps dgp1 --n-values 80 --p-values 5 --pi-values 1.0 --taus 0.5 --max-designs 1 --n-jobs 1 --alpha-grid-size 5 --no-reports --output results/raw/smoke_full_control.csv --manifest results/raw/smoke_full_control_manifest.json
-```
-
-Tiny all-estimator smoke:
-
-```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post_selection full_control dml --reps 1 --dgps dgp1 --n-values 80 --p-values 20 --pi-values 1.0 --taus 0.5 --max-designs 1 --n-jobs 1 --alpha-grid-size 5 --no-reports --output results/raw/smoke_all_estimators.csv --manifest results/raw/smoke_all_estimators_manifest.json
+pixi run python scenarios/run_simulation.py --mode fast --estimators dml --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
 ```
 
 Dry run:

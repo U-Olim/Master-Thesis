@@ -19,7 +19,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "--basetemp=.pytest_tmp -p no:ddtrace -p no:cacheprovider"
 markers = [
-    "slow: long-running simulation, multiprocessing, or subprocess smoke tests",
+    "slow: long-running simulation, multiprocessing, or subprocess integration tests",
 ]
 
 [tool.pixi.workspace]
@@ -42,7 +42,6 @@ master-thesis-ivqr = { path = ".", editable = true }
 [tool.pixi.tasks]
 fast = "python scenarios/run_simulation.py --mode fast"
 full = "python scenarios/run_simulation.py --mode full"
-smoke = "python scenarios/run_simulation.py --mode fast --estimators full_control --reps 1 --dgps dgp1 --n-values 80 --p-values 5 --pi-values 1.0 --taus 0.5 --max-designs 1 --n-jobs 1 --alpha-grid-size 5 --no-reports --output results/raw/smoke_full_control.csv --manifest results/raw/smoke_full_control_manifest.json"
 import_check = "python -c \"import dgp; import estimators; import ivqr; import simulation; import reporting\""
 test = "pytest tests -m 'not slow'"
 test_slow = "pytest tests -m slow"
