@@ -423,15 +423,45 @@ def test_run_single_replication_catches_unexpected_estimator_exception(
     ]
 
 
-def test_run_single_replication_rejects_full_control_in_main_runner() -> None:
+def test_run_single_replication_accepts_full_control_in_main_runner(monkeypatch) -> None:
     design = Design("dgp1", 80, 20, 1.0, 0.5, rep=0, seed=123)
 
-    with pytest.raises(ValueError, match="Unknown estimator"):
-        run_single_replication(
-            design,
-            np.linspace(0.0, 2.0, 5),
-            estimators=("full",),
+    def fake_full_control_estimator(data, tau, alphas, **kwargs):
+        return EstimationResult(
+            estimator="full_control_ivqr",
+            alpha_hat=1.0,
+            alpha_true=data.alpha_true,
+            tau=tau,
+            converged=True,
+            failed=False,
+            message="ok",
+            objective_value=0.0,
+            at_grid_boundary=False,
+            alpha_grid_size=len(alphas),
+            failed_alpha_count=0,
+            cr_lower=None,
+            cr_upper=None,
+            cr_length=None,
+            cr_covers_true=None,
+            cr_empty=True,
+            cr_disconnected=False,
+            selected_controls=design.p,
+            runtime_seconds=0.0,
         )
+
+    monkeypatch.setattr(
+        runner_module,
+        "estimate_full_control_ivqr",
+        fake_full_control_estimator,
+    )
+    rows = run_single_replication(
+        design,
+        np.linspace(0.0, 2.0, 5),
+        estimators=("full_control",),
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["estimator"] == "full_control_ivqr"
 
 
 def test_run_single_replication_accepts_oracle_estimator() -> None:

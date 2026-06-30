@@ -34,8 +34,9 @@ src/
   utils/                    Shared validation helpers.
 
 scenarios/
-  main_simulation.py        Main fast/full simulation runner.
-  full_control_ivqr.py      Separate full-control IVQR benchmark runner.
+  run_simulation.py         Official unified fast/full simulation runner.
+  main_simulation.py        Backward-compatible wrapper.
+  full_control_ivqr.py      Backward-compatible full-control wrapper.
   _common.py                Shared scenario-script helpers.
 
 tests/
@@ -109,7 +110,7 @@ pixi run test_project
 pixi run test_slow
 pixi run fast_mode
 pixi run full_mode
-pixi run full_control
+pixi run full_control_fast
 ```
 
 Recommended local fast-mode command for a MacBook Pro M5 base model:
@@ -121,7 +122,7 @@ export OPENBLAS_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 
-caffeinate -dimsu pixi run python scenarios/main_simulation.py \
+caffeinate -dimsu pixi run python scenarios/run_simulation.py \
   --mode fast \
   --estimators oracle dml post_selection \
   --n-jobs 4 \
@@ -131,10 +132,16 @@ caffeinate -dimsu pixi run python scenarios/main_simulation.py \
   --manifest results/raw/fast_mode_manifest_grid21.json
 ```
 
+PowerShell one-line full-control fast run:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --estimators full_control --output results/raw/fast_grid21_full_control_ivqr.csv --manifest results/raw/fast_grid21_full_control_ivqr_manifest.json
+```
+
 Resume the same local run with the same output and manifest pair:
 
 ```bash
-caffeinate -dimsu pixi run python scenarios/main_simulation.py \
+caffeinate -dimsu pixi run python scenarios/run_simulation.py \
   --mode fast \
   --estimators oracle dml post_selection \
   --n-jobs 4 \
@@ -148,21 +155,21 @@ caffeinate -dimsu pixi run python scenarios/main_simulation.py \
 Run a targeted estimator subset when diagnosing runtime or coverage:
 
 ```bash
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --estimators oracle \
   --n-jobs 4 \
   --batch-size 10 \
   --alpha-grid-size 21
 
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --estimators dml \
   --n-jobs 4 \
   --batch-size 10 \
   --alpha-grid-size 21
 
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --estimators oracle post_selection \
   --n-jobs 4 \
@@ -185,7 +192,7 @@ Do not reuse baseline output or manifest files for this run.
 Run oracle and post-selection first because they are completed and faster:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -200,7 +207,7 @@ pixi run python scenarios/main_simulation.py \
 Resume the same wider-grid run with the same output and manifest pair:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -247,7 +254,7 @@ should be interpreted as an experimental sensitivity check.
 Run the quantile-specific post-selection estimator only:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -260,7 +267,7 @@ pixi run python scenarios/main_simulation.py \
 Resume the same run with the same output and manifest pair:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -274,7 +281,7 @@ pixi run python scenarios/main_simulation.py \
 For a direct baseline comparison, run:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -314,7 +321,7 @@ fully selection-robust inference; it is an experimental comparator.
 Run the IVQR-aligned estimator only:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -327,7 +334,7 @@ pixi run python scenarios/main_simulation.py \
 Resume the same run with the same output and manifest pair:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -383,7 +390,7 @@ resume into a manifest created with multiplier `1.10`, and vice versa.
 Baseline nominal oracle/post-selection:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -397,7 +404,7 @@ pixi run python scenarios/main_simulation.py \
 Moderate conservative sensitivity:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -411,7 +418,7 @@ pixi run python scenarios/main_simulation.py \
 Strong conservative sensitivity:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -425,7 +432,7 @@ pixi run python scenarios/main_simulation.py \
 Combined with the wider Experiment A grid:
 
 ```zsh
-pixi run python scenarios/main_simulation.py \
+pixi run python scenarios/run_simulation.py \
   --mode fast \
   --n-jobs 4 \
   --batch-size 10 \
@@ -449,8 +456,8 @@ disconnected-region rate, and boundary-hit rates may change.
 Use dry runs to inspect resolved defaults without writing results.
 
 ```bash
-python scenarios/main_simulation.py --mode fast --dry-run
-python scenarios/main_simulation.py --mode full --dry-run
+python scenarios/run_simulation.py --mode fast --dry-run
+python scenarios/run_simulation.py --mode full --dry-run
 python scenarios/full_control_ivqr.py --dry-run
 ```
 

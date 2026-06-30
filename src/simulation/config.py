@@ -1,12 +1,8 @@
 """Project-wide simulation configuration constants.
 
-The main simulation compares oracle IVQR, post-selection IVQR, and DML-style
-residualized IVQR over the thesis DGPs, sample sizes, instrument strengths,
-and quantiles.
-
-The full-control IVQR benchmark is intentionally separated because it uses all
-controls without selection or regularization and is computationally expensive
-in high-dimensional designs.
+The main simulation compares oracle IVQR, post-selection IVQR, DML-style
+residualized IVQR, and optional full-control IVQR over the thesis DGPs,
+sample sizes, instrument strengths, and quantiles.
 """
 
 N_VALUES: tuple[int, ...] = (500, 1000)
@@ -18,6 +14,7 @@ MAIN_ESTIMATORS: tuple[str, ...] = (
     "oracle",
     "dml",
     "post_selection",
+    "full_control",
     "post_selection_quantile",
     "post_selection_ivqr_aligned",
 )

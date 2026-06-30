@@ -9,22 +9,27 @@ CANONICAL_ESTIMATORS: tuple[str, ...] = (
     "oracle",
     "dml",
     "post_selection",
+    "full_control",
     "post_selection_quantile",
     "post_selection_ivqr_aligned",
+)
+MAIN_ESTIMATORS: tuple[str, ...] = (
+    "oracle",
+    "dml",
+    "post_selection",
     "full_control",
 )
-MAIN_SCENARIO_ESTIMATORS: tuple[str, ...] = (
+DEFAULT_MAIN_ESTIMATORS: tuple[str, ...] = (
     "oracle",
     "dml",
     "post_selection",
+)
+EXPERIMENTAL_ESTIMATORS: tuple[str, ...] = (
     "post_selection_quantile",
     "post_selection_ivqr_aligned",
 )
-MAIN_SCENARIO_DEFAULT_ESTIMATORS: tuple[str, ...] = (
-    "oracle",
-    "dml",
-    "post_selection",
-)
+MAIN_SCENARIO_ESTIMATORS: tuple[str, ...] = CANONICAL_ESTIMATORS
+MAIN_SCENARIO_DEFAULT_ESTIMATORS: tuple[str, ...] = DEFAULT_MAIN_ESTIMATORS
 FULL_CONTROL_SCENARIO_ESTIMATORS: tuple[str, ...] = ("full_control",)
 
 ESTIMATOR_ALIASES: dict[str, str] = {
@@ -122,8 +127,11 @@ def normalize_estimator_names(
 
 __all__ = [
     "CANONICAL_ESTIMATORS",
+    "DEFAULT_MAIN_ESTIMATORS",
     "ESTIMATOR_ALIASES",
+    "EXPERIMENTAL_ESTIMATORS",
     "FULL_CONTROL_SCENARIO_ESTIMATORS",
+    "MAIN_ESTIMATORS",
     "MAIN_SCENARIO_DEFAULT_ESTIMATORS",
     "MAIN_SCENARIO_ESTIMATORS",
     "SCENARIO_ALLOWED_ESTIMATORS",

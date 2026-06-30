@@ -15,6 +15,7 @@ from tests.helpers import (
 def test_project_root_and_scenarios_dir_exist() -> None:
     assert PROJECT_ROOT.exists()
     assert SCENARIOS_DIR.exists()
+    assert (SCENARIOS_DIR / "run_simulation.py").is_file()
     assert (SCENARIOS_DIR / "main_simulation.py").is_file()
     assert (SCENARIOS_DIR / "full_control_ivqr.py").is_file()
 

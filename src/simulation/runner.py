@@ -14,6 +14,7 @@ from dgp.generators import generate_data
 from dgp.true_parameters import get_oracle_control_indices, true_alpha
 from estimators.base import EstimationResult
 from estimators.dml_ivqr import estimate_dml_ivqr
+from estimators.full_control_ivqr import estimate_full_control_ivqr
 from estimators.oracle_ivqr import estimate_oracle_ivqr
 from estimators.post_selection_ivqr import estimate_post_selection_ivqr
 from estimators.post_selection_ivqr_aligned import estimate_post_selection_ivqr_aligned
@@ -66,6 +67,7 @@ ESTIMATOR_OUTPUT_NAMES = {
     "post_selection_quantile": "post_selection_quantile",
     "post_selection_ivqr_aligned": "post_selection_ivqr_aligned",
     "dml": "dml_ivqr",
+    "full_control": "full_control_ivqr",
 }
 DESIGN_KEY_COLUMNS: tuple[str, ...] = ("dgp", "n", "p", "pi", "tau", "rep", "seed")
 
@@ -312,6 +314,7 @@ def run_single_replication(
         "post_selection_quantile": estimate_post_selection_quantile_ivqr,
         "post_selection_ivqr_aligned": estimate_post_selection_ivqr_aligned,
         "dml": estimate_dml_ivqr,
+        "full_control": estimate_full_control_ivqr,
     }
 
     rows: list[dict[str, object]] = []
@@ -379,6 +382,15 @@ def run_single_replication(
                         tau=design.tau,
                         alphas=alphas,
                         oracle_indices=oracle_indices,
+                        max_iter=quantreg_max_iter,
+                        gmm_ridge=gmm_ridge,
+                        critical_value_multiplier=critical_value_multiplier,
+                    )
+                elif estimator_name == "full_control":
+                    result = estimator(
+                        data,
+                        tau=design.tau,
+                        alphas=alphas,
                         max_iter=quantreg_max_iter,
                         gmm_ridge=gmm_ridge,
                         critical_value_multiplier=critical_value_multiplier,

@@ -126,8 +126,9 @@ def test_normalize_estimator_names_defaults_and_aliases() -> None:
 def test_normalize_estimator_names_rejects_invalid_and_unsupported() -> None:
     with pytest.raises(ValueError, match="Unknown estimator"):
         normalize_estimator_names(["bad_name"], scenario="main")
-    with pytest.raises(ValueError, match="not supported"):
-        normalize_estimator_names(["full_control"], scenario="main")
+    assert normalize_estimator_names(["full_control"], scenario="main") == (
+        "full_control",
+    )
     with pytest.raises(ValueError, match="not supported"):
         normalize_estimator_names(["dml"], scenario="full_control")
     assert normalize_estimator_names(None, scenario="full_control") == ("full_control",)
@@ -704,10 +705,10 @@ def test_full_simulation_rejects_invalid_quantreg_max_iter(monkeypatch) -> None:
         full_simulation_main()
 
 
-def test_main_runner_validation_rejects_full_control() -> None:
+def test_main_runner_validation_accepts_full_control() -> None:
     args = full_simulation_cli.argparse.Namespace(
         mode="fast",
-        estimators=["full"],
+        estimators=["full_control_ivqr"],
         dgps=["dgp1"],
         n_values=[500],
         p_values=[100],
@@ -730,8 +731,8 @@ def test_main_runner_validation_rejects_full_control() -> None:
         max_designs=None,
     )
 
-    with pytest.raises(ValueError, match="Unknown estimator"):
-        full_simulation_cli._apply_mode_defaults(args)
+    full_simulation_cli._apply_mode_defaults(args)
+    assert args.estimators == ("full_control",)
 
 
 def test_manual_oracle_uses_single_scenario_defaults() -> None:

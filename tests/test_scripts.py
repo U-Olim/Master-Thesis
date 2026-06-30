@@ -12,11 +12,16 @@ import pytest
 from dgp.designs import Design
 from estimators.base import EstimationResult
 from inference import metrics
-from tests.helpers import load_full_control_cli, load_main_simulation_cli
+from tests.helpers import (
+    load_full_control_cli,
+    load_main_simulation_cli,
+    load_main_simulation_wrapper_cli,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-FULL_SIMULATION_SCRIPT = PROJECT_ROOT / "scenarios" / "main_simulation.py"
+FULL_SIMULATION_SCRIPT = PROJECT_ROOT / "scenarios" / "run_simulation.py"
+MAIN_SIMULATION_WRAPPER_SCRIPT = PROJECT_ROOT / "scenarios" / "main_simulation.py"
 FULL_CONTROL_SCRIPT = PROJECT_ROOT / "scenarios" / "full_control_ivqr.py"
 RESUME_REQUIRES_MANIFEST_MESSAGE = (
     "--resume requires --manifest so run configuration compatibility can be validated."
@@ -51,6 +56,11 @@ def main_cli():
 @pytest.fixture(scope="module")
 def full_control_cli():
     return load_full_control_cli()
+
+
+@pytest.fixture(scope="module")
+def main_wrapper_cli():
+    return load_main_simulation_wrapper_cli()
 
 
 def _run_cli_in_process(
@@ -149,7 +159,7 @@ def test_core_phase1_imports_work() -> None:
     assert EstimationResult is not None
 
 
-def test_main_simulation_help_uses_modes(
+def test_run_simulation_help_uses_modes(
     main_cli,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -165,7 +175,7 @@ def test_main_simulation_help_uses_modes(
     )
 
     assert result.returncode == 0
-    assert "Run the main IVQR Monte Carlo simulation" in result.stdout
+    assert "Run the unified IVQR Monte Carlo simulation" in result.stdout
     assert "--mode {fast,full}" in result.stdout
     assert "full-control-benchmark" not in result.stdout
 
@@ -520,20 +530,22 @@ def test_main_simulation_cli_runs_aligned_post_selection_only(
     assert payload["resume_signature"]["estimators"] == ["post_selection_ivqr_aligned"]
 
 
-def test_main_simulation_rejects_full_control_estimator(
+def test_run_simulation_accepts_full_control_estimator(
     main_cli,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(ValueError, match="not supported"):
-        _run_cli_in_process(
-            main_cli,
-            ["--estimators", "full_control", "--dry-run"],
-            monkeypatch,
-            capsys,
-            tmp_path,
-        )
+    result = _run_cli_in_process(
+        main_cli,
+        ["--estimators", "full_control", "--dry-run"],
+        monkeypatch,
+        capsys,
+        tmp_path,
+    )
+
+    assert result.returncode == 0
+    assert "Running estimators: full_control" in result.stdout
 
 
 def test_full_control_script_dry_run_uses_limited_design(
@@ -552,7 +564,7 @@ def test_full_control_script_dry_run_uses_limited_design(
     )
 
     assert result.returncode == 0
-    assert "Mode: full-control IVQR benchmark" in result.stdout
+    assert "Mode: fast" in result.stdout
     assert "Replications per design: 500" in result.stdout
     assert "alpha_min = -1.0" in result.stdout
     assert "alpha_max = 3.0" in result.stdout
@@ -894,19 +906,17 @@ def test_full_control_resume_applies_chunking_before_filtering(
         encoding="utf-8",
     )
 
-    def fake_run_batch(
-        designs,
-        alphas,
-        quantreg_max_iter,
-        critical_value_multiplier,
-        n_jobs,
-        show_quantreg_warnings,
-    ):
+    def fake_run_simulation_batch(designs, alphas, **kwargs):
         captured_designs.extend(designs)
-        return pd.DataFrame(columns=full_control_cli.RESULT_COLUMNS)
+        return pd.DataFrame()
 
-    monkeypatch.setattr(full_control_cli, "_run_batch", fake_run_batch)
-    monkeypatch.setattr(full_control_cli, "_make_reports", lambda args: None)
+    monkeypatch.setattr(
+        full_control_cli._unified,
+        "run_simulation_batch",
+        fake_run_simulation_batch,
+    )
+    monkeypatch.setattr(full_control_cli._unified, "_make_reports", lambda args: None)
+    monkeypatch.setattr(full_control_cli._unified, "_count_rows", lambda path: 1)
 
     _run_cli_in_process(
         full_control_cli,

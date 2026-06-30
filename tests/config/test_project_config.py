@@ -210,6 +210,7 @@ def test_estimator_name_constants() -> None:
         "oracle",
         "dml",
         "post_selection",
+        "full_control",
         "post_selection_quantile",
         "post_selection_ivqr_aligned",
     )

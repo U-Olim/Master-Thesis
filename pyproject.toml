@@ -40,8 +40,9 @@ pytest = "*"
 master-thesis-ivqr = { path = ".", editable = true }
 
 [tool.pixi.tasks]
-fast_mode = "python scenarios/main_simulation.py --mode fast"
-full_mode = "python scenarios/main_simulation.py --mode full"
+fast_mode = "python scenarios/run_simulation.py --mode fast"
+full_mode = "python scenarios/run_simulation.py --mode full"
+full_control_fast = "python scenarios/run_simulation.py --mode fast --estimators full_control"
 full_control = "python scenarios/full_control_ivqr.py"
 import_check = "python -c \"import config; import estimators; import simulation; import inference; import reporting\""
 test_project = "pytest tests -m 'not slow'"

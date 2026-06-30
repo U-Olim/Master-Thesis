@@ -36,6 +36,13 @@ def load_module_from_path(module_name: str, path: str | Path) -> ModuleType:
 
 def load_main_simulation_cli() -> ModuleType:
     return load_module_from_path(
+        "run_simulation_cli",
+        SCENARIOS_DIR / "run_simulation.py",
+    )
+
+
+def load_main_simulation_wrapper_cli() -> ModuleType:
+    return load_module_from_path(
         "main_simulation_cli",
         SCENARIOS_DIR / "main_simulation.py",
     )
@@ -165,5 +172,6 @@ __all__ = [
     "SIMULATION_RESULT_REQUIRED_KEYS",
     "load_full_control_cli",
     "load_main_simulation_cli",
+    "load_main_simulation_wrapper_cli",
     "load_module_from_path",
 ]
