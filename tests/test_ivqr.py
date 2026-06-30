@@ -21,6 +21,8 @@ def test_confidence_region_inversion_on_known_vector() -> None:
     )
     assert region.empty is False
     assert region.covers_true is True
+    assert region.lower is not None
+    assert region.upper is not None
     assert region.lower <= 0.0
     assert region.upper >= 1.0
 

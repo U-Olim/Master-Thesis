@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from time import perf_counter
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import numpy as np
 
@@ -121,7 +121,7 @@ class RuntimeProfile:
 def empty_runtime_columns() -> RuntimeDiagnosticColumns:
     """Return all runtime profiling columns with missing values."""
     missing = float(np.nan)
-    return {name: missing for name in RUNTIME_COLUMNS}
+    return cast(RuntimeDiagnosticColumns, {name: missing for name in RUNTIME_COLUMNS})
 
 
 def _nonnegative_or_nan(value: float) -> float:
