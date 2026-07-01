@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from dgp import Design, generate_data, get_oracle_control_indices
 from estimators import (
@@ -50,3 +51,41 @@ def test_estimators_return_estimation_results_with_expected_names() -> None:
         assert "failed_alpha_rate" in result.diagnostics
         assert "ps_n_selected_controls" in result.diagnostics
         assert "runtime_total_sec" in result.diagnostics
+
+
+def test_post_selection_lasso_multiplier_diagnostics() -> None:
+    data = _tiny_data()
+    alphas = np.linspace(-1.0, 3.0, 5)
+    for multiplier in (1.0, 1.5):
+        result = estimate_post_selection_ivqr(
+            data,
+            tau=0.5,
+            alphas=alphas,
+            selection_cv=2,
+            selection_lasso_multiplier=multiplier,
+            quantreg_max_iter=100,
+        )
+        assert isinstance(result, EstimationResult)
+        assert result.status in {"ok", "failed"}
+        assert result.ps_selection_lasso_multiplier == multiplier
+        assert result.diagnostics["ps_selection_lasso_multiplier"] == multiplier
+        if result.ps_lasso_alpha_y_cv is not None:
+            assert result.ps_lasso_alpha_y_final == pytest.approx(
+                multiplier * result.ps_lasso_alpha_y_cv
+            )
+        if result.ps_lasso_alpha_d_cv is not None:
+            assert result.ps_lasso_alpha_d_final == pytest.approx(
+                multiplier * result.ps_lasso_alpha_d_cv
+            )
+
+
+def test_post_selection_lasso_multiplier_must_be_positive() -> None:
+    data = _tiny_data()
+    with pytest.raises(ValueError, match="selection_lasso_multiplier must be positive"):
+        estimate_post_selection_ivqr(
+            data,
+            tau=0.5,
+            alphas=np.linspace(-1.0, 3.0, 5),
+            selection_cv=2,
+            selection_lasso_multiplier=0,
+        )

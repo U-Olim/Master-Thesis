@@ -21,7 +21,10 @@ from estimators.base import EstimationResult
 from estimators.dml import estimate_dml_ivqr
 from estimators.full_control import estimate_full_control_ivqr
 from estimators.oracle import estimate_oracle_ivqr
-from estimators.post_selection import estimate_post_selection_ivqr
+from estimators.post_selection import (
+    estimate_post_selection_ivqr,
+    validate_selection_lasso_multiplier,
+)
 from simulation.config import (
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_ALPHA_MAX,
@@ -107,6 +110,7 @@ class WorkerArgs:
     dml_k_folds: int
     gmm_ridge: float
     critical_value_multiplier: float
+    selection_lasso_multiplier: float
     show_quantreg_warnings: bool
 
 
@@ -365,6 +369,7 @@ def run_simulation_design(
     dml_k_folds: int = DEFAULT_DML_K_FOLDS,
     gmm_ridge: float = 1e-8,
     critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
+    selection_lasso_multiplier: float = 1.0,
     show_quantreg_warnings: bool = False,
 ) -> list[dict[str, object]]:
     """Generate one dataset and run requested estimators on it."""
@@ -377,6 +382,9 @@ def run_simulation_design(
     gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
     critical_value_multiplier = _validate_positive_float(
         "critical_value_multiplier", critical_value_multiplier
+    )
+    selection_lasso_multiplier = validate_selection_lasso_multiplier(
+        selection_lasso_multiplier
     )
     alphas = validate_alpha_grid(alphas)
 
@@ -405,6 +413,7 @@ def run_simulation_design(
                         selection_max_iter=10000,
                         quantreg_max_iter=quantreg_max_iter,
                         selection_random_state=estimator_random_state,
+                        selection_lasso_multiplier=selection_lasso_multiplier,
                         critical_value_multiplier=critical_value_multiplier,
                     )
                 elif estimator_name == "full_control":
@@ -458,6 +467,7 @@ def _run_worker(args: WorkerArgs) -> list[dict[str, object]]:
         dml_k_folds=args.dml_k_folds,
         gmm_ridge=args.gmm_ridge,
         critical_value_multiplier=args.critical_value_multiplier,
+        selection_lasso_multiplier=args.selection_lasso_multiplier,
         show_quantreg_warnings=args.show_quantreg_warnings,
     )
 
@@ -476,6 +486,7 @@ def run_simulation_batch(
     dml_k_folds: int = DEFAULT_DML_K_FOLDS,
     gmm_ridge: float = 1e-8,
     critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
+    selection_lasso_multiplier: float = 1.0,
     n_jobs: int = DEFAULT_N_JOBS,
     show_quantreg_warnings: bool = False,
 ) -> pd.DataFrame:
@@ -484,6 +495,9 @@ def run_simulation_batch(
     estimators = _validate_estimators(estimators)
     alphas = validate_alpha_grid(alphas)
     n_jobs = validate_positive_int("n_jobs", n_jobs)
+    selection_lasso_multiplier = validate_selection_lasso_multiplier(
+        selection_lasso_multiplier
+    )
 
     worker_args = [
         WorkerArgs(
@@ -494,6 +508,7 @@ def run_simulation_batch(
             dml_k_folds=dml_k_folds,
             gmm_ridge=gmm_ridge,
             critical_value_multiplier=critical_value_multiplier,
+            selection_lasso_multiplier=selection_lasso_multiplier,
             show_quantreg_warnings=show_quantreg_warnings,
         )
         for design in designs

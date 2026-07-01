@@ -305,6 +305,19 @@ def critical_value_multiplier(df: pd.DataFrame) -> float:
     return float(values.mean())
 
 
+def ps_selection_lasso_multiplier(df: pd.DataFrame) -> float:
+    validate_metric_input(df)
+    if "ps_selection_lasso_multiplier" not in df.columns:
+        return float(np.nan)
+    values = _to_nonnegative_numeric(df["ps_selection_lasso_multiplier"]).dropna()
+    if values.empty:
+        return float(np.nan)
+    unique_values = values.unique()
+    if unique_values.size == 1:
+        return float(unique_values[0])
+    return float(values.mean())
+
+
 def mean_critical_value_adjusted(df: pd.DataFrame) -> float:
     validate_metric_input(df)
     if "critical_value_adjusted" in df.columns:
@@ -393,6 +406,7 @@ def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
         "mean_failed_alpha_rate": mean_failed_alpha_rate(df),
         "mean_selected_controls": mean_selected_controls(df),
         "critical_value_multiplier": critical_value_multiplier(df),
+        "ps_selection_lasso_multiplier": ps_selection_lasso_multiplier(df),
         "mean_critical_value_adjusted": mean_critical_value_adjusted(df),
         "mean_runtime_seconds": mean_runtime_seconds(df),
         "mean_runtime_total_sec": mean_runtime_total_sec(df),
@@ -431,6 +445,7 @@ __all__ = [
     "mean_failed_alpha_rate",
     "mean_selected_controls",
     "critical_value_multiplier",
+    "ps_selection_lasso_multiplier",
     "mean_critical_value_adjusted",
     "mean_runtime_seconds",
     "mean_runtime_total_sec",

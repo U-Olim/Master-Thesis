@@ -52,9 +52,14 @@ POST_SELECTION_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
     "ps_first_stage_f_stat",
     "ps_first_stage_condition_number",
     "ps_selection_method",
+    "ps_selection_lasso_multiplier",
     "ps_lasso_alpha_controls",
     "ps_lasso_alpha_instruments",
     "ps_lasso_alpha_first_stage",
+    "ps_lasso_alpha_y_cv",
+    "ps_lasso_alpha_d_cv",
+    "ps_lasso_alpha_y_final",
+    "ps_lasso_alpha_d_final",
     "ps_lasso_cv_folds",
     "ps_selection_failed",
     "ps_first_stage_failed",
@@ -183,9 +188,14 @@ class EstimationResult:
     ps_first_stage_f_stat: float | None = None
     ps_first_stage_condition_number: float | None = None
     ps_selection_method: str | None = None
+    ps_selection_lasso_multiplier: float | None = None
     ps_lasso_alpha_controls: float | None = None
     ps_lasso_alpha_instruments: float | None = None
     ps_lasso_alpha_first_stage: float | None = None
+    ps_lasso_alpha_y_cv: float | None = None
+    ps_lasso_alpha_d_cv: float | None = None
+    ps_lasso_alpha_y_final: float | None = None
+    ps_lasso_alpha_d_final: float | None = None
     ps_lasso_cv_folds: int | None = None
     ps_selection_failed: bool | None = None
     ps_first_stage_failed: bool | None = None

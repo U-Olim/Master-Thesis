@@ -114,10 +114,14 @@ def test_resume_signature_seed_and_execution_invariance() -> None:
     changed_execution = _signature("--n-jobs", "4", "--batch-size", "10")
     changed_seed = _signature("--base-seed", "54321")
     changed_estimators = _signature("--estimators", "oracle")
+    changed_selection_lasso = _signature("--selection-lasso-multiplier", "1.2")
     assert base == changed_execution
     assert base != changed_seed
     assert base != changed_estimators
+    assert base != changed_selection_lasso
     assert base["base_seed"] == DEFAULT_BASE_SEED
+    assert base["selection_lasso_multiplier"] == 1.0
+    assert changed_selection_lasso["selection_lasso_multiplier"] == 1.2
     assert "n_jobs" not in base
     assert "batch_size" not in base
 
@@ -130,8 +134,38 @@ def test_dry_run_uses_default_estimators(tmp_path: Path) -> None:
     assert "Seed rule: deterministic by design cell, independent of estimator/order" in result.stdout
     assert "First design seed:" in result.stdout
     assert "Estimators: oracle, post_selection, dml" in result.stdout
+    assert "Post-selection Lasso multiplier: 1.0" in result.stdout
     assert "Expected design rows:" in result.stdout
     assert "Reports: generated after successful run" in result.stdout
+
+
+def test_dry_run_accepts_selection_lasso_multiplier(tmp_path: Path) -> None:
+    result = _run_cli(
+        tmp_path,
+        "--mode",
+        "fast",
+        "--estimators",
+        "post_selection",
+        "--selection-lasso-multiplier",
+        "1.2",
+        "--dry-run",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Estimators: post_selection" in result.stdout
+    assert "Post-selection Lasso multiplier: 1.2" in result.stdout
+
+
+def test_selection_lasso_multiplier_rejects_nonpositive_values(tmp_path: Path) -> None:
+    result = _run_cli(
+        tmp_path,
+        "--mode",
+        "fast",
+        "--selection-lasso-multiplier",
+        "0",
+        "--dry-run",
+    )
+    assert result.returncode != 0
+    assert "--selection-lasso-multiplier must be positive" in result.stderr
 
 
 def test_dry_run_accepts_full_control(tmp_path: Path) -> None:
@@ -192,3 +226,53 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
     assert payload["resume_signature"]["base_seed"] == DEFAULT_BASE_SEED
     assert "n_jobs" not in payload["resume_signature"]
     assert "batch_size" not in payload["resume_signature"]
+
+
+def test_tiny_post_selection_run_writes_lasso_multiplier_diagnostics(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "raw" / "tiny_post_selection.csv"
+    manifest = tmp_path / "raw" / "tiny_post_selection_manifest.json"
+    result = _run_cli(
+        tmp_path,
+        "--mode",
+        "fast",
+        "--estimators",
+        "post_selection",
+        "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--n-values",
+        "80",
+        "--p-values",
+        "20",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--max-designs",
+        "1",
+        "--n-jobs",
+        "1",
+        "--batch-size",
+        "10",
+        "--alpha-grid-size",
+        "5",
+        "--selection-lasso-multiplier",
+        "1.2",
+        "--no-reports",
+        "--output",
+        str(output),
+        "--manifest",
+        str(manifest),
+    )
+    assert result.returncode == 0, result.stderr
+    written = pd.read_csv(output)
+    assert written["estimator"].tolist() == ["post_selection_ivqr"]
+    assert written.loc[0, "ps_selection_lasso_multiplier"] == 1.2
+    assert "ps_lasso_alpha_y_cv" in written.columns
+    assert "ps_lasso_alpha_y_final" in written.columns
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["parameters"]["selection_lasso_multiplier"] == 1.2
+    assert payload["resume_signature"]["selection_lasso_multiplier"] == 1.2

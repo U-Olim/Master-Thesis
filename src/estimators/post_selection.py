@@ -24,7 +24,7 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
-from sklearn.linear_model import LassoCV
+from sklearn.linear_model import Lasso, LassoCV
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -78,6 +78,10 @@ class SelectionResult:
     message: str
     lasso_alpha_controls: float | None
     lasso_alpha_first_stage: float | None
+    lasso_alpha_y_cv: float | None
+    lasso_alpha_d_cv: float | None
+    lasso_alpha_y_final: float | None
+    lasso_alpha_d_final: float | None
 
 
 def _nan_or_float(value: float | None) -> float | None:
@@ -148,6 +152,11 @@ def summarize_post_selection_diagnostics(
     lasso_alpha_controls: float | None = None,
     lasso_alpha_instruments: float | None = None,
     lasso_alpha_first_stage: float | None = None,
+    selection_lasso_multiplier: float | None = 1.0,
+    lasso_alpha_y_cv: float | None = None,
+    lasso_alpha_d_cv: float | None = None,
+    lasso_alpha_y_final: float | None = None,
+    lasso_alpha_d_final: float | None = None,
     lasso_cv_folds: int | None = None,
     selection_failed: bool = False,
     selection_method: str = "lassocv_control_union",
@@ -212,9 +221,16 @@ def summarize_post_selection_diagnostics(
             "ps_selected_no_instruments": n_retained_instruments == 0,
             "ps_selected_empty_total": n_total == 0,
             "ps_selection_method": selection_method,
+            "ps_selection_lasso_multiplier": _nan_or_float(
+                selection_lasso_multiplier
+            ),
             "ps_lasso_alpha_controls": _nan_or_float(lasso_alpha_controls),
             "ps_lasso_alpha_instruments": _nan_or_float(lasso_alpha_instruments),
             "ps_lasso_alpha_first_stage": _nan_or_float(lasso_alpha_first_stage),
+            "ps_lasso_alpha_y_cv": _nan_or_float(lasso_alpha_y_cv),
+            "ps_lasso_alpha_d_cv": _nan_or_float(lasso_alpha_d_cv),
+            "ps_lasso_alpha_y_final": _nan_or_float(lasso_alpha_y_final),
+            "ps_lasso_alpha_d_final": _nan_or_float(lasso_alpha_d_final),
             "ps_lasso_cv_folds": lasso_cv_folds,
             "ps_selection_failed": bool(selection_failed),
         }
@@ -300,6 +316,15 @@ def _validate_selection_config(cv: int, max_iter: int, n: int) -> None:
         raise ValueError("max_iter must be positive")
 
 
+def validate_selection_lasso_multiplier(selection_lasso_multiplier: float) -> float:
+    if isinstance(selection_lasso_multiplier, bool):
+        raise ValueError("selection_lasso_multiplier must be positive.")
+    selection_lasso_multiplier = float(selection_lasso_multiplier)
+    if not np.isfinite(selection_lasso_multiplier) or selection_lasso_multiplier <= 0:
+        raise ValueError("selection_lasso_multiplier must be positive.")
+    return selection_lasso_multiplier
+
+
 def _failed_result(
     data: SimData,
     tau: float,
@@ -367,6 +392,7 @@ def _select_controls_lasso_details(
     random_state: int | None = None,
     cv: int = 5,
     max_iter: int = 10000,
+    selection_lasso_multiplier: float = 1.0,
 ) -> SelectionResult:
     """Select controls by union of LassoCV selections for Y~X and D~X.
 
@@ -379,6 +405,9 @@ def _select_controls_lasso_details(
     if n < 2:
         raise ValueError("at least two observations are required")
     _validate_selection_config(cv, max_iter, n)
+    selection_lasso_multiplier = validate_selection_lasso_multiplier(
+        selection_lasso_multiplier
+    )
 
     if x.shape[1] == 0:
         return SelectionResult(
@@ -386,35 +415,60 @@ def _select_controls_lasso_details(
             message="selected_y=0; selected_d=0; selected_union=0",
             lasso_alpha_controls=None,
             lasso_alpha_first_stage=None,
+            lasso_alpha_y_cv=None,
+            lasso_alpha_d_cv=None,
+            lasso_alpha_y_final=None,
+            lasso_alpha_d_final=None,
         )
 
-    model_y = make_pipeline(
+    cv_model_y = make_pipeline(
         StandardScaler(),
         LassoCV(cv=cv, random_state=random_state, max_iter=max_iter),
     )
-    model_d = make_pipeline(
+    cv_model_d = make_pipeline(
         StandardScaler(),
         LassoCV(cv=cv, random_state=random_state, max_iter=max_iter),
     )
 
-    model_y.fit(x, y)
-    model_d.fit(x, d)
+    cv_model_y.fit(x, y)
+    cv_model_d.fit(x, d)
 
-    coef_y = np.asarray(model_y.named_steps["lassocv"].coef_)
-    coef_d = np.asarray(model_d.named_steps["lassocv"].coef_)
+    alpha_y_cv = float(cv_model_y.named_steps["lassocv"].alpha_)
+    alpha_d_cv = float(cv_model_d.named_steps["lassocv"].alpha_)
+    alpha_y_final = selection_lasso_multiplier * alpha_y_cv
+    alpha_d_final = selection_lasso_multiplier * alpha_d_cv
+
+    final_model_y = make_pipeline(
+        StandardScaler(),
+        Lasso(alpha=alpha_y_final, max_iter=max_iter),
+    )
+    final_model_d = make_pipeline(
+        StandardScaler(),
+        Lasso(alpha=alpha_d_final, max_iter=max_iter),
+    )
+    final_model_y.fit(x, y)
+    final_model_d.fit(x, d)
+
+    coef_y = np.asarray(final_model_y.named_steps["lasso"].coef_)
+    coef_d = np.asarray(final_model_d.named_steps["lasso"].coef_)
     selected_y = np.flatnonzero(np.abs(coef_y) > 1e-12)
     selected_d = np.flatnonzero(np.abs(coef_d) > 1e-12)
     selected = np.union1d(selected_y, selected_d).astype(int)
     message = (
         f"selected_y={selected_y.size}; selected_d={selected_d.size}; "
-        f"selected_union={selected.size}"
+        f"selected_union={selected.size}; "
+        f"selection_lasso_multiplier={selection_lasso_multiplier:g}"
     )
 
     return SelectionResult(
         selected_indices=selected,
         message=message,
-        lasso_alpha_controls=float(model_y.named_steps["lassocv"].alpha_),
-        lasso_alpha_first_stage=float(model_d.named_steps["lassocv"].alpha_),
+        lasso_alpha_controls=alpha_y_final,
+        lasso_alpha_first_stage=alpha_d_final,
+        lasso_alpha_y_cv=alpha_y_cv,
+        lasso_alpha_d_cv=alpha_d_cv,
+        lasso_alpha_y_final=alpha_y_final,
+        lasso_alpha_d_final=alpha_d_final,
     )
 
 
@@ -426,6 +480,7 @@ def select_controls_lasso(
     random_state: int | None = None,
     cv: int = 5,
     max_iter: int = 10000,
+    selection_lasso_multiplier: float = 1.0,
 ) -> tuple[np.ndarray, str]:
     """Select controls by union of LassoCV selections for Y~X and D~X."""
     details = _select_controls_lasso_details(
@@ -436,6 +491,7 @@ def select_controls_lasso(
         random_state=random_state,
         cv=cv,
         max_iter=max_iter,
+        selection_lasso_multiplier=selection_lasso_multiplier,
     )
     return details.selected_indices, details.message
 
@@ -475,6 +531,7 @@ def estimate_post_selection_ivqr(
     selection_random_state: int | None = 123,
     selection_cv: int = 5,
     selection_max_iter: int = 10000,
+    selection_lasso_multiplier: float = 1.0,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
 ) -> EstimationResult:
     """Estimate post-selection IVQR by Lasso control selection and CH inverse-IVQR."""
@@ -485,6 +542,9 @@ def estimate_post_selection_ivqr(
     validate_tau(tau)
     critical_value_multiplier = validate_critical_value_multiplier(
         critical_value_multiplier
+    )
+    selection_lasso_multiplier = validate_selection_lasso_multiplier(
+        selection_lasso_multiplier
     )
     if quantreg_max_iter <= 0:
         raise ValueError("quantreg_max_iter must be positive")
@@ -504,6 +564,7 @@ def estimate_post_selection_ivqr(
             random_state=selection_random_state,
             cv=selection_cv,
             max_iter=selection_max_iter,
+            selection_lasso_multiplier=selection_lasso_multiplier,
         )
         selection_sec = _elapsed_since(selection_start)
     except Exception as exc:  # noqa: BLE001 - selection failures should be reported cleanly.
@@ -515,6 +576,7 @@ def estimate_post_selection_ivqr(
             selected_control_indices=None,
             selected_instrument_indices=np.arange(z_2d.shape[1]),
             lasso_cv_folds=selection_cv,
+            selection_lasso_multiplier=selection_lasso_multiplier,
             selection_failed=True,
             warning_code="lasso_failed",
         )
@@ -549,6 +611,11 @@ def estimate_post_selection_ivqr(
         selected_instrument_indices=selected_instrument_indices,
         lasso_alpha_controls=selection_details.lasso_alpha_controls,
         lasso_alpha_first_stage=selection_details.lasso_alpha_first_stage,
+        selection_lasso_multiplier=selection_lasso_multiplier,
+        lasso_alpha_y_cv=selection_details.lasso_alpha_y_cv,
+        lasso_alpha_d_cv=selection_details.lasso_alpha_d_cv,
+        lasso_alpha_y_final=selection_details.lasso_alpha_y_final,
+        lasso_alpha_d_final=selection_details.lasso_alpha_d_final,
         lasso_cv_folds=selection_cv,
     )
     diagnostics_sec = _elapsed_since(diagnostics_start)

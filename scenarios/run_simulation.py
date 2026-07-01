@@ -86,6 +86,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=float,
         default=DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     )
+    parser.add_argument(
+        "--selection-lasso-multiplier",
+        type=float,
+        default=1.0,
+        help=(
+            "Multiplies the LassoCV-selected penalty used in post-selection "
+            "control selection. Affects only the post_selection estimator. "
+            "Default 1.0 preserves baseline behavior."
+        ),
+    )
     parser.add_argument("--dml-k-folds", type=int, default=DEFAULT_DML_K_FOLDS)
     parser.add_argument("--quantreg-max-iter", type=int, default=DEFAULT_QUANTREG_MAX_ITER)
     parser.add_argument("--dgps", nargs="+", default=None)
@@ -151,6 +161,11 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--quantreg-max-iter must be at least 1")
     if args.critical_value_multiplier <= 0:
         raise ValueError("--critical-value-multiplier must be positive")
+    if (
+        not np.isfinite(args.selection_lasso_multiplier)
+        or args.selection_lasso_multiplier <= 0
+    ):
+        raise ValueError("--selection-lasso-multiplier must be positive")
     if args.resume and args.manifest is None:
         raise ValueError("--resume requires --manifest")
 
@@ -169,6 +184,7 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
         "alpha_max": args.alpha_max,
         "alpha_grid_size": args.alpha_grid_size,
         "critical_value_multiplier": args.critical_value_multiplier,
+        "selection_lasso_multiplier": args.selection_lasso_multiplier,
         "estimators": list(args.estimators),
         "dml_k_folds": args.dml_k_folds,
         "quantreg_max_iter": args.quantreg_max_iter,
@@ -235,6 +251,7 @@ def _print_dry_run(
     print(f"pi values: {', '.join(map(str, args.pi_values))}")
     print(f"taus: {', '.join(map(str, args.taus))}")
     print(f"Estimators: {', '.join(args.estimators)}")
+    print(f"Post-selection Lasso multiplier: {args.selection_lasso_multiplier}")
     print(
         "Alpha grid: "
         f"min={args.alpha_min}, max={args.alpha_max}, size={args.alpha_grid_size}, "
@@ -336,6 +353,7 @@ def main(argv: list[str] | None = None) -> None:
             quantreg_max_iter=args.quantreg_max_iter,
             dml_k_folds=args.dml_k_folds,
             critical_value_multiplier=args.critical_value_multiplier,
+            selection_lasso_multiplier=args.selection_lasso_multiplier,
             n_jobs=args.n_jobs,
             show_quantreg_warnings=args.show_quantreg_warnings,
         )

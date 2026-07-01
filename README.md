@@ -106,10 +106,33 @@ Fast DML only:
 pixi run python scenarios/run_simulation.py --mode fast --estimators dml --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
 ```
 
+Baseline post-selection:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --estimators post_selection --base-seed 12345 --output results/raw/fast_post_selection.csv --manifest results/raw/fast_post_selection_manifest.json
+```
+
 Dry run:
 
 ```powershell
 pixi run python scenarios/run_simulation.py --mode fast --dry-run
+```
+
+## Post-selection Lasso Multiplier
+
+`--selection-lasso-multiplier` controls only the Lasso control-selection step
+inside post-selection IVQR. The default is `1.0`, which preserves baseline
+behavior. It is separate from `--critical-value-multiplier`, which affects
+confidence-region inversion.
+
+Values above `1.0` increase the Lasso penalty selected by cross-validation and
+therefore tend to select fewer controls. This can reduce over-selection, but
+large values can under-select controls and introduce omitted-control bias.
+
+Post-selection with a 1.2 multiplier:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --estimators post_selection --selection-lasso-multiplier 1.2 --base-seed 12345 --output results/raw/fast_post_selection_lasso120.csv --manifest results/raw/fast_post_selection_lasso120_manifest.json
 ```
 
 ## Reproducibility and Separate Estimator Runs
