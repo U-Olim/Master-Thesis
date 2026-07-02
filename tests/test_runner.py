@@ -78,15 +78,85 @@ def test_default_estimators_and_aliases() -> None:
 
 
 def test_design_seed_is_stable_and_changes_by_design_cell() -> None:
-    base = dict(base_seed=DEFAULT_BASE_SEED, dgp="dgp1", n=500, p=200, pi=1.0, tau=0.5)
-    seed = make_design_seed(**base, rep=0)
-    assert seed == make_design_seed(**base, rep=0)
-    assert seed != make_design_seed(**base, rep=1)
-    assert seed != make_design_seed(**{**base, "dgp": "dgp2"}, rep=0)
-    assert seed != make_design_seed(**{**base, "n": 1000}, rep=0)
-    assert seed != make_design_seed(**{**base, "p": 500}, rep=0)
-    assert seed != make_design_seed(**{**base, "pi": 0.5}, rep=0)
-    assert seed != make_design_seed(**{**base, "tau": 0.75}, rep=0)
+    base_seed: int = DEFAULT_BASE_SEED
+    dgp: str = "dgp1"
+    n: int = 500
+    p: int = 200
+    pi: float = 1.0
+    tau: float = 0.5
+
+    seed = make_design_seed(
+        base_seed=base_seed,
+        dgp=dgp,
+        n=n,
+        p=p,
+        pi=pi,
+        tau=tau,
+        rep=0,
+    )
+    assert seed == make_design_seed(
+        base_seed=base_seed,
+        dgp=dgp,
+        n=n,
+        p=p,
+        pi=pi,
+        tau=tau,
+        rep=0,
+    )
+    assert seed != make_design_seed(
+        base_seed=base_seed,
+        dgp=dgp,
+        n=n,
+        p=p,
+        pi=pi,
+        tau=tau,
+        rep=1,
+    )
+    assert seed != make_design_seed(
+        base_seed=base_seed,
+        dgp="dgp2",
+        n=n,
+        p=p,
+        pi=pi,
+        tau=tau,
+        rep=0,
+    )
+    assert seed != make_design_seed(
+        base_seed=base_seed,
+        dgp=dgp,
+        n=1000,
+        p=p,
+        pi=pi,
+        tau=tau,
+        rep=0,
+    )
+    assert seed != make_design_seed(
+        base_seed=base_seed,
+        dgp=dgp,
+        n=n,
+        p=500,
+        pi=pi,
+        tau=tau,
+        rep=0,
+    )
+    assert seed != make_design_seed(
+        base_seed=base_seed,
+        dgp=dgp,
+        n=n,
+        p=p,
+        pi=0.5,
+        tau=tau,
+        rep=0,
+    )
+    assert seed != make_design_seed(
+        base_seed=base_seed,
+        dgp=dgp,
+        n=n,
+        p=p,
+        pi=pi,
+        tau=0.75,
+        rep=0,
+    )
 
 
 def test_design_seed_is_independent_of_estimator_list() -> None:

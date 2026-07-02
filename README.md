@@ -190,6 +190,28 @@ pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post
 
 Simulation outputs are ignored by git except for `.gitkeep` placeholders.
 
+## Automatic Reports
+
+Automatic reports are intentionally compact. Each simulation run writes simple
+tables and figures focused on coverage, runtime, weak-instrument behavior, and
+estimator comparison unless `--no-reports` is used.
+
+Tables:
+
+- `main_summary.csv`
+- `coverage_by_pi.csv`
+- `runtime_summary.csv`
+- `coverage_by_tau.csv`
+
+Figures:
+
+- `coverage_by_pi.png`
+- `runtime_by_estimator.png`
+- `coverage_overall.png`
+- `weak_iv_diagnostic.png`
+
+Detailed thesis-specific tables can be produced separately from the raw CSVs.
+
 ## Key Diagnostics
 
 Raw results and summaries include diagnostics for:

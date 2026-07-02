@@ -1,11 +1,8 @@
-"""Figure generation for Monte Carlo diagnostics and results."""
+"""Compact automatic figures for Monte Carlo reports."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
-from types import MappingProxyType
-from typing import TypeAlias, cast
 
 import matplotlib
 
@@ -13,140 +10,48 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from reporting.tables import ESTIMATOR_LABELS
-
-
-FigureMetricSpec: TypeAlias = str | tuple[str, str]
-
-DEFAULT_FIGURE_METRICS: Mapping[str, FigureMetricSpec] = MappingProxyType(
-    {
-        "bias": ("fig_bias.png", "Bias"),
-        "rmse": ("fig_rmse.png", "RMSE"),
-        "coverage": ("fig_coverage.png", "Coverage"),
-        "avg_cr_length": ("fig_cr_length.png", "Average confidence-region length"),
-        "failure_rate": ("fig_failure_rate.png", "Failure rate"),
-    }
+from reporting.tables import (
+    ESTIMATOR_COLUMN,
+    ESTIMATOR_LABELS,
+    build_coverage_by_pi,
+    build_main_summary,
+    build_runtime_summary,
+    infer_reporting_columns,
 )
 
+
 __all__ = [
-    "DEFAULT_FIGURE_METRICS",
-    "FigureMetricSpec",
-    "make_metric_figure",
+    "make_coverage_by_pi_figure",
+    "make_coverage_overall_figure",
+    "make_runtime_by_estimator_figure",
+    "make_weak_iv_diagnostic_figure",
     "write_figures",
 ]
 
 
-def _validate_summary(summary: pd.DataFrame, metrics: list[str]) -> None:
-    if not isinstance(summary, pd.DataFrame):
+def _validate_report_frame(df: pd.DataFrame) -> pd.DataFrame:
+    if not isinstance(df, pd.DataFrame):
         raise TypeError("summary must be a pandas DataFrame")
-    if summary.columns.duplicated().any():
-        duplicated = sorted(set(summary.columns[summary.columns.duplicated()].astype(str)))
+    if df.columns.duplicated().any():
+        duplicated = sorted(set(df.columns[df.columns.duplicated()].astype(str)))
         raise ValueError(f"summary has duplicate columns: {duplicated}")
-    if summary.empty:
+    if df.empty:
         raise ValueError("cannot plot an empty summary")
-    if not metrics:
-        raise ValueError("at least one figure metric is required")
-    if any(not isinstance(metric, str) or not metric for metric in metrics):
-        raise ValueError("figure metrics must be nonempty strings")
-
-    required = {"dgp", "n", "p", "pi", "tau", "estimator", *metrics}
-    missing = sorted(required - set(summary.columns))
-    if missing:
-        raise ValueError(f"summary is missing required figure columns: {missing}")
-
-    for metric in metrics:
-        numeric = pd.to_numeric(summary[metric], errors="coerce")
-        if numeric.notna().sum() == 0:
-            raise ValueError(f"metric column '{metric}' has no numeric values")
+    if ESTIMATOR_COLUMN not in df.columns:
+        raise ValueError("summary must contain an estimator column")
+    return df
 
 
-def _format_int_label(value: object, name: str) -> str:
-    numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
-    if pd.isna(numeric):
-        raise ValueError(f"{name} must be numeric for scenario labels")
-    if float(numeric) != int(numeric):
-        raise ValueError(f"{name} must be integer-valued for scenario labels")
-    return str(int(numeric))
+def _label(estimator: object) -> str:
+    text = str(estimator)
+    return ESTIMATOR_LABELS.get(text, text)
 
 
-def _format_numeric_label(value: object, name: str) -> str:
-    numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
-    if pd.isna(numeric):
-        raise ValueError(f"{name} must be numeric for scenario labels")
-    return f"{float(numeric):g}"
-
-
-def _scenario_label(row: pd.Series) -> str:
-    return (
-        f"{row['dgp']} | "
-        f"n={_format_int_label(row['n'], 'n')} | "
-        f"p={_format_int_label(row['p'], 'p')} | "
-        f"pi={_format_numeric_label(row['pi'], 'pi')} | "
-        f"tau={_format_numeric_label(row['tau'], 'tau')}"
-    )
-
-
-def _ordered_estimator_columns(columns: pd.Index) -> list[str]:
-    preferred = [
-        ESTIMATOR_LABELS.get("oracle", "Oracle IVQR"),
-        ESTIMATOR_LABELS.get("post_selection_ivqr", "Post-selection IVQR"),
-        ESTIMATOR_LABELS.get("full_control_ivqr", "Full-control IVQR"),
-        ESTIMATOR_LABELS.get("dml_ivqr", "DML-style IVQR"),
-    ]
-    existing = [label for label in preferred if label in columns]
-    remaining = sorted(str(label) for label in columns if label not in set(existing))
-    return existing + remaining
-
-
-def make_metric_figure(
-    summary: pd.DataFrame,
-    metric: str,
-    output_path: str | Path,
-    title: str | None = None,
-) -> Path:
-    """Write one grouped bar chart for a scenario-level metric."""
-    if not isinstance(metric, str) or not metric:
-        raise ValueError("metric must be a nonempty string")
-    path = Path(output_path)
-    if path.name == "":
-        raise ValueError("output_path must include a file name")
-
-    _validate_summary(summary, [metric])
-    data = summary.copy()
-    data[metric] = pd.to_numeric(data[metric], errors="coerce")
-    data = data.loc[data[metric].notna()].copy()
-    if data.empty:
-        raise ValueError(f"metric column '{metric}' has no numeric values")
-    data["scenario"] = data.apply(_scenario_label, axis=1)
-    data["estimator_label"] = (
-        data["estimator"].map(ESTIMATOR_LABELS).fillna(data["estimator"])
-    )
-
-    pivot = data.pivot_table(
-        index="scenario",
-        columns="estimator_label",
-        values=metric,
-        aggfunc="mean",
-        observed=False,
-    )
-    if pivot.empty:
-        raise ValueError("cannot plot an empty summary")
-    pivot = pivot.loc[:, _ordered_estimator_columns(pivot.columns)]
-
-    fig_width = max(9.0, min(24.0, 0.45 * len(pivot.index) + 6.0))
-    ax = cast(Axes, pivot.plot(kind="bar", figsize=(fig_width, 5.5)))
-    fig = cast(Figure, ax.get_figure())
-    ax.set_title(title or metric)
-    ax.set_xlabel("Scenario")
-    ax.set_ylabel(title or metric)
-    ax.legend(title="Estimator", loc="best")
-    ax.tick_params(axis="x", labelrotation=70)
-    plt.tight_layout()
-
+def _finish(fig: Figure, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
     try:
         fig.savefig(path, dpi=200)
     finally:
@@ -154,52 +59,158 @@ def make_metric_figure(
     return path
 
 
-def _validate_figure_metrics(
-    metrics: Mapping[str, FigureMetricSpec],
-) -> dict[str, tuple[str, str]]:
-    if not isinstance(metrics, Mapping):
-        raise TypeError("metrics must be a mapping")
-    if not metrics:
-        raise ValueError("metrics must not be empty")
+def _has_numeric(table: pd.DataFrame, column: str) -> bool:
+    return bool(pd.to_numeric(table[column], errors="coerce").notna().any())
 
-    normalized: dict[str, tuple[str, str]] = {}
-    for metric, spec in metrics.items():
-        if not isinstance(metric, str) or not metric:
-            raise ValueError("figure metric names must be nonempty strings")
-        if isinstance(spec, str):
-            if not spec:
-                raise ValueError("figure metric title must be nonempty")
-            normalized[metric] = (f"fig_{metric}.png", spec)
-            continue
-        if (
-            isinstance(spec, tuple)
-            and len(spec) == 2
-            and all(isinstance(item, str) and item for item in spec)
-        ):
-            filename, title = spec
-            normalized[metric] = (filename, title)
-            continue
-        raise ValueError(
-            "figure metric specs must be a title string or a (filename, title) tuple"
+
+def _should_use_log_scale(values: pd.Series) -> bool:
+    clean = pd.to_numeric(values, errors="coerce").dropna()
+    clean = clean.loc[clean > 0]
+    if clean.empty:
+        return False
+    min_value = float(clean.min())
+    max_value = float(clean.max())
+    if min_value <= 0:
+        return False
+    return bool(max_value / min_value > 10)
+
+
+def make_coverage_by_pi_figure(summary: pd.DataFrame, output_path: str | Path) -> Path | None:
+    """Write coverage-by-pi line plot, or return None when unavailable."""
+    _validate_report_frame(summary)
+    if "pi" not in summary.columns:
+        return None
+    pi_values = pd.to_numeric(summary["pi"], errors="coerce").dropna().unique()
+    if len(pi_values) < 2:
+        return None
+    table = build_coverage_by_pi(summary, round_digits=None)
+    if table is None or table.empty or not _has_numeric(table, "coverage"):
+        return None
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for estimator, group in table.groupby("estimator", sort=False):
+        plot_data = group.sort_values("pi")
+        ax.plot(
+            plot_data["pi"],
+            plot_data["coverage"],
+            marker="o",
+            linewidth=1.8,
+            label=_label(estimator),
         )
-    return normalized
+    ax.axhline(0.95, color="black", linestyle="--", linewidth=1)
+    ax.set_xlabel("pi")
+    ax.set_ylabel("Coverage")
+    ax.set_ylim(0, 1.05)
+    ax.legend(title="Estimator", fontsize=8)
+    return _finish(fig, Path(output_path))
 
 
-def write_figures(
+def make_runtime_by_estimator_figure(
     summary: pd.DataFrame,
-    output_dir: str | Path,
-    metrics: dict[str, FigureMetricSpec] | None = None,
-) -> dict[str, Path]:
-    """Generate standard Monte Carlo figures and return written paths."""
-    selected_metrics = DEFAULT_FIGURE_METRICS if metrics is None else metrics
-    normalized = _validate_figure_metrics(selected_metrics)
+    output_path: str | Path,
+) -> Path | None:
+    """Write median-runtime bar chart, or return None when unavailable."""
+    _validate_report_frame(summary)
+    if infer_reporting_columns(summary)["runtime"] is None:
+        return None
+    table = build_runtime_summary(summary, round_digits=None)
+    if table is None or table.empty or not _has_numeric(table, "median_runtime_sec"):
+        return None
+    table = table.loc[pd.to_numeric(table["median_runtime_sec"], errors="coerce").notna()]
+    if table.empty:
+        return None
 
+    labels = [_label(estimator) for estimator in table["estimator"]]
+    values = pd.to_numeric(table["median_runtime_sec"], errors="coerce")
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.bar(labels, values)
+    if _should_use_log_scale(values):
+        ax.set_yscale("log")
+    ax.set_xlabel("Estimator")
+    ax.set_ylabel("Median runtime (sec)")
+    if max(len(label) for label in labels) > 14:
+        ax.tick_params(axis="x", labelrotation=25)
+    return _finish(fig, Path(output_path))
+
+
+def make_coverage_overall_figure(
+    summary: pd.DataFrame,
+    output_path: str | Path,
+) -> Path | None:
+    """Write overall coverage bar chart for multi-estimator runs."""
+    _validate_report_frame(summary)
+    if summary[ESTIMATOR_COLUMN].nunique(dropna=True) < 2:
+        return None
+    table = build_main_summary(summary, round_digits=None)
+    if table.empty or not _has_numeric(table, "coverage"):
+        return None
+    table = table.loc[pd.to_numeric(table["coverage"], errors="coerce").notna()]
+    if len(table) < 2:
+        return None
+
+    labels = [_label(estimator) for estimator in table["estimator"]]
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.bar(labels, pd.to_numeric(table["coverage"], errors="coerce"))
+    ax.axhline(0.95, color="black", linestyle="--", linewidth=1)
+    ax.set_xlabel("Estimator")
+    ax.set_ylabel("Coverage")
+    ax.set_ylim(0, 1.05)
+    if max(len(label) for label in labels) > 14:
+        ax.tick_params(axis="x", labelrotation=25)
+    return _finish(fig, Path(output_path))
+
+
+def make_weak_iv_diagnostic_figure(
+    summary: pd.DataFrame,
+    output_path: str | Path,
+) -> Path | None:
+    """Write boundary-share-by-pi line plot, or return None when unavailable."""
+    _validate_report_frame(summary)
+    if "pi" not in summary.columns:
+        return None
+    if infer_reporting_columns(summary)["boundary"] is None:
+        return None
+    pi_values = pd.to_numeric(summary["pi"], errors="coerce").dropna().unique()
+    if len(pi_values) < 2:
+        return None
+    table = build_coverage_by_pi(summary, round_digits=None)
+    if table is None or table.empty or not _has_numeric(table, "boundary_share"):
+        return None
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for estimator, group in table.groupby("estimator", sort=False):
+        plot_data = group.sort_values("pi")
+        ax.plot(
+            plot_data["pi"],
+            plot_data["boundary_share"],
+            marker="o",
+            linewidth=1.8,
+            label=_label(estimator),
+        )
+    ax.set_xlabel("pi")
+    ax.set_ylabel("Boundary share")
+    ax.set_ylim(0, 1.05)
+    ax.legend(title="Estimator", fontsize=8)
+    return _finish(fig, Path(output_path))
+
+
+def write_figures(summary: pd.DataFrame, output_dir: str | Path) -> dict[str, Path]:
+    """Generate compact automatic figures and return written paths."""
+    _validate_report_frame(summary)
     output = Path(output_dir)
-    written: dict[str, Path] = {}
-    for metric, (filename, title) in normalized.items():
-        if metric not in summary.columns:
-            continue
-        path = output / filename
-        written[metric] = make_metric_figure(summary, metric, path, title=title)
-    return written
+    if output.exists() and not output.is_dir():
+        raise ValueError("output_dir must be a directory path")
+    output.mkdir(parents=True, exist_ok=True)
 
+    figure_specs = (
+        ("coverage_by_pi", "coverage_by_pi.png", make_coverage_by_pi_figure),
+        ("runtime_by_estimator", "runtime_by_estimator.png", make_runtime_by_estimator_figure),
+        ("coverage_overall", "coverage_overall.png", make_coverage_overall_figure),
+        ("weak_iv_diagnostic", "weak_iv_diagnostic.png", make_weak_iv_diagnostic_figure),
+    )
+    written: dict[str, Path] = {}
+    for key, filename, builder in figure_specs:
+        path = builder(summary, output / filename)
+        if path is not None:
+            written[key] = path
+    return written

@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
 from pathlib import Path
+from typing import TypeVar
 import warnings
 
 import numpy as np
@@ -47,6 +48,7 @@ from simulation.results import (
 from utils.validation import validate_alpha_grid, validate_positive_int, validate_tau
 
 
+_T = TypeVar("_T")
 VALID_ESTIMATORS: tuple[str, ...] = ESTIMATORS
 DEFAULT_SIMULATION_ESTIMATORS: tuple[str, ...] = DEFAULT_ESTIMATORS
 VALID_DGPS: tuple[str, ...] = DGPS
@@ -167,7 +169,7 @@ def _validate_estimators(estimators: Sequence[str]) -> tuple[str, ...]:
     return estimators
 
 
-def _validate_unique_sequence(name: str, values: Sequence[object]) -> tuple[object, ...]:
+def _validate_unique_sequence(name: str, values: Sequence[_T]) -> tuple[_T, ...]:
     if isinstance(values, (str, bytes)):
         raise ValueError(f"{name} must be a sequence")
     try:
@@ -176,9 +178,47 @@ def _validate_unique_sequence(name: str, values: Sequence[object]) -> tuple[obje
         raise ValueError(f"{name} must be a sequence") from exc
     if not values_tuple:
         raise ValueError(f"{name} must not be empty")
-    if len(set(values_tuple)) != len(values_tuple):
-        raise ValueError(f"{name} must not contain duplicates")
+    seen: list[_T] = []
+    for value in values_tuple:
+        if value in seen:
+            raise ValueError(f"{name} must not contain duplicates")
+        seen.append(value)
     return values_tuple
+
+
+def _validate_dgp_sequence(name: str, values: Sequence[str]) -> tuple[str, ...]:
+    dgps = tuple(str(dgp) for dgp in _validate_unique_sequence(name, values))
+    invalid_dgps = sorted(set(dgps) - set(VALID_DGPS))
+    if invalid_dgps:
+        raise ValueError(f"Unknown DGP(s): {invalid_dgps}")
+    return dgps
+
+
+def _validate_positive_int_sequence(
+    name: str,
+    values: Sequence[int],
+) -> tuple[int, ...]:
+    return tuple(
+        validate_positive_int(name, int(value))
+        for value in _validate_unique_sequence(name, values)
+    )
+
+
+def _validate_nonnegative_float_sequence(
+    name: str,
+    values: Sequence[float],
+) -> tuple[float, ...]:
+    return tuple(
+        _validate_nonnegative_float(name, float(value))
+        for value in _validate_unique_sequence(name, values)
+    )
+
+
+def _validate_tau_sequence(name: str, values: Sequence[float]) -> tuple[float, ...]:
+    return tuple(
+        validate_tau(float(value))
+        for value in _validate_unique_sequence(name, values)
+    )
 
 
 def _validate_float(name: str, value: float) -> float:
@@ -205,8 +245,9 @@ def _validate_nonnegative_float(name: str, value: float) -> float:
 
 
 def _validate_nonnegative_int(name: str, value: int) -> int:
-    if not isinstance(value, int) or isinstance(value, bool):
+    if isinstance(value, bool):
         raise ValueError(f"{name} must be an integer")
+    value = int(value)
     if value < 0:
         raise ValueError(f"{name} must be nonnegative")
     return value
@@ -289,14 +330,11 @@ def make_simulation_grid(
     resume status. ``reps`` is the full planned replication count; ``rep_start``
     and ``rep_end`` select the global replication indices included in this grid.
     """
-    dgps = tuple(str(dgp) for dgp in _validate_unique_sequence("dgps", dgps))
-    invalid_dgps = sorted(set(dgps) - set(VALID_DGPS))
-    if invalid_dgps:
-        raise ValueError(f"Unknown DGP(s): {invalid_dgps}")
-    n_values = tuple(validate_positive_int("n", int(n)) for n in _validate_unique_sequence("n_values", n_values))
-    p_values = tuple(validate_positive_int("p", int(p)) for p in _validate_unique_sequence("p_values", p_values))
-    pi_values = tuple(_validate_nonnegative_float("pi", float(pi)) for pi in _validate_unique_sequence("pi_values", pi_values))
-    taus = tuple(validate_tau(float(tau)) for tau in _validate_unique_sequence("taus", taus))
+    dgps = _validate_dgp_sequence("dgps", dgps)
+    n_values = _validate_positive_int_sequence("n_values", n_values)
+    p_values = _validate_positive_int_sequence("p_values", p_values)
+    pi_values = _validate_nonnegative_float_sequence("pi_values", pi_values)
+    taus = _validate_tau_sequence("taus", taus)
     reps = validate_positive_int("reps", reps)
     base_seed = _validate_nonnegative_int("base_seed", base_seed)
     rep_start = _validate_nonnegative_int("rep_start", rep_start)

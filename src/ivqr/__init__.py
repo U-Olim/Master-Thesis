@@ -1,5 +1,14 @@
 """IVQR grid, moment, and confidence-region helpers."""
 
+from typing import Any
+
+from ivqr.alpha_grid import alpha_grid
+from ivqr.confidence_regions import (
+    ConfidenceRegion,
+    critical_value_chi_square,
+    invert_score_test,
+)
+
 __all__ = [
     "ConfidenceRegion",
     "alpha_grid",
@@ -10,17 +19,15 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):
-    if name == "alpha_grid":
-        from ivqr.alpha_grid import alpha_grid
+def estimate_ch_ivqr_controls(*args: Any, **kwargs: Any) -> Any:
+    """Lazily dispatch to the CH-IVQR controls estimator."""
+    from ivqr.ch_inverse import estimate_ch_ivqr_controls as _estimate
 
-        return alpha_grid
-    if name in {"evaluate_alpha_ch_ivqr", "estimate_ch_ivqr_controls"}:
-        from ivqr import ch_inverse
+    return _estimate(*args, **kwargs)
 
-        return getattr(ch_inverse, name)
-    if name in {"ConfidenceRegion", "critical_value_chi_square", "invert_score_test"}:
-        from ivqr import confidence_regions
 
-        return getattr(confidence_regions, name)
-    raise AttributeError(name)
+def evaluate_alpha_ch_ivqr(*args: Any, **kwargs: Any) -> Any:
+    """Lazily dispatch to the CH-IVQR alpha evaluator."""
+    from ivqr.ch_inverse import evaluate_alpha_ch_ivqr as _evaluate
+
+    return _evaluate(*args, **kwargs)
