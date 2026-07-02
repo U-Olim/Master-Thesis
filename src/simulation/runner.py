@@ -279,12 +279,15 @@ def make_simulation_grid(
     taus: tuple[float, ...],
     reps: int,
     base_seed: int = DEFAULT_BASE_SEED,
+    rep_start: int = 0,
+    rep_end: int | None = None,
 ) -> list[Design]:
     """Create the deterministic full Monte Carlo design grid.
 
     Each design seed is a stable hash of the design cell, so data generation is
     independent of estimator list, estimator order, workers, batch size, and
-    resume status.
+    resume status. ``reps`` is the full planned replication count; ``rep_start``
+    and ``rep_end`` select the global replication indices included in this grid.
     """
     dgps = tuple(str(dgp) for dgp in _validate_unique_sequence("dgps", dgps))
     invalid_dgps = sorted(set(dgps) - set(VALID_DGPS))
@@ -296,6 +299,12 @@ def make_simulation_grid(
     taus = tuple(validate_tau(float(tau)) for tau in _validate_unique_sequence("taus", taus))
     reps = validate_positive_int("reps", reps)
     base_seed = _validate_nonnegative_int("base_seed", base_seed)
+    rep_start = _validate_nonnegative_int("rep_start", rep_start)
+    rep_end = reps - 1 if rep_end is None else _validate_nonnegative_int("rep_end", rep_end)
+    if rep_end < rep_start:
+        raise ValueError("rep_end must be greater than or equal to rep_start")
+    if rep_end >= reps:
+        raise ValueError("rep_end must be less than reps")
 
     designs: list[Design] = []
     seeds: set[int] = set()
@@ -304,7 +313,7 @@ def make_simulation_grid(
             for p in p_values:
                 for pi in pi_values:
                     for tau in taus:
-                        for rep in range(reps):
+                        for rep in range(rep_start, rep_end + 1):
                             seed = make_design_seed(
                                 base_seed=base_seed,
                                 dgp=dgp,

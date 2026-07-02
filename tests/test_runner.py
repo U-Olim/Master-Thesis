@@ -40,6 +40,13 @@ def _signature(*extra_args: str) -> dict[str, object]:
     return RUN_SIMULATION._resume_signature(args)
 
 
+def _validated_args(*extra_args: str):
+    args = RUN_SIMULATION._parse_args(["--mode", "fast", *extra_args])
+    RUN_SIMULATION._apply_defaults(args)
+    RUN_SIMULATION._validate_args(args)
+    return args
+
+
 def _run_cli(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
@@ -109,6 +116,67 @@ def test_design_seed_is_independent_of_estimator_list() -> None:
     assert first.seed == second.seed
 
 
+def test_simulation_grid_defaults_to_full_replication_range() -> None:
+    designs = make_simulation_grid(
+        dgps=("dgp1",),
+        n_values=(500,),
+        p_values=(200,),
+        pi_values=(1.0,),
+        taus=(0.5,),
+        reps=3,
+        base_seed=DEFAULT_BASE_SEED,
+    )
+    assert [design.rep for design in designs] == [0, 1, 2]
+
+
+@pytest.mark.parametrize(
+    ("reps", "rep_start", "rep_end", "expected"),
+    [
+        (10, 3, 5, [3, 4, 5]),
+        (10, 8, 9, [8, 9]),
+        (10, 4, 4, [4]),
+    ],
+)
+def test_simulation_grid_uses_global_replication_block(
+    reps: int,
+    rep_start: int,
+    rep_end: int,
+    expected: list[int],
+) -> None:
+    designs = make_simulation_grid(
+        dgps=("dgp1",),
+        n_values=(500,),
+        p_values=(200,),
+        pi_values=(1.0,),
+        taus=(0.5,),
+        reps=reps,
+        base_seed=DEFAULT_BASE_SEED,
+        rep_start=rep_start,
+        rep_end=rep_end,
+    )
+    assert [design.rep for design in designs] == expected
+
+
+@pytest.mark.parametrize(
+    ("rep_start", "rep_end"),
+    [
+        (-1, 3),
+        (5, 4),
+        (0, 10),
+    ],
+)
+def test_cli_rejects_invalid_replication_blocks(rep_start: int, rep_end: int) -> None:
+    with pytest.raises(ValueError):
+        _validated_args(
+            "--reps",
+            "10",
+            "--rep-start",
+            str(rep_start),
+            "--rep-end",
+            str(rep_end),
+        )
+
+
 def test_resume_signature_seed_and_execution_invariance() -> None:
     base = _signature("--n-jobs", "1", "--batch-size", "1")
     changed_execution = _signature("--n-jobs", "4", "--batch-size", "10")
@@ -126,10 +194,49 @@ def test_resume_signature_seed_and_execution_invariance() -> None:
     assert "batch_size" not in base
 
 
+def test_resume_signature_changes_by_replication_block() -> None:
+    first_block = _signature("--reps", "10", "--rep-start", "0", "--rep-end", "4")
+    second_block = _signature("--reps", "10", "--rep-start", "5", "--rep-end", "9")
+    assert first_block != second_block
+    assert first_block["rep_start"] == 0
+    assert first_block["rep_end"] == 4
+    assert second_block["rep_start"] == 5
+    assert second_block["rep_end"] == 9
+
+
+def test_seed_uses_global_replication_index_inside_block() -> None:
+    full_grid = make_simulation_grid(
+        dgps=("dgp1",),
+        n_values=(500,),
+        p_values=(200,),
+        pi_values=(1.0,),
+        taus=(0.5,),
+        reps=10,
+        base_seed=DEFAULT_BASE_SEED,
+        rep_start=0,
+        rep_end=9,
+    )
+    single_rep_block = make_simulation_grid(
+        dgps=("dgp1",),
+        n_values=(500,),
+        p_values=(200,),
+        pi_values=(1.0,),
+        taus=(0.5,),
+        reps=10,
+        base_seed=DEFAULT_BASE_SEED,
+        rep_start=5,
+        rep_end=5,
+    )
+    full_rep_5 = next(design for design in full_grid if design.rep == 5)
+    assert single_rep_block[0].rep == 5
+    assert single_rep_block[0].seed == full_rep_5.seed
+
+
 def test_dry_run_uses_default_estimators(tmp_path: Path) -> None:
     result = _run_cli(tmp_path, "--mode", "fast", "--dry-run")
     assert result.returncode == 0
     assert "Replications per design: 10" in result.stdout
+    assert "Replication block: 0 to 9" in result.stdout
     assert f"Base seed: {DEFAULT_BASE_SEED}" in result.stdout
     assert "Seed rule: deterministic by design cell, independent of estimator/order" in result.stdout
     assert "First design seed:" in result.stdout
@@ -224,6 +331,12 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
     assert payload["base_seed"] == DEFAULT_BASE_SEED
     assert payload["seed_rule"] == SEED_RULE_TEXT
     assert payload["resume_signature"]["base_seed"] == DEFAULT_BASE_SEED
+    assert payload["parameters"]["reps"] == 1
+    assert payload["parameters"]["rep_start"] == 0
+    assert payload["parameters"]["rep_end"] == 0
+    assert payload["resume_signature"]["reps"] == 1
+    assert payload["resume_signature"]["rep_start"] == 0
+    assert payload["resume_signature"]["rep_end"] == 0
     assert "n_jobs" not in payload["resume_signature"]
     assert "batch_size" not in payload["resume_signature"]
 

@@ -100,6 +100,23 @@ Full default with explicit output:
 pixi run python scenarios/run_simulation.py --mode full --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/full_results.csv --manifest results/raw/full_manifest.json
 ```
 
+Full R500 runs can be split into replication blocks with `--rep-start` and
+`--rep-end`. `--reps` remains the total planned replication count, while the
+block arguments select the global replication indices for the current process.
+Each block should use a separate output and manifest file.
+
+Oracle R500 block 0-99:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --reps 500 --rep-start 0 --rep-end 99 --alpha-min -2 --alpha-max 4 --alpha-grid-size 41 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/oracle_R500_grid41_block000_099.csv --manifest results/raw/oracle_R500_grid41_block000_099_manifest.json
+```
+
+Post-selection R500 block 0-99:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --estimators post_selection --reps 500 --rep-start 0 --rep-end 99 --selection-lasso-multiplier 1.8 --alpha-min -2 --alpha-max 4 --alpha-grid-size 41 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/post_selection_R500_lasso180_grid41_block000_099.csv --manifest results/raw/post_selection_R500_lasso180_grid41_block000_099_manifest.json
+```
+
 Fast DML only:
 
 ```powershell

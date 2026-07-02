@@ -75,6 +75,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output", default=None)
     parser.add_argument("--manifest", default=None)
     parser.add_argument("--reps", type=int, default=None)
+    parser.add_argument(
+        "--rep-start",
+        type=int,
+        default=0,
+        help="First replication index to run, inclusive. Default: 0.",
+    )
+    parser.add_argument(
+        "--rep-end",
+        type=int,
+        default=None,
+        help="Last replication index to run, inclusive. Default: reps - 1.",
+    )
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--base-seed", type=int, default=DEFAULT_BASE_SEED)
@@ -123,6 +135,7 @@ def _apply_defaults(args: argparse.Namespace) -> None:
     args.pi_values = list(PI_VALUES) if args.pi_values is None else args.pi_values
     args.taus = list(TAUS) if args.taus is None else args.taus
     args.reps = (R_FAST if args.mode == "fast" else R_FULL) if args.reps is None else args.reps
+    args.rep_end = args.reps - 1 if args.rep_end is None else args.rep_end
     args.output = _default_output_for_mode(args.mode) if args.output is None else Path(args.output)
     args.manifest = None if args.manifest is None else Path(args.manifest)
     args.summary_output = (
@@ -145,6 +158,12 @@ def _apply_defaults(args: argparse.Namespace) -> None:
 def _validate_args(args: argparse.Namespace) -> None:
     if args.reps < 1:
         raise ValueError("--reps must be at least 1")
+    if args.rep_start < 0:
+        raise ValueError("--rep-start must be at least 0")
+    if args.rep_end < args.rep_start:
+        raise ValueError("--rep-end must be greater than or equal to --rep-start")
+    if args.rep_end >= args.reps:
+        raise ValueError("--rep-end must be less than --reps")
     if args.n_jobs < 1:
         raise ValueError("--n-jobs must be at least 1")
     if args.batch_size < 1:
@@ -179,6 +198,8 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
         "pi_values": list(args.pi_values),
         "taus": list(args.taus),
         "reps": args.reps,
+        "rep_start": args.rep_start,
+        "rep_end": args.rep_end,
         "base_seed": args.base_seed,
         "alpha_min": args.alpha_min,
         "alpha_max": args.alpha_max,
@@ -242,6 +263,7 @@ def _print_dry_run(
 ) -> None:
     print(f"Mode: {args.mode}")
     print(f"Replications per design: {args.reps}")
+    print(f"Replication block: {args.rep_start} to {args.rep_end}")
     print(f"Base seed: {args.base_seed}")
     print("Seed rule: deterministic by design cell, independent of estimator/order")
     print(f"First design seed: {first_design_seed}")
@@ -306,6 +328,8 @@ def main(argv: list[str] | None = None) -> None:
         taus=tuple(args.taus),
         reps=args.reps,
         base_seed=args.base_seed,
+        rep_start=args.rep_start,
+        rep_end=args.rep_end,
     )
     if args.resume:
         _validate_resume_manifest(args)
