@@ -285,6 +285,10 @@ def _print_dry_run(
     print("Reports: skipped by --no-reports" if args.no_reports else "Reports: generated after successful run")
 
 
+def _block_replications(args: argparse.Namespace) -> int:
+    return int(args.rep_end - args.rep_start + 1)
+
+
 def _make_reports(args: argparse.Namespace) -> None:
     if args.no_reports:
         print("Reports: skipped by --no-reports")
@@ -292,7 +296,7 @@ def _make_reports(args: argparse.Namespace) -> None:
     summary = aggregate_results_file(
         args.output,
         args.summary_output,
-        expected_replications=args.reps,
+        expected_replications=_block_replications(args),
     )
     tables = write_tables(summary, args.tables_dir)
     figures = write_figures(summary, args.figures_dir)

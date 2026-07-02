@@ -62,6 +62,18 @@ def _run_cli(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _cell_int(df: pd.DataFrame, column: str, row: int = 0) -> int:
+    return int(str(df[column].iloc[row]))
+
+
+def _cell_float(df: pd.DataFrame, column: str, row: int = 0) -> float:
+    return float(str(df[column].iloc[row]))
+
+
+def _cell_str(df: pd.DataFrame, column: str, row: int = 0) -> str:
+    return str(df[column].iloc[row])
+
+
 def test_help_works(tmp_path: Path) -> None:
     result = _run_cli(tmp_path, "--help")
     assert result.returncode == 0
@@ -387,7 +399,7 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
     assert written["estimator"].tolist() == ["full_control_ivqr"]
-    assert int(written.loc[0, "seed"]) == make_design_seed(
+    assert _cell_int(written, "seed") == make_design_seed(
         base_seed=DEFAULT_BASE_SEED,
         dgp="dgp1",
         n=50,
@@ -409,6 +421,100 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
     assert payload["resume_signature"]["rep_end"] == 0
     assert "n_jobs" not in payload["resume_signature"]
     assert "batch_size" not in payload["resume_signature"]
+
+
+def test_block_run_reports_block_replication_completion(tmp_path: Path) -> None:
+    output = tmp_path / "raw" / "block.csv"
+    summary = tmp_path / "summary" / "block_summary.csv"
+    result = _run_cli(
+        tmp_path,
+        "--mode",
+        "fast",
+        "--estimators",
+        "full_control",
+        "--reps",
+        "10",
+        "--rep-start",
+        "3",
+        "--rep-end",
+        "5",
+        "--dgps",
+        "dgp1",
+        "--n-values",
+        "50",
+        "--p-values",
+        "4",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--n-jobs",
+        "1",
+        "--batch-size",
+        "3",
+        "--alpha-grid-size",
+        "5",
+        "--output",
+        str(output),
+        "--summary-output",
+        str(summary),
+        "--tables-dir",
+        str(tmp_path / "tables"),
+        "--figures-dir",
+        str(tmp_path / "figures"),
+    )
+    assert result.returncode == 0, result.stderr
+    written = pd.read_csv(output)
+    assert sorted(written["rep"].unique().tolist()) == [3, 4, 5]
+    summary_frame = pd.read_csv(summary)
+    assert summary_frame["expected_replications"].tolist() == [3]
+    assert summary_frame["observed_replications"].tolist() == [3]
+    assert summary_frame["completion_rate"].tolist() == [1.0]
+
+
+def test_default_run_reports_default_replication_completion(tmp_path: Path) -> None:
+    output = tmp_path / "raw" / "default.csv"
+    summary = tmp_path / "summary" / "default_summary.csv"
+    result = _run_cli(
+        tmp_path,
+        "--mode",
+        "fast",
+        "--estimators",
+        "full_control",
+        "--reps",
+        "3",
+        "--dgps",
+        "dgp1",
+        "--n-values",
+        "50",
+        "--p-values",
+        "4",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--n-jobs",
+        "1",
+        "--batch-size",
+        "3",
+        "--alpha-grid-size",
+        "5",
+        "--output",
+        str(output),
+        "--summary-output",
+        str(summary),
+        "--tables-dir",
+        str(tmp_path / "tables"),
+        "--figures-dir",
+        str(tmp_path / "figures"),
+    )
+    assert result.returncode == 0, result.stderr
+    written = pd.read_csv(output)
+    assert sorted(written["rep"].unique().tolist()) == [0, 1, 2]
+    summary_frame = pd.read_csv(summary)
+    assert summary_frame["expected_replications"].tolist() == [3]
+    assert summary_frame["observed_replications"].tolist() == [3]
+    assert summary_frame["completion_rate"].tolist() == [1.0]
 
 
 def test_tiny_post_selection_run_writes_lasso_multiplier_diagnostics(
@@ -453,7 +559,7 @@ def test_tiny_post_selection_run_writes_lasso_multiplier_diagnostics(
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
     assert written["estimator"].tolist() == ["post_selection_ivqr"]
-    assert written.loc[0, "ps_selection_lasso_multiplier"] == 1.2
+    assert _cell_float(written, "ps_selection_lasso_multiplier") == 1.2
     assert "ps_lasso_alpha_y_cv" in written.columns
     assert "ps_lasso_alpha_y_final" in written.columns
     payload = json.loads(manifest.read_text(encoding="utf-8"))
