@@ -28,6 +28,9 @@ from simulation.config import (  # noqa: E402
     DEFAULT_BATCH_SIZE,
     DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     DEFAULT_DML_K_FOLDS,
+    DEFAULT_DML_QUANTILE_PENALTY,
+    DEFAULT_DML_QUANTILE_SOLVER,
+    DEFAULT_DML_RIDGE_ALPHA,
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
@@ -109,6 +112,24 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument("--dml-k-folds", type=int, default=DEFAULT_DML_K_FOLDS)
+    parser.add_argument(
+        "--dml-quantile-penalty",
+        type=float,
+        default=DEFAULT_DML_QUANTILE_PENALTY,
+        help="Penalty alpha for DML quantile nuisance fits. Default: 0.01.",
+    )
+    parser.add_argument(
+        "--dml-ridge-alpha",
+        type=float,
+        default=DEFAULT_DML_RIDGE_ALPHA,
+        help="Ridge alpha for DML instrument residualization. Default: 1.0.",
+    )
+    parser.add_argument(
+        "--dml-quantile-solver",
+        default=DEFAULT_DML_QUANTILE_SOLVER,
+        choices=("highs-ds", "highs-ipm", "highs", "interior-point", "revised simplex"),
+        help='Solver for DML QuantileRegressor nuisance fits. Default: "highs".',
+    )
     parser.add_argument("--quantreg-max-iter", type=int, default=DEFAULT_QUANTREG_MAX_ITER)
     parser.add_argument("--dgps", nargs="+", default=None)
     parser.add_argument("--n-values", nargs="+", type=int, default=None)
@@ -176,6 +197,10 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--alpha-max must exceed --alpha-min")
     if args.dml_k_folds < 2:
         raise ValueError("--dml-k-folds must be at least 2")
+    if not np.isfinite(args.dml_quantile_penalty) or args.dml_quantile_penalty < 0:
+        raise ValueError("--dml-quantile-penalty must be nonnegative")
+    if not np.isfinite(args.dml_ridge_alpha) or args.dml_ridge_alpha < 0:
+        raise ValueError("--dml-ridge-alpha must be nonnegative")
     if args.quantreg_max_iter < 1:
         raise ValueError("--quantreg-max-iter must be at least 1")
     if args.critical_value_multiplier <= 0:
@@ -208,6 +233,9 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
         "selection_lasso_multiplier": args.selection_lasso_multiplier,
         "estimators": list(args.estimators),
         "dml_k_folds": args.dml_k_folds,
+        "dml_quantile_penalty": args.dml_quantile_penalty,
+        "dml_ridge_alpha": args.dml_ridge_alpha,
+        "dml_quantile_solver": args.dml_quantile_solver,
         "quantreg_max_iter": args.quantreg_max_iter,
     }
 
@@ -274,6 +302,9 @@ def _print_dry_run(
     print(f"taus: {', '.join(map(str, args.taus))}")
     print(f"Estimators: {', '.join(args.estimators)}")
     print(f"Post-selection Lasso multiplier: {args.selection_lasso_multiplier}")
+    print(f"DML quantile penalty: {args.dml_quantile_penalty}")
+    print(f"DML ridge alpha: {args.dml_ridge_alpha}")
+    print(f"DML quantile solver: {args.dml_quantile_solver}")
     print(
         "Alpha grid: "
         f"min={args.alpha_min}, max={args.alpha_max}, size={args.alpha_grid_size}, "
@@ -380,6 +411,9 @@ def main(argv: list[str] | None = None) -> None:
             append=args.resume or completed > 0,
             quantreg_max_iter=args.quantreg_max_iter,
             dml_k_folds=args.dml_k_folds,
+            dml_quantile_penalty=args.dml_quantile_penalty,
+            dml_ridge_alpha=args.dml_ridge_alpha,
+            dml_quantile_solver=args.dml_quantile_solver,
             critical_value_multiplier=args.critical_value_multiplier,
             selection_lasso_multiplier=args.selection_lasso_multiplier,
             n_jobs=args.n_jobs,

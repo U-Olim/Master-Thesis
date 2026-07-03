@@ -7,7 +7,11 @@ from typing import Any
 import numpy as np
 
 from dgp.designs import Design
-from estimators.base import EstimationResult, POST_SELECTION_DIAGNOSTIC_FIELDS
+from estimators.base import (
+    DML_DIAGNOSTIC_FIELDS,
+    EstimationResult,
+    POST_SELECTION_DIAGNOSTIC_FIELDS,
+)
 from ivqr.confidence_regions import summarize_alpha_grid_diagnostics
 from utils.timing import RUNTIME_COLUMNS, empty_runtime_columns
 
@@ -66,6 +70,14 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "selected_controls",
     "runtime_seconds",
     *RUNTIME_COLUMNS,
+    "dml_quantile_penalty",
+    "dml_ridge_alpha",
+    "dml_quantile_solver",
+    "dml_qr_fit_count",
+    "dml_runtime_mean_alpha_sec",
+    "dml_runtime_max_alpha_sec",
+    "dml_qr_nonzero_mean",
+    "dml_z_resid_var_mean",
     "ps_n_selected_controls",
     "ps_n_selected_instruments",
     "ps_n_selected_total",
@@ -154,6 +166,30 @@ def runtime_diagnostics(result: EstimationResult) -> dict[str, Any]:
     """Return runtime diagnostics with missing stage timings filled."""
     diagnostics: dict[str, Any] = dict(empty_runtime_columns())
     for name in RUNTIME_COLUMNS:
+        value = getattr(result, name)
+        if value is not None:
+            diagnostics[name] = value
+    return diagnostics
+
+
+def empty_dml_diagnostics() -> dict[str, Any]:
+    """Return neutral DML diagnostics for non-DML rows."""
+    return {
+        "dml_quantile_penalty": None,
+        "dml_ridge_alpha": None,
+        "dml_quantile_solver": None,
+        "dml_qr_fit_count": None,
+        "dml_runtime_mean_alpha_sec": np.nan,
+        "dml_runtime_max_alpha_sec": np.nan,
+        "dml_qr_nonzero_mean": np.nan,
+        "dml_z_resid_var_mean": np.nan,
+    }
+
+
+def dml_diagnostics(result: EstimationResult) -> dict[str, Any]:
+    """Return DML diagnostics with non-applicable defaults filled."""
+    diagnostics = empty_dml_diagnostics()
+    for name in DML_DIAGNOSTIC_FIELDS:
         value = getattr(result, name)
         if value is not None:
             diagnostics[name] = value
@@ -296,6 +332,7 @@ def build_simulation_result_row(
         "selected_controls": result.selected_controls,
         "runtime_seconds": result.runtime_seconds,
         **runtime_diagnostics(result),
+        **dml_diagnostics(result),
         **post_selection_diagnostics(result),
         "message": result.message,
     }
@@ -374,6 +411,8 @@ __all__ = [
     "RESULT_COLUMNS",
     "build_failure_result_row",
     "build_simulation_result_row",
+    "dml_diagnostics",
+    "empty_dml_diagnostics",
     "empty_post_selection_diagnostics",
     "ensure_result_schema",
     "post_selection_diagnostics",

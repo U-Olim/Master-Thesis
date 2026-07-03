@@ -168,6 +168,48 @@ def _validate_scalar_instrument(
     return z_array
 
 
+def _nanmean_or_nan(values: list[float]) -> float:
+    if not values:
+        return float("nan")
+    array = np.asarray(values, dtype=float)
+    if array.size == 0 or np.all(np.isnan(array)):
+        return float("nan")
+    return float(np.nanmean(array))
+
+
+def _nanmax_or_nan(values: list[float]) -> float:
+    if not values:
+        return float("nan")
+    array = np.asarray(values, dtype=float)
+    if array.size == 0 or np.all(np.isnan(array)):
+        return float("nan")
+    return float(np.nanmax(array))
+
+
+def _dml_diagnostic_kwargs(
+    *,
+    quantile_penalty: float,
+    ridge_alpha: float,
+    quantile_solver: str,
+    qr_fit_count: int | None = None,
+    alpha_runtime_values: list[float] | None = None,
+    qr_nonzero_values: list[int] | None = None,
+    z_resid_var_values: list[float] | None = None,
+) -> dict[str, Any]:
+    return {
+        "dml_quantile_penalty": quantile_penalty,
+        "dml_ridge_alpha": ridge_alpha,
+        "dml_quantile_solver": quantile_solver,
+        "dml_qr_fit_count": qr_fit_count,
+        "dml_runtime_mean_alpha_sec": _nanmean_or_nan(alpha_runtime_values or []),
+        "dml_runtime_max_alpha_sec": _nanmax_or_nan(alpha_runtime_values or []),
+        "dml_qr_nonzero_mean": _nanmean_or_nan(
+            [float(value) for value in (qr_nonzero_values or [])]
+        ),
+        "dml_z_resid_var_mean": _nanmean_or_nan(z_resid_var_values or []),
+    }
+
+
 def _validate_dml_data_arrays(
     y: np.ndarray,
     d: np.ndarray,
@@ -192,6 +234,14 @@ class DMLFoldCache:
     z_resid_test: np.ndarray
 
 
+@dataclass(frozen=True)
+class DMLAlphaDiagnostics:
+    """Aggregated diagnostics for one alpha-grid evaluation."""
+
+    qr_fit_count: int
+    qr_nonzero_values: tuple[int, ...]
+
+
 def _failed_result(
     data: SimData,
     tau: float,
@@ -200,6 +250,7 @@ def _failed_result(
     alpha_grid_size: int | None = None,
     failed_alpha_count: int | None = None,
     runtime_diagnostics: RuntimeDiagnosticColumns | None = None,
+    dml_diagnostics: dict[str, Any] | None = None,
 ) -> EstimationResult:
     if runtime_seconds < 0:
         raise ValueError("runtime_seconds must be nonnegative")
@@ -233,6 +284,7 @@ def _failed_result(
         cr_disconnected=None,
         selected_controls=None,
         runtime_seconds=runtime_seconds,
+        **({} if dml_diagnostics is None else dml_diagnostics),
         **(
             estimator_runtime_columns(estimator="dml_ivqr", total_sec=runtime_seconds)
             if runtime_diagnostics is None
@@ -398,7 +450,7 @@ def _evaluate_dml_ivqr_alpha_with_cache(
     quantile_penalty: float = 0.01,
     quantile_solver: QuantileSolver = "highs",
     gmm_ridge: float = 1e-8,
-) -> tuple[float, bool, str]:
+) -> tuple[float, bool, str, DMLAlphaDiagnostics]:
     """Evaluate the weighted cross-fitted scalar statistic using cached folds."""
     y = validate_1d_array("y", y)
     d = validate_1d_array("d", d)
@@ -414,6 +466,8 @@ def _evaluate_dml_ivqr_alpha_with_cache(
 
     n = len(y)
     moment_contributions = np.empty(n, dtype=float)
+    qr_fit_count = 0
+    qr_nonzero_values: list[int] = []
 
     for fold_id, fold in enumerate(fold_cache):
         model_beta, beta_converged, beta_message = fit_quantile_nuisance(
@@ -426,7 +480,15 @@ def _evaluate_dml_ivqr_alpha_with_cache(
             solver=quantile_solver,
         )
         if not beta_converged or model_beta is None:
-            return np.inf, False, f"Quantile nuisance failed in fold {fold_id}: {beta_message}"
+            message = f"Quantile nuisance failed in fold {fold_id}: {beta_message}"
+            diagnostics = DMLAlphaDiagnostics(
+                qr_fit_count=qr_fit_count,
+                qr_nonzero_values=tuple(qr_nonzero_values),
+            )
+            return np.inf, False, message, diagnostics
+        qr_fit_count += 1
+        coef = np.asarray(getattr(model_beta, "coef_", []), dtype=float)
+        qr_nonzero_values.append(int(np.count_nonzero(np.abs(coef) > 1e-12)))
 
         q_hat_test = model_beta.predict(fold.x_test_scaled)
         residual_test = y[fold.test_idx] - d[fold.test_idx] * alpha_value - q_hat_test
@@ -435,7 +497,11 @@ def _evaluate_dml_ivqr_alpha_with_cache(
 
     contributions = moment_contributions.reshape(-1, 1)
     statistic = weighted_gmm_statistic(contributions, ridge=gmm_ridge)
-    return float(statistic), True, "ok"
+    diagnostics = DMLAlphaDiagnostics(
+        qr_fit_count=qr_fit_count,
+        qr_nonzero_values=tuple(qr_nonzero_values),
+    )
+    return float(statistic), True, "ok", diagnostics
 
 
 def _evaluate_dml_ivqr_alpha_uncached(
@@ -451,7 +517,7 @@ def _evaluate_dml_ivqr_alpha_uncached(
     ridge_alpha: float = 1.0,
     quantile_solver: QuantileSolver = "highs",
     gmm_ridge: float = 1e-8,
-) -> tuple[float, bool, str]:
+) -> tuple[float, bool, str, DMLAlphaDiagnostics]:
     """Evaluate a DML-style IVQR alpha with the original uncached fold setup."""
     y, d, z, x = _validate_dml_data_arrays(y, d, z, x)
     validate_tau(tau)
@@ -474,7 +540,10 @@ def _evaluate_dml_ivqr_alpha_uncached(
             ridge_alpha=ridge_alpha,
         )
     except RuntimeError as exc:
-        return np.inf, False, str(exc)
+        return np.inf, False, str(exc), DMLAlphaDiagnostics(
+            qr_fit_count=0,
+            qr_nonzero_values=(),
+        )
 
     return _evaluate_dml_ivqr_alpha_with_cache(
         y=y,
@@ -515,7 +584,7 @@ def evaluate_dml_ivqr_alpha(
     quantile_solver = _validate_quantile_solver(quantile_solver)
     gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
     if not use_cache:
-        return _evaluate_dml_ivqr_alpha_uncached(
+        statistic, converged, message, _ = _evaluate_dml_ivqr_alpha_uncached(
             y=y,
             d=d,
             z=z,
@@ -529,6 +598,7 @@ def evaluate_dml_ivqr_alpha(
             quantile_solver=quantile_solver,
             gmm_ridge=gmm_ridge,
         )
+        return statistic, converged, message
 
     try:
         fold_cache = _build_dml_fold_cache(
@@ -543,7 +613,7 @@ def evaluate_dml_ivqr_alpha(
     except RuntimeError as exc:
         return np.inf, False, str(exc)
 
-    return _evaluate_dml_ivqr_alpha_with_cache(
+    statistic, converged, message, _ = _evaluate_dml_ivqr_alpha_with_cache(
         y=y,
         d=d,
         fold_cache=fold_cache,
@@ -553,6 +623,7 @@ def evaluate_dml_ivqr_alpha(
         quantile_solver=quantile_solver,
         gmm_ridge=gmm_ridge,
     )
+    return statistic, converged, message
 
 
 def estimate_dml_ivqr(
@@ -634,6 +705,12 @@ def estimate_dml_ivqr(
                     total_sec=runtime_seconds,
                     crossfit_sec=_elapsed_since(crossfit_start),
                 ),
+                dml_diagnostics=_dml_diagnostic_kwargs(
+                    quantile_penalty=quantile_penalty,
+                    ridge_alpha=ridge_alpha,
+                    quantile_solver=quantile_solver,
+                    qr_fit_count=0,
+                ),
             )
     else:
         make_folds(n=len(y), k_folds=k_folds, random_state=fold_random_state)
@@ -641,12 +718,30 @@ def estimate_dml_ivqr(
     statistics = np.empty(len(alphas), dtype=float)
     converged_flags: list[bool] = []
     failure_messages: list[str] = []
+    alpha_runtime_values: list[float] = []
+    qr_nonzero_values: list[int] = []
+    qr_fit_count = 0
+    z_resid_var_values: list[float] = []
+    if fold_cache is not None:
+        z_resid_var_values = [
+            float(np.var(fold.z_resid_test, ddof=0)) for fold in fold_cache
+        ]
 
     alpha_loop_start = perf_counter()
     for j, alpha_value in enumerate(alphas):
+        alpha_start = perf_counter()
+        alpha_diagnostics = DMLAlphaDiagnostics(
+            qr_fit_count=0,
+            qr_nonzero_values=(),
+        )
         try:
             if fold_cache is not None:
-                statistic, converged, message = _evaluate_dml_ivqr_alpha_with_cache(
+                (
+                    statistic,
+                    converged,
+                    message,
+                    alpha_diagnostics,
+                ) = _evaluate_dml_ivqr_alpha_with_cache(
                     y=y,
                     d=d,
                     fold_cache=fold_cache,
@@ -657,7 +752,12 @@ def estimate_dml_ivqr(
                     gmm_ridge=gmm_ridge,
                 )
             else:
-                statistic, converged, message = _evaluate_dml_ivqr_alpha_uncached(
+                (
+                    statistic,
+                    converged,
+                    message,
+                    alpha_diagnostics,
+                ) = _evaluate_dml_ivqr_alpha_uncached(
                     y=y,
                     d=d,
                     z=z,
@@ -674,11 +774,23 @@ def estimate_dml_ivqr(
         except Exception as exc:  # noqa: BLE001 - failed grid points are recorded.
             statistic, converged = np.inf, False
             message = str(exc)
+        alpha_runtime_values.append(perf_counter() - alpha_start)
+        qr_fit_count += alpha_diagnostics.qr_fit_count
+        qr_nonzero_values.extend(alpha_diagnostics.qr_nonzero_values)
         if not converged:
             failure_messages.append(message)
         statistics[j] = statistic
         converged_flags.append(converged)
     alpha_loop_sec = perf_counter() - alpha_loop_start
+    dml_diagnostics = _dml_diagnostic_kwargs(
+        quantile_penalty=quantile_penalty,
+        ridge_alpha=ridge_alpha,
+        quantile_solver=quantile_solver,
+        qr_fit_count=qr_fit_count,
+        alpha_runtime_values=alpha_runtime_values,
+        qr_nonzero_values=qr_nonzero_values,
+        z_resid_var_values=z_resid_var_values,
+    )
 
     statistics, num_failed = sanitize_grid_statistics(statistics, converged_flags)
     if num_failed == len(alphas):
@@ -705,6 +817,7 @@ def estimate_dml_ivqr(
                 crossfit_sec=crossfit_sec,
                 alpha_loop_sec=alpha_loop_sec,
             ),
+            dml_diagnostics=dml_diagnostics,
         )
 
     confidence_region_start = perf_counter()
@@ -764,6 +877,7 @@ def estimate_dml_ivqr(
         cr_disconnected=diagnostics["cr_disconnected"],
         selected_controls=None,
         runtime_seconds=runtime_seconds,
+        **dml_diagnostics,
         # At the current profiling granularity, DML cross-fitting is timed as
         # a combined stage. Nuisance fit and prediction sub-times are not
         # separated, so their runtime fields are intentionally NaN.

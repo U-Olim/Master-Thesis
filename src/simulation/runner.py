@@ -33,6 +33,9 @@ from simulation.config import (
     DEFAULT_BASE_SEED,
     DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     DEFAULT_DML_K_FOLDS,
+    DEFAULT_DML_QUANTILE_PENALTY,
+    DEFAULT_DML_QUANTILE_SOLVER,
+    DEFAULT_DML_RIDGE_ALPHA,
     DEFAULT_ESTIMATORS,
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
@@ -110,6 +113,9 @@ class WorkerArgs:
     estimators: tuple[str, ...]
     quantreg_max_iter: int
     dml_k_folds: int
+    dml_quantile_penalty: float
+    dml_ridge_alpha: float
+    dml_quantile_solver: str
     gmm_ridge: float
     critical_value_multiplier: float
     selection_lasso_multiplier: float
@@ -414,6 +420,9 @@ def run_simulation_design(
     estimators: tuple[str, ...] = DEFAULT_SIMULATION_ESTIMATORS,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     dml_k_folds: int = DEFAULT_DML_K_FOLDS,
+    dml_quantile_penalty: float = DEFAULT_DML_QUANTILE_PENALTY,
+    dml_ridge_alpha: float = DEFAULT_DML_RIDGE_ALPHA,
+    dml_quantile_solver: str = DEFAULT_DML_QUANTILE_SOLVER,
     gmm_ridge: float = 1e-8,
     critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     selection_lasso_multiplier: float = 1.0,
@@ -426,6 +435,11 @@ def run_simulation_design(
     dml_k_folds = validate_positive_int("dml_k_folds", dml_k_folds)
     if dml_k_folds < 2 or dml_k_folds > design.n:
         raise ValueError("dml_k_folds must satisfy 2 <= dml_k_folds <= n")
+    dml_quantile_penalty = _validate_nonnegative_float(
+        "dml_quantile_penalty", dml_quantile_penalty
+    )
+    dml_ridge_alpha = _validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
+    dml_quantile_solver = str(dml_quantile_solver)
     gmm_ridge = _validate_nonnegative_float("gmm_ridge", gmm_ridge)
     critical_value_multiplier = _validate_positive_float(
         "critical_value_multiplier", critical_value_multiplier
@@ -479,8 +493,9 @@ def run_simulation_design(
                         alphas=alphas,
                         k_folds=dml_k_folds,
                         fold_random_state=estimator_random_state,
-                        quantile_penalty=0.01,
-                        ridge_alpha=1.0,
+                        quantile_penalty=dml_quantile_penalty,
+                        ridge_alpha=dml_ridge_alpha,
+                        quantile_solver=dml_quantile_solver,
                         gmm_ridge=gmm_ridge,
                         critical_value_multiplier=critical_value_multiplier,
                     )
@@ -512,6 +527,9 @@ def _run_worker(args: WorkerArgs) -> list[dict[str, object]]:
         estimators=args.estimators,
         quantreg_max_iter=args.quantreg_max_iter,
         dml_k_folds=args.dml_k_folds,
+        dml_quantile_penalty=args.dml_quantile_penalty,
+        dml_ridge_alpha=args.dml_ridge_alpha,
+        dml_quantile_solver=args.dml_quantile_solver,
         gmm_ridge=args.gmm_ridge,
         critical_value_multiplier=args.critical_value_multiplier,
         selection_lasso_multiplier=args.selection_lasso_multiplier,
@@ -531,6 +549,9 @@ def run_simulation_batch(
     append: bool = False,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     dml_k_folds: int = DEFAULT_DML_K_FOLDS,
+    dml_quantile_penalty: float = DEFAULT_DML_QUANTILE_PENALTY,
+    dml_ridge_alpha: float = DEFAULT_DML_RIDGE_ALPHA,
+    dml_quantile_solver: str = DEFAULT_DML_QUANTILE_SOLVER,
     gmm_ridge: float = 1e-8,
     critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     selection_lasso_multiplier: float = 1.0,
@@ -545,6 +566,11 @@ def run_simulation_batch(
     selection_lasso_multiplier = validate_selection_lasso_multiplier(
         selection_lasso_multiplier
     )
+    dml_quantile_penalty = _validate_nonnegative_float(
+        "dml_quantile_penalty", dml_quantile_penalty
+    )
+    dml_ridge_alpha = _validate_nonnegative_float("dml_ridge_alpha", dml_ridge_alpha)
+    dml_quantile_solver = str(dml_quantile_solver)
 
     worker_args = [
         WorkerArgs(
@@ -553,6 +579,9 @@ def run_simulation_batch(
             estimators=estimators,
             quantreg_max_iter=quantreg_max_iter,
             dml_k_folds=dml_k_folds,
+            dml_quantile_penalty=dml_quantile_penalty,
+            dml_ridge_alpha=dml_ridge_alpha,
+            dml_quantile_solver=dml_quantile_solver,
             gmm_ridge=gmm_ridge,
             critical_value_multiplier=critical_value_multiplier,
             selection_lasso_multiplier=selection_lasso_multiplier,

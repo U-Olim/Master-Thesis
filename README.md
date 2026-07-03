@@ -123,6 +123,12 @@ Fast DML only:
 pixi run python scenarios/run_simulation.py --mode fast --estimators dml --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
 ```
 
+DML penalty experiment:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --estimators dml --reps 5 --dml-k-folds 3 --dml-quantile-penalty 0.05 --dml-quantile-solver highs-ds --alpha-min -1 --alpha-max 3 --alpha-grid-size 21 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/dml_R5_penalty005_solver_highsds.csv --manifest results/raw/dml_R5_penalty005_solver_highsds_manifest.json
+```
+
 Baseline post-selection:
 
 ```powershell

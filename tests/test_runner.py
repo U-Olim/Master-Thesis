@@ -1,5 +1,6 @@
 import json
 import importlib.util
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -276,6 +277,14 @@ def test_resume_signature_seed_and_execution_invariance() -> None:
     assert "batch_size" not in base
 
 
+def test_resume_signature_changes_by_dml_quantile_penalty() -> None:
+    base = _signature("--estimators", "dml", "--dml-quantile-penalty", "0.01")
+    changed = _signature("--estimators", "dml", "--dml-quantile-penalty", "0.05")
+    assert base != changed
+    assert base["dml_quantile_penalty"] == 0.01
+    assert changed["dml_quantile_penalty"] == 0.05
+
+
 def test_resume_signature_changes_by_replication_block() -> None:
     first_block = _signature("--reps", "10", "--rep-start", "0", "--rep-end", "4")
     second_block = _signature("--reps", "10", "--rep-start", "5", "--rep-end", "9")
@@ -419,8 +428,126 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
     assert payload["resume_signature"]["reps"] == 1
     assert payload["resume_signature"]["rep_start"] == 0
     assert payload["resume_signature"]["rep_end"] == 0
+    assert payload["parameters"]["dml_quantile_penalty"] == 0.01
+    assert payload["parameters"]["dml_ridge_alpha"] == 1.0
+    assert payload["parameters"]["dml_quantile_solver"] == "highs"
+    assert payload["resume_signature"]["dml_quantile_penalty"] == 0.01
+    assert payload["resume_signature"]["dml_ridge_alpha"] == 1.0
+    assert payload["resume_signature"]["dml_quantile_solver"] == "highs"
     assert "n_jobs" not in payload["resume_signature"]
     assert "batch_size" not in payload["resume_signature"]
+
+
+def test_tiny_dml_run_writes_custom_dml_options_and_diagnostics(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "raw" / "tiny_dml.csv"
+    manifest = tmp_path / "raw" / "tiny_dml_manifest.json"
+    result = _run_cli(
+        tmp_path,
+        "--mode",
+        "fast",
+        "--estimators",
+        "dml",
+        "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--n-values",
+        "40",
+        "--p-values",
+        "3",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--max-designs",
+        "1",
+        "--n-jobs",
+        "1",
+        "--alpha-grid-size",
+        "3",
+        "--dml-k-folds",
+        "2",
+        "--dml-quantile-penalty",
+        "0.05",
+        "--dml-ridge-alpha",
+        "0.5",
+        "--dml-quantile-solver",
+        "highs-ds",
+        "--no-reports",
+        "--output",
+        str(output),
+        "--manifest",
+        str(manifest),
+    )
+    assert result.returncode == 0, result.stderr
+    written = pd.read_csv(output)
+    assert written["estimator"].tolist() == ["dml_ivqr"]
+    for column in (
+        "dml_quantile_penalty",
+        "dml_ridge_alpha",
+        "dml_quantile_solver",
+        "dml_qr_fit_count",
+    ):
+        assert column in written.columns
+    assert _cell_float(written, "dml_quantile_penalty") == 0.05
+    assert _cell_float(written, "dml_ridge_alpha") == 0.5
+    assert _cell_str(written, "dml_quantile_solver") == "highs-ds"
+
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["parameters"]["dml_quantile_penalty"] == 0.05
+    assert payload["parameters"]["dml_ridge_alpha"] == 0.5
+    assert payload["parameters"]["dml_quantile_solver"] == "highs-ds"
+    assert payload["resume_signature"]["dml_quantile_penalty"] == 0.05
+    assert payload["resume_signature"]["dml_ridge_alpha"] == 0.5
+    assert payload["resume_signature"]["dml_quantile_solver"] == "highs-ds"
+
+
+def test_tiny_dml_run_writes_sane_aggregate_diagnostics(tmp_path: Path) -> None:
+    output = tmp_path / "raw" / "tiny_dml_diagnostics.csv"
+    result = _run_cli(
+        tmp_path,
+        "--mode",
+        "fast",
+        "--estimators",
+        "dml",
+        "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--n-values",
+        "40",
+        "--p-values",
+        "3",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--max-designs",
+        "1",
+        "--n-jobs",
+        "1",
+        "--alpha-grid-size",
+        "3",
+        "--dml-k-folds",
+        "2",
+        "--no-reports",
+        "--output",
+        str(output),
+    )
+    assert result.returncode == 0, result.stderr
+    written = pd.read_csv(output)
+    for column in (
+        "dml_runtime_mean_alpha_sec",
+        "dml_runtime_max_alpha_sec",
+        "dml_qr_nonzero_mean",
+        "dml_z_resid_var_mean",
+    ):
+        assert column in written.columns
+        value = written[column].iloc[0]
+        assert isinstance(value, (int, float))
+        assert pd.isna(value) or math.isfinite(float(value))
 
 
 def test_block_run_reports_block_replication_completion(tmp_path: Path) -> None:

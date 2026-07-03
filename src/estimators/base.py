@@ -69,6 +69,17 @@ POST_SELECTION_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
 
 RUNTIME_DIAGNOSTIC_FIELDS: tuple[str, ...] = RUNTIME_COLUMNS
 
+DML_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
+    "dml_quantile_penalty",
+    "dml_ridge_alpha",
+    "dml_quantile_solver",
+    "dml_qr_fit_count",
+    "dml_runtime_mean_alpha_sec",
+    "dml_runtime_max_alpha_sec",
+    "dml_qr_nonzero_mean",
+    "dml_z_resid_var_mean",
+)
+
 
 def estimation_result_diagnostic_kwargs(
     diagnostics: dict[str, Any],
@@ -202,6 +213,15 @@ class EstimationResult:
     ps_rank_deficient: bool | None = None
     ps_warning_code: str | None = None
 
+    dml_quantile_penalty: float | None = None
+    dml_ridge_alpha: float | None = None
+    dml_quantile_solver: str | None = None
+    dml_qr_fit_count: int | None = None
+    dml_runtime_mean_alpha_sec: float | None = None
+    dml_runtime_max_alpha_sec: float | None = None
+    dml_qr_nonzero_mean: float | None = None
+    dml_z_resid_var_mean: float | None = None
+
     @property
     def status(self) -> str:
         """Return the public estimator status used in simulation CSV rows."""
@@ -230,6 +250,7 @@ class EstimationResult:
         names = (
             RESULT_DIAGNOSTIC_FIELDS
             + POST_SELECTION_DIAGNOSTIC_FIELDS
+            + DML_DIAGNOSTIC_FIELDS
             + RUNTIME_DIAGNOSTIC_FIELDS
         )
         return {name: getattr(self, name) for name in names}
