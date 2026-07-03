@@ -1,8 +1,7 @@
 """Common Chernozhukov-Hansen inverse-IVQR grid routines.
 
 This module contains the shared low-dimensional CH-IVQR machinery used by
-oracle, post-selection, and the separate full-control benchmark. The main
-simulation runner should not call the full-control wrapper directly.
+oracle, post-selection, and the separate full-control benchmark.
 """
 
 from __future__ import annotations

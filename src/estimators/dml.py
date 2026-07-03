@@ -229,6 +229,10 @@ class DMLFoldCache:
 
     train_idx: np.ndarray
     test_idx: np.ndarray
+    y_train: np.ndarray
+    d_train: np.ndarray
+    y_test: np.ndarray
+    d_test: np.ndarray
     x_train_scaled: np.ndarray
     x_test_scaled: np.ndarray
     z_resid_test: np.ndarray
@@ -432,6 +436,10 @@ def _build_dml_fold_cache(
             DMLFoldCache(
                 train_idx=train_idx,
                 test_idx=test_idx,
+                y_train=y[train_idx],
+                d_train=d[train_idx],
+                y_test=y[test_idx],
+                d_test=d[test_idx],
                 x_train_scaled=x_train_scaled,
                 x_test_scaled=x_test_scaled,
                 z_resid_test=z[test_idx] - model_delta.predict(x_test_scaled),
@@ -471,8 +479,8 @@ def _evaluate_dml_ivqr_alpha_with_cache(
 
     for fold_id, fold in enumerate(fold_cache):
         model_beta, beta_converged, beta_message = fit_quantile_nuisance(
-            y_train=y[fold.train_idx],
-            d_train=d[fold.train_idx],
+            y_train=fold.y_train,
+            d_train=fold.d_train,
             x_train=fold.x_train_scaled,
             alpha_value=alpha_value,
             tau=tau,
@@ -491,7 +499,7 @@ def _evaluate_dml_ivqr_alpha_with_cache(
         qr_nonzero_values.append(int(np.count_nonzero(np.abs(coef) > 1e-12)))
 
         q_hat_test = model_beta.predict(fold.x_test_scaled)
-        residual_test = y[fold.test_idx] - d[fold.test_idx] * alpha_value - q_hat_test
+        residual_test = fold.y_test - fold.d_test * alpha_value - q_hat_test
         score_test = quantile_score(residual_test, tau)
         moment_contributions[fold.test_idx] = score_test * fold.z_resid_test
 

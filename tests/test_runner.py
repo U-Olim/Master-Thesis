@@ -260,6 +260,38 @@ def test_cli_rejects_invalid_replication_blocks(rep_start: int, rep_end: int) ->
         )
 
 
+def test_cli_rejects_multi_estimator_rerun_failed_resume(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="can duplicate successful rows"):
+        _validated_args(
+            "--resume",
+            "--rerun-failed",
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+            "--estimators",
+            "oracle",
+            "dml",
+        )
+
+
+def test_resume_manifest_mismatch_is_rejected(tmp_path: Path) -> None:
+    manifest = tmp_path / "manifest.json"
+    base_args = _validated_args("--manifest", str(manifest))
+    manifest.write_text(
+        json.dumps({"resume_signature": RUN_SIMULATION._resume_signature(base_args)}),
+        encoding="utf-8",
+    )
+
+    changed_args = _validated_args(
+        "--resume",
+        "--manifest",
+        str(manifest),
+        "--base-seed",
+        "54321",
+    )
+    with pytest.raises(ValueError, match="resume signature does not match"):
+        RUN_SIMULATION._validate_resume_manifest(changed_args)
+
+
 def test_resume_signature_seed_and_execution_invariance() -> None:
     base = _signature("--n-jobs", "1", "--batch-size", "1")
     changed_execution = _signature("--n-jobs", "4", "--batch-size", "10")

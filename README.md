@@ -54,6 +54,9 @@ pixi run test
 pixi run test_slow
 ```
 
+`test_slow` may deselect all tests when no tests are marked `slow`; this is
+expected until long-running production checks are added.
+
 ## Simulation Modes
 
 - `fast`: `R = 10`
@@ -123,10 +126,20 @@ Fast DML only:
 pixi run python scenarios/run_simulation.py --mode fast --estimators dml --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
 ```
 
-DML penalty experiment:
+DML chosen experimental setting:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators dml --reps 5 --dml-k-folds 3 --dml-quantile-penalty 0.05 --dml-quantile-solver highs-ds --alpha-min -1 --alpha-max 3 --alpha-grid-size 21 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/dml_R5_penalty005_solver_highsds.csv --manifest results/raw/dml_R5_penalty005_solver_highsds_manifest.json
+pixi run python scenarios/run_simulation.py --mode fast --estimators dml --reps 5 --dml-k-folds 3 --dml-quantile-penalty 0.07 --dml-quantile-solver highs-ipm --alpha-min -1 --alpha-max 3 --alpha-grid-size 21 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/dml_R5_penalty007_solver_highsipm.csv --manifest results/raw/dml_R5_penalty007_solver_highsipm_manifest.json
+```
+
+For parallel DML batches, cap numerical-library threads to avoid process/thread
+oversubscription:
+
+```powershell
+$env:OMP_NUM_THREADS = "1"
+$env:MKL_NUM_THREADS = "1"
+$env:OPENBLAS_NUM_THREADS = "1"
+$env:NUMEXPR_NUM_THREADS = "1"
 ```
 
 Baseline post-selection:

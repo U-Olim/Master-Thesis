@@ -212,6 +212,11 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--selection-lasso-multiplier must be positive")
     if args.resume and args.manifest is None:
         raise ValueError("--resume requires --manifest")
+    if args.resume and args.rerun_failed and len(args.estimators) > 1:
+        raise ValueError(
+            "--rerun-failed with multiple estimators can duplicate successful rows; "
+            "rerun one estimator at a time or choose a new output file"
+        )
 
 
 def _resume_signature(args: argparse.Namespace) -> dict[str, object]:

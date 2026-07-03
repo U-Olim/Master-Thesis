@@ -53,6 +53,36 @@ def test_estimators_return_estimation_results_with_expected_names() -> None:
         assert "runtime_total_sec" in result.diagnostics
 
 
+def test_dml_cached_and_uncached_paths_match_tiny_run() -> None:
+    data = _tiny_data()
+    alphas = np.linspace(-1.0, 3.0, 3)
+    cached = estimate_dml_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        k_folds=2,
+        fold_random_state=123,
+        quantile_penalty=0.05,
+        use_cache=True,
+    )
+    uncached = estimate_dml_ivqr(
+        data,
+        tau=0.5,
+        alphas=alphas,
+        k_folds=2,
+        fold_random_state=123,
+        quantile_penalty=0.05,
+        use_cache=False,
+    )
+
+    assert cached.alpha_hat == pytest.approx(uncached.alpha_hat)
+    assert cached.cr_lower == pytest.approx(uncached.cr_lower)
+    assert cached.cr_upper == pytest.approx(uncached.cr_upper)
+    assert cached.cr_covers_true == uncached.cr_covers_true
+    assert cached.failed_alpha_count == uncached.failed_alpha_count
+    assert cached.dml_qr_fit_count == uncached.dml_qr_fit_count
+
+
 def test_post_selection_lasso_multiplier_diagnostics() -> None:
     data = _tiny_data()
     alphas = np.linspace(-1.0, 3.0, 5)
