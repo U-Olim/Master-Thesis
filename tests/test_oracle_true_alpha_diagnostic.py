@@ -1,6 +1,8 @@
 import importlib.util
 import math
+import os
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 
@@ -170,3 +172,44 @@ def test_diagnostic_creates_output_directories_and_runs_tiny_config(
     assert len(written_summary) == 1
     for column in DIAGNOSTIC.DETAIL_COLUMNS:
         assert column in written.columns
+
+
+def test_diagnostic_cli_runs_tiny_configuration(tmp_path: Path) -> None:
+    output = tmp_path / "cli" / "oracle_true_alpha.csv"
+    summary_output = tmp_path / "cli" / "oracle_true_alpha_summary.csv"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--reps",
+            "1",
+            "--dgps",
+            "dgp1",
+            "--n-values",
+            "40",
+            "--p-values",
+            "5",
+            "--pi-values",
+            "1.0",
+            "--taus",
+            "0.5",
+            "--quantreg-max-iter",
+            "1000",
+            "--output",
+            str(output),
+            "--summary-output",
+            str(summary_output),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        env=env,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Total rows: 1" in result.stdout
+    assert output.exists()
+    assert summary_output.exists()
