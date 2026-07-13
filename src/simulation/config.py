@@ -6,7 +6,7 @@ PI_VALUES: tuple[float, ...] = (1.0, 0.5, 0.25, 0.10)
 TAUS: tuple[float, ...] = (0.25, 0.50, 0.75)
 DGPS: tuple[str, ...] = ("dgp1", "dgp2", "dgp3")
 
-ESTIMATORS: tuple[str, ...] = ("oracle", "post_selection", "full_control", "dml")
+ESTIMATORS: tuple[str, ...] = ("oracle", "post_selection", "dml")
 DEFAULT_ESTIMATORS: tuple[str, ...] = ("oracle", "post_selection", "dml")
 
 R_FAST: int = 10

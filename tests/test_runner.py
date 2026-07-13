@@ -18,9 +18,8 @@ from simulation.runner import (
     normalize_estimator_names,
     run_simulation_batch,
 )
-from simulation.dml_output import REQUIRED_DML_COLUMNS
+from simulation.dml_output import REQUIRED_CORE_COLUMNS, REQUIRED_DML_COLUMNS
 from simulation.post_selection_output import REQUIRED_POST_SELECTION_COLUMNS
-from simulation.oracle_output import REQUIRED_ORACLE_COLUMNS
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -87,9 +86,11 @@ def test_help_works(tmp_path: Path) -> None:
 
 def test_default_estimators_and_aliases() -> None:
     assert normalize_estimator_names(None) == ("oracle", "post_selection", "dml")
-    assert normalize_estimator_names(["full_control_ivqr"]) == ("full_control",)
-    assert normalize_estimator_names(["full-control-ivqr"]) == ("full_control",)
     assert normalize_estimator_names(["dml-ivqr"]) == ("dml",)
+    with pytest.raises(ValueError):
+        normalize_estimator_names(["full_control_ivqr"])
+    with pytest.raises(ValueError):
+        normalize_estimator_names(["full-control-ivqr"])
     with pytest.raises(ValueError):
         normalize_estimator_names(["bad"])
 
@@ -179,7 +180,7 @@ def test_design_seed_is_stable_and_changes_by_design_cell() -> None:
 def test_design_seed_is_independent_of_estimator_list() -> None:
     oracle_only = normalize_estimator_names(["oracle"])
     all_estimators = normalize_estimator_names(
-        ["oracle", "post_selection", "full_control", "dml"]
+        ["oracle", "post_selection", "dml"]
     )
     assert oracle_only != all_estimators
     first = make_simulation_grid(
@@ -370,7 +371,6 @@ def test_dry_run_uses_default_estimators(tmp_path: Path) -> None:
     assert "Estimators: oracle, post_selection, dml" in result.stdout
     assert "Post-selection Lasso multiplier: 1.0" in result.stdout
     assert "Expected design rows:" in result.stdout
-    assert "Reports: generated after successful run" in result.stdout
 
 
 def test_dry_run_accepts_selection_lasso_multiplier(tmp_path: Path) -> None:
@@ -402,10 +402,10 @@ def test_selection_lasso_multiplier_rejects_nonpositive_values(tmp_path: Path) -
     assert "--selection-lasso-multiplier must be positive" in result.stderr
 
 
-def test_dry_run_accepts_full_control(tmp_path: Path) -> None:
+def test_dry_run_rejects_full_control(tmp_path: Path) -> None:
     result = _run_cli(tmp_path, "--mode", "fast", "--estimators", "full_control", "--dry-run")
-    assert result.returncode == 0
-    assert "Estimators: full_control" in result.stdout
+    assert result.returncode != 0
+    assert "Unknown estimator name" in result.stderr
 
 
 def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
@@ -416,7 +416,7 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
         "--mode",
         "fast",
         "--estimators",
-        "full_control",
+        "oracle",
         "--reps",
         "1",
         "--dgps",
@@ -435,7 +435,6 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
         "1",
         "--alpha-grid-size",
         "5",
-        "--no-reports",
         "--output",
         str(output),
         "--manifest",
@@ -443,7 +442,7 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
-    assert written["estimator"].tolist() == ["full_control_ivqr"]
+    assert written["estimator"].tolist() == ["oracle"]
     assert _cell_int(written, "seed") == make_design_seed(
         base_seed=DEFAULT_BASE_SEED,
         dgp="dgp1",
@@ -454,7 +453,7 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
         rep=0,
     )
     payload = json.loads(manifest.read_text(encoding="utf-8"))
-    assert payload["estimators"] == ["full_control"]
+    assert payload["estimators"] == ["oracle"]
     assert payload["base_seed"] == DEFAULT_BASE_SEED
     assert payload["seed_rule"] == SEED_RULE_TEXT
     assert payload["resume_signature"]["base_seed"] == DEFAULT_BASE_SEED
@@ -500,14 +499,13 @@ def test_tiny_oracle_run_writes_clean_common_schema(tmp_path: Path) -> None:
         "1",
         "--alpha-grid-size",
         "3",
-        "--no-reports",
         "--output",
         str(output),
     )
 
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
-    assert tuple(written.columns) == REQUIRED_ORACLE_COLUMNS
+    assert tuple(written.columns) == REQUIRED_CORE_COLUMNS
     assert written["estimator"].tolist() == ["oracle"]
     assert not any("runtime" in column for column in written.columns)
 
@@ -549,7 +547,6 @@ def test_tiny_dml_run_writes_clean_schema_and_keeps_options_in_manifest(
         "0.5",
         "--dml-quantile-solver",
         "highs-ds",
-        "--no-reports",
         "--output",
         str(output),
         "--manifest",
@@ -597,7 +594,6 @@ def test_tiny_dml_run_excludes_diagnostics_and_runtime(tmp_path: Path) -> None:
         "3",
         "--dml-k-folds",
         "2",
-        "--no-reports",
         "--output",
         str(output),
     )
@@ -608,8 +604,8 @@ def test_tiny_dml_run_excludes_diagnostics_and_runtime(tmp_path: Path) -> None:
     assert "dml_quantile_solver" not in written.columns
 
 
-def test_dml_append_rejects_legacy_wide_output_schema(tmp_path: Path) -> None:
-    output = tmp_path / "raw" / "legacy_dml.csv"
+def test_dml_append_rejects_different_output_schema(tmp_path: Path) -> None:
+    output = tmp_path / "raw" / "incompatible_dml.csv"
     output.parent.mkdir(parents=True)
     pd.DataFrame({"estimator": ["dml_ivqr"], "failed": [False]}).to_csv(
         output, index=False
@@ -625,15 +621,14 @@ def test_dml_append_rejects_legacy_wide_output_schema(tmp_path: Path) -> None:
         )
 
 
-def test_block_run_reports_block_replication_completion(tmp_path: Path) -> None:
+def test_block_run_writes_requested_replication_block(tmp_path: Path) -> None:
     output = tmp_path / "raw" / "block.csv"
-    summary = tmp_path / "summary" / "block_summary.csv"
     result = _run_cli(
         tmp_path,
         "--mode",
         "fast",
         "--estimators",
-        "full_control",
+        "oracle",
         "--reps",
         "10",
         "--rep-start",
@@ -658,31 +653,20 @@ def test_block_run_reports_block_replication_completion(tmp_path: Path) -> None:
         "5",
         "--output",
         str(output),
-        "--summary-output",
-        str(summary),
-        "--tables-dir",
-        str(tmp_path / "tables"),
-        "--figures-dir",
-        str(tmp_path / "figures"),
     )
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
     assert sorted(written["rep"].unique().tolist()) == [3, 4, 5]
-    summary_frame = pd.read_csv(summary)
-    assert summary_frame["expected_replications"].tolist() == [3]
-    assert summary_frame["observed_replications"].tolist() == [3]
-    assert summary_frame["completion_rate"].tolist() == [1.0]
 
 
-def test_default_run_reports_default_replication_completion(tmp_path: Path) -> None:
+def test_default_run_writes_default_replication_block(tmp_path: Path) -> None:
     output = tmp_path / "raw" / "default.csv"
-    summary = tmp_path / "summary" / "default_summary.csv"
     result = _run_cli(
         tmp_path,
         "--mode",
         "fast",
         "--estimators",
-        "full_control",
+        "oracle",
         "--reps",
         "3",
         "--dgps",
@@ -703,20 +687,10 @@ def test_default_run_reports_default_replication_completion(tmp_path: Path) -> N
         "5",
         "--output",
         str(output),
-        "--summary-output",
-        str(summary),
-        "--tables-dir",
-        str(tmp_path / "tables"),
-        "--figures-dir",
-        str(tmp_path / "figures"),
     )
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
     assert sorted(written["rep"].unique().tolist()) == [0, 1, 2]
-    summary_frame = pd.read_csv(summary)
-    assert summary_frame["expected_replications"].tolist() == [3]
-    assert summary_frame["observed_replications"].tolist() == [3]
-    assert summary_frame["completion_rate"].tolist() == [1.0]
 
 
 def test_tiny_post_selection_run_writes_clean_schema_and_manifest_options(
@@ -752,7 +726,6 @@ def test_tiny_post_selection_run_writes_clean_schema_and_manifest_options(
         "5",
         "--selection-lasso-multiplier",
         "1.2",
-        "--no-reports",
         "--output",
         str(output),
         "--manifest",

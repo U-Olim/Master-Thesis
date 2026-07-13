@@ -1,10 +1,6 @@
-"""Clean and validate thesis-ready Post-selection IVQR outputs."""
+"""Build and validate current Post-selection IVQR outputs."""
 
 from __future__ import annotations
-
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -48,45 +44,13 @@ _SOURCE_COLUMNS = {
 _BOOLEAN_COLUMNS = ("covered", "converged")
 
 
-@dataclass(frozen=True)
-class PostSelectionValidationSummary:
-    """Calculated validation information for one cleaning operation."""
-
-    input_rows: int
-    output_rows: int
-    input_columns: int
-    output_columns: int
-    removed_columns: int
-    missing_values: dict[str, int]
-    empty_confidence_regions: int
-    duplicate_identifiers: int
-    selected_controls_min: float
-    selected_controls_max: float
-    selected_controls_mean: float
-    selection_lasso_multipliers: tuple[float, ...]
-
-
 def _as_boolean(series: pd.Series, column: str) -> pd.Series:
-    true_values = {"true", "1", "yes"}
-    false_values = {"false", "0", "no"}
-
-    def convert(value: Any) -> Any:
-        if pd.isna(value):
-            return pd.NA
-        if isinstance(value, (bool, np.bool_)):
-            return bool(value)
-        if isinstance(value, (int, float, np.integer, np.floating)):
-            if np.isfinite(float(value)) and float(value) in (0.0, 1.0):
-                return bool(value)
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if normalized in true_values:
-                return True
-            if normalized in false_values:
-                return False
+    present = series.dropna()
+    valid = present.map(lambda value: isinstance(value, (bool, np.bool_)))
+    if not valid.all():
+        value = present.loc[~valid].iloc[0]
         raise ValueError(f"{column} contains a non-Boolean value: {value!r}")
-
-    return series.map(convert).astype("boolean")
+    return series.astype("boolean")
 
 
 def _numeric(series: pd.Series, column: str) -> pd.Series:
@@ -122,7 +86,7 @@ def _validate_parameters(frame: pd.DataFrame) -> None:
     _validate_integer_parameter(frame, "seed", minimum=0)
 
 
-def _validate_confidence_regions(frame: pd.DataFrame) -> int:
+def _validate_confidence_regions(frame: pd.DataFrame) -> None:
     lower = _numeric(frame["cr_lower"], "cr_lower")
     upper = _numeric(frame["cr_upper"], "cr_upper")
     length = _numeric(frame["cr_length"], "cr_length")
@@ -154,10 +118,9 @@ def _validate_confidence_regions(frame: pd.DataFrame) -> int:
     empty = missing.all(axis=1)
     if (empty & actual).any():
         raise ValueError("an empty confidence region cannot have covered=True")
-    return int(empty.sum())
 
 
-def _validate_selection_variables(frame: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+def _validate_selection_variables(frame: pd.DataFrame) -> None:
     selected = _numeric(frame["n_selected_controls"], "n_selected_controls")
     p = _numeric(frame["p"], "p")
     present_selected = selected.notna()
@@ -179,18 +142,15 @@ def _validate_selection_variables(frame: pd.DataFrame) -> tuple[pd.Series, pd.Se
     )
     if invalid_multiplier.any():
         raise ValueError("selection_lasso_multiplier must be finite and positive")
-    return selected, multiplier
 
 
-def _source_column(source: pd.DataFrame, output_column: str) -> str:
-    if output_column in source.columns:
-        return output_column
+def _source_column(output_column: str) -> str:
     return _SOURCE_COLUMNS.get(output_column, output_column)
 
 
 def _assert_retained_identity(source: pd.DataFrame, cleaned: pd.DataFrame) -> None:
     for column in REQUIRED_POST_SELECTION_COLUMNS:
-        source_column = _source_column(source, column)
+        source_column = _source_column(column)
         left = source[source_column]
         right = cleaned[column]
         if column in _BOOLEAN_COLUMNS:
@@ -205,19 +165,7 @@ def _assert_retained_identity(source: pd.DataFrame, cleaned: pd.DataFrame) -> No
         )
 
 
-def _validate_alias_agreement(source: pd.DataFrame) -> None:
-    for output_column, legacy_column in _SOURCE_COLUMNS.items():
-        if output_column not in source.columns or legacy_column not in source.columns:
-            continue
-        if output_column in _BOOLEAN_COLUMNS:
-            current = _as_boolean(source[output_column], output_column)
-            legacy = _as_boolean(source[legacy_column], legacy_column)
-        else:
-            current = _numeric(source[output_column], output_column)
-            legacy = _numeric(source[legacy_column], legacy_column)
-        if not current.equals(legacy):
-            raise ValueError(f"{output_column} and {legacy_column} disagree")
-
+def _validate_selection_count_agreement(source: pd.DataFrame) -> None:
     if {"selected_controls", "ps_n_selected_controls"}.issubset(source.columns):
         selected = _numeric(source["selected_controls"], "selected_controls")
         diagnostic = _numeric(
@@ -233,17 +181,17 @@ def _validate_alias_agreement(source: pd.DataFrame) -> None:
 
 def clean_post_selection_results_frame(
     source: pd.DataFrame,
-) -> tuple[pd.DataFrame, PostSelectionValidationSummary]:
+) -> pd.DataFrame:
     """Select, standardize, and strictly validate a Post-selection DataFrame."""
     if not isinstance(source, pd.DataFrame):
         raise TypeError("source must be a pandas DataFrame")
     if source.columns.duplicated().any():
         duplicates = sorted(set(source.columns[source.columns.duplicated()].astype(str)))
         raise ValueError(f"source has duplicate columns: {duplicates}")
-    _validate_alias_agreement(source)
+    _validate_selection_count_agreement(source)
 
     source_columns = {
-        column: _source_column(source, column)
+        column: _source_column(column)
         for column in REQUIRED_POST_SELECTION_COLUMNS
     }
     missing = sorted(
@@ -268,8 +216,8 @@ def clean_post_selection_results_frame(
         raise ValueError("clean output contains an estimator other than post_selection_ivqr")
 
     _validate_parameters(cleaned)
-    empty_confidence_regions = _validate_confidence_regions(cleaned)
-    selected, multiplier = _validate_selection_variables(cleaned)
+    _validate_confidence_regions(cleaned)
+    _validate_selection_variables(cleaned)
     duplicate_mask = cleaned.duplicated(
         list(POST_SELECTION_IDENTIFIER_COLUMNS), keep=False
     )
@@ -286,62 +234,11 @@ def clean_post_selection_results_frame(
         )
     _assert_retained_identity(source, cleaned)
 
-    selected_present = selected.dropna()
-    multiplier_values = tuple(sorted(float(value) for value in multiplier.dropna().unique()))
-    summary = PostSelectionValidationSummary(
-        input_rows=len(source),
-        output_rows=len(cleaned),
-        input_columns=len(source.columns),
-        output_columns=len(cleaned.columns),
-        removed_columns=len(source.columns) - len(cleaned.columns),
-        missing_values={
-            column: int(cleaned[column].isna().sum())
-            for column in REQUIRED_POST_SELECTION_COLUMNS
-        },
-        empty_confidence_regions=empty_confidence_regions,
-        duplicate_identifiers=duplicate_identifiers,
-        selected_controls_min=(
-            float(selected_present.min()) if not selected_present.empty else float("nan")
-        ),
-        selected_controls_max=(
-            float(selected_present.max()) if not selected_present.empty else float("nan")
-        ),
-        selected_controls_mean=(
-            float(selected_present.mean()) if not selected_present.empty else float("nan")
-        ),
-        selection_lasso_multipliers=multiplier_values,
-    )
-    return cleaned, summary
-
-
-def clean_post_selection_results_csv(
-    input_path: str | Path, output_path: str | Path
-) -> PostSelectionValidationSummary:
-    """Clean a historical Post-selection CSV without modifying its source."""
-    source_path = Path(input_path)
-    destination = Path(output_path)
-    if source_path.resolve() == destination.resolve():
-        raise ValueError("input and output paths must differ")
-    source = pd.read_csv(source_path, low_memory=False, float_precision="round_trip")
-    cleaned, summary = clean_post_selection_results_frame(source)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    cleaned.to_csv(destination, index=False)
-
-    reread = pd.read_csv(
-        destination, low_memory=False, float_precision="round_trip"
-    )
-    if tuple(reread.columns) != REQUIRED_POST_SELECTION_COLUMNS:
-        raise AssertionError("written Post-selection CSV has the wrong schema")
-    if len(reread) != len(source):
-        raise AssertionError("written Post-selection CSV changed the row count")
-    _assert_retained_identity(cleaned, reread)
-    return summary
+    return cleaned
 
 
 __all__ = [
     "POST_SELECTION_IDENTIFIER_COLUMNS",
-    "PostSelectionValidationSummary",
     "REQUIRED_POST_SELECTION_COLUMNS",
-    "clean_post_selection_results_csv",
     "clean_post_selection_results_frame",
 ]

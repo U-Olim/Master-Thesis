@@ -1,10 +1,6 @@
-"""Clean and validate thesis-ready DML-IVQR simulation outputs."""
+"""Build and validate current common-schema simulation outputs."""
 
 from __future__ import annotations
-
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -38,51 +34,18 @@ CORE_IDENTIFIER_COLUMNS: tuple[str, ...] = (
     "rep",
     "estimator",
 )
-DML_IDENTIFIER_COLUMNS = CORE_IDENTIFIER_COLUMNS
-
 _BOOLEAN_COLUMNS = ("covered", "converged")
-_LEGACY_RENAMES = {"cr_covers_true": "covered"}
-
-
-@dataclass(frozen=True)
-class CoreValidationSummary:
-    """Calculated validation information for one common-core cleaning operation."""
-
-    input_rows: int
-    output_rows: int
-    input_columns: int
-    output_columns: int
-    removed_columns: int
-    missing_values: dict[str, int]
-    empty_confidence_regions: int
-    duplicate_identifiers: int
-
-
-DMLValidationSummary = CoreValidationSummary
+_SOURCE_COLUMNS = {"covered": "cr_covers_true"}
 
 
 def _as_boolean(series: pd.Series, column: str) -> pd.Series:
-    """Return a nullable Boolean series, rejecting ambiguous values."""
-    true_values = {"true", "1", "yes"}
-    false_values = {"false", "0", "no"}
-
-    def convert(value: Any) -> Any:
-        if pd.isna(value):
-            return pd.NA
-        if isinstance(value, (bool, np.bool_)):
-            return bool(value)
-        if isinstance(value, (int, float, np.integer, np.floating)):
-            if np.isfinite(float(value)) and float(value) in (0.0, 1.0):
-                return bool(value)
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if normalized in true_values:
-                return True
-            if normalized in false_values:
-                return False
+    """Return a nullable Boolean series, rejecting non-Boolean values."""
+    present = series.dropna()
+    valid = present.map(lambda value: isinstance(value, (bool, np.bool_)))
+    if not valid.all():
+        value = present.loc[~valid].iloc[0]
         raise ValueError(f"{column} contains a non-Boolean value: {value!r}")
-
-    return series.map(convert).astype("boolean")
+    return series.astype("boolean")
 
 
 def _numeric(series: pd.Series, column: str) -> pd.Series:
@@ -122,7 +85,7 @@ def _validate_parameters(frame: pd.DataFrame) -> None:
     _validate_integer_parameter(frame, "seed", minimum=0)
 
 
-def _validate_confidence_regions(frame: pd.DataFrame) -> int:
+def _validate_confidence_regions(frame: pd.DataFrame) -> None:
     lower = _numeric(frame["cr_lower"], "cr_lower")
     upper = _numeric(frame["cr_upper"], "cr_upper")
     length = _numeric(frame["cr_length"], "cr_length")
@@ -157,15 +120,12 @@ def _validate_confidence_regions(frame: pd.DataFrame) -> int:
     invalid_empty_coverage = empty & frame["covered"].fillna(False).astype(bool)
     if invalid_empty_coverage.any():
         raise ValueError("an empty confidence region cannot have covered=True")
-    return int(empty.sum())
 
 
 def _assert_retained_identity(source: pd.DataFrame, cleaned: pd.DataFrame) -> None:
     for column in REQUIRED_CORE_COLUMNS:
         source_column = (
-            "cr_covers_true"
-            if column == "covered" and "covered" not in source
-            else column
+            _SOURCE_COLUMNS.get(column, column)
         )
         left = source[source_column]
         right = cleaned[column]
@@ -185,7 +145,7 @@ def clean_core_results_frame(
     source: pd.DataFrame,
     *,
     estimator: str,
-) -> tuple[pd.DataFrame, CoreValidationSummary]:
+) -> pd.DataFrame:
     """Select and validate the common 15-column estimator result schema."""
     if not isinstance(estimator, str) or not estimator:
         raise ValueError("estimator must be a nonempty string")
@@ -195,20 +155,21 @@ def clean_core_results_frame(
         duplicates = sorted(set(source.columns[source.columns.duplicated()].astype(str)))
         raise ValueError(f"source has duplicate columns: {duplicates}")
 
-    renamed = source.copy()
-    if "covered" in renamed.columns and "cr_covers_true" in renamed.columns:
-        legacy = _as_boolean(renamed["cr_covers_true"], "cr_covers_true")
-        current = _as_boolean(renamed["covered"], "covered")
-        if not legacy.equals(current):
-            raise ValueError("covered and cr_covers_true disagree")
-    elif "cr_covers_true" in renamed.columns:
-        renamed = renamed.rename(columns=_LEGACY_RENAMES)
-
-    missing_columns = sorted(set(REQUIRED_CORE_COLUMNS) - set(renamed.columns))
+    source_columns = {
+        column: _SOURCE_COLUMNS.get(column, column)
+        for column in REQUIRED_CORE_COLUMNS
+    }
+    missing_columns = sorted(
+        column
+        for column, source_column in source_columns.items()
+        if source_column not in source.columns
+    )
     if missing_columns:
         raise ValueError(f"source is missing required core columns: {missing_columns}")
 
-    cleaned = renamed.loc[:, REQUIRED_CORE_COLUMNS].copy()
+    cleaned = pd.DataFrame(
+        {column: source[source_column] for column, source_column in source_columns.items()}
+    )
     for column in _BOOLEAN_COLUMNS:
         cleaned[column] = _as_boolean(cleaned[column], column)
 
@@ -222,7 +183,7 @@ def clean_core_results_frame(
         )
 
     _validate_parameters(cleaned)
-    empty_confidence_regions = _validate_confidence_regions(cleaned)
+    _validate_confidence_regions(cleaned)
     duplicate_mask = cleaned.duplicated(list(CORE_IDENTIFIER_COLUMNS), keep=False)
     duplicate_identifiers = int(
         cleaned.loc[duplicate_mask, CORE_IDENTIFIER_COLUMNS].drop_duplicates().shape[0]
@@ -236,72 +197,20 @@ def clean_core_results_frame(
         )
     _assert_retained_identity(source, cleaned)
 
-    summary = CoreValidationSummary(
-        input_rows=len(source),
-        output_rows=len(cleaned),
-        input_columns=len(source.columns),
-        output_columns=len(cleaned.columns),
-        removed_columns=len(source.columns) - len(cleaned.columns),
-        missing_values={
-            column: int(cleaned[column].isna().sum())
-            for column in REQUIRED_CORE_COLUMNS
-        },
-        empty_confidence_regions=empty_confidence_regions,
-        duplicate_identifiers=duplicate_identifiers,
-    )
-    return cleaned, summary
+    return cleaned
 
 
 def clean_dml_results_frame(
     source: pd.DataFrame,
-) -> tuple[pd.DataFrame, DMLValidationSummary]:
+) -> pd.DataFrame:
     """Select, standardize, and strictly validate a DML result DataFrame."""
     return clean_core_results_frame(source, estimator="dml_ivqr")
 
 
-def clean_core_results_csv(
-    input_path: str | Path,
-    output_path: str | Path,
-    *,
-    estimator: str,
-) -> CoreValidationSummary:
-    """Clean a historical common-core CSV without modifying its source."""
-    source_path = Path(input_path)
-    destination = Path(output_path)
-    if source_path.resolve() == destination.resolve():
-        raise ValueError("input and output paths must differ")
-    source = pd.read_csv(source_path, low_memory=False, float_precision="round_trip")
-    cleaned, summary = clean_core_results_frame(source, estimator=estimator)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    cleaned.to_csv(destination, index=False)
-
-    reread = pd.read_csv(
-        destination, low_memory=False, float_precision="round_trip"
-    )
-    if tuple(reread.columns) != REQUIRED_CORE_COLUMNS or len(reread) != len(source):
-        raise AssertionError(
-            "written common-core CSV failed schema or row-count validation"
-        )
-    _assert_retained_identity(cleaned, reread)
-    return summary
-
-
-def clean_dml_results_csv(
-    input_path: str | Path, output_path: str | Path
-) -> DMLValidationSummary:
-    """Clean a historical DML CSV without modifying the source file."""
-    return clean_core_results_csv(input_path, output_path, estimator="dml_ivqr")
-
-
 __all__ = [
     "CORE_IDENTIFIER_COLUMNS",
-    "CoreValidationSummary",
-    "DML_IDENTIFIER_COLUMNS",
-    "DMLValidationSummary",
     "REQUIRED_CORE_COLUMNS",
     "REQUIRED_DML_COLUMNS",
-    "clean_core_results_csv",
     "clean_core_results_frame",
-    "clean_dml_results_csv",
     "clean_dml_results_frame",
 ]

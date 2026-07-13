@@ -20,7 +20,6 @@ from dgp.generators import generate_data
 from dgp.true_parameters import get_oracle_control_indices, true_alpha
 from estimators.base import EstimationResult
 from estimators.dml import estimate_dml_ivqr
-from estimators.full_control import estimate_full_control_ivqr
 from estimators.oracle import estimate_oracle_ivqr
 from estimators.post_selection import (
     estimate_post_selection_ivqr,
@@ -42,8 +41,7 @@ from simulation.config import (
     DGPS,
     ESTIMATORS,
 )
-from simulation.dml_output import clean_dml_results_frame
-from simulation.oracle_output import clean_oracle_results_frame
+from simulation.dml_output import clean_core_results_frame, clean_dml_results_frame
 from simulation.post_selection_output import clean_post_selection_results_frame
 from simulation.results import (
     MAX_ERROR_MESSAGE_LENGTH,
@@ -61,7 +59,6 @@ VALID_DGPS: tuple[str, ...] = DGPS
 ESTIMATOR_OUTPUT_NAMES: dict[str, str] = {
     "oracle": "oracle",
     "post_selection": "post_selection_ivqr",
-    "full_control": "full_control_ivqr",
     "dml": "dml_ivqr",
 }
 ESTIMATOR_ALIASES: dict[str, str] = {
@@ -72,11 +69,6 @@ ESTIMATOR_ALIASES: dict[str, str] = {
     "post-selection": "post_selection",
     "post-selection-ivqr": "post_selection",
     "post_selection-ivqr": "post_selection",
-    "full_control": "full_control",
-    "full_control_ivqr": "full_control",
-    "full-control": "full_control",
-    "full-control-ivqr": "full_control",
-    "full_control-ivqr": "full_control",
     "dml": "dml",
     "dml_ivqr": "dml",
     "dml-ivqr": "dml",
@@ -480,15 +472,6 @@ def run_simulation_design(
                         selection_lasso_multiplier=selection_lasso_multiplier,
                         critical_value_multiplier=critical_value_multiplier,
                     )
-                elif estimator_name == "full_control":
-                    result = estimate_full_control_ivqr(
-                        data,
-                        tau=design.tau,
-                        alphas=alphas,
-                        max_iter=quantreg_max_iter,
-                        gmm_ridge=gmm_ridge,
-                        critical_value_multiplier=critical_value_multiplier,
-                    )
                 elif estimator_name == "dml":
                     result = estimate_dml_ivqr(
                         data,
@@ -605,11 +588,11 @@ def run_simulation_batch(
 
     results = pd.DataFrame(rows, columns=RESULT_COLUMNS)
     if estimators == ("dml",):
-        results, _ = clean_dml_results_frame(results)
+        results = clean_dml_results_frame(results)
     elif estimators == ("oracle",):
-        results, _ = clean_oracle_results_frame(results)
+        results = clean_core_results_frame(results, estimator="oracle")
     elif estimators == ("post_selection",):
-        results, _ = clean_post_selection_results_frame(results)
+        results = clean_post_selection_results_frame(results)
     if output_path is not None:
         path = Path(output_path)
         if path.exists() and path.is_dir():

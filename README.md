@@ -4,11 +4,10 @@ This repository contains thesis code for Monte Carlo simulations of instrumental
 variable quantile regression under high-dimensional controls and weak
 instruments.
 
-The project compares four estimators:
+The project compares three estimators:
 
 - Oracle IVQR
 - Post-selection IVQR
-- Full-control IVQR
 - DML-style residualized IVQR
 
 The only simulation entry point is:
@@ -24,22 +23,24 @@ scenarios/
   run_simulation.py
 
 src/
+  analysis/     Final-result validation, tables, and figures.
   dgp/          Simulation designs and data-generating processes.
-  estimators/   Oracle, post-selection, full-control, and DML estimators.
+  estimators/   Oracle, post-selection, and DML estimators.
   ivqr/         Alpha grids, CH inverse-IVQR, moments, and confidence regions.
   simulation/   Simulation config, runner, and result-row construction.
-  reporting/    Summary aggregation, tables, and figures.
   utils/        Validation and timing helpers.
 
 reports/
   monte_carlo_runs_summary.qmd
+
+scripts/
+  make_results.py
 
 tests/
   test_dgp.py
   test_estimators.py
   test_ivqr.py
   test_runner.py
-  test_reporting.py
 ```
 
 ## Environment
@@ -50,6 +51,7 @@ Pixi is the only project manager used by this repository.
 pixi run fast
 pixi run full
 pixi run import_check
+pixi run results
 pixi run test
 pixi run test_slow
 ```
@@ -62,8 +64,7 @@ expected until long-running production checks are added.
 - `fast`: `R = 10`
 - `full`: `R = 500`
 
-Default estimators are `oracle post_selection dml`. `full_control` is available
-but must be requested explicitly because it can be slow when `p` is large.
+Default estimators are `oracle post_selection dml`.
 
 ## Design Grid
 
@@ -94,7 +95,7 @@ pixi run full
 Fast all estimators:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post_selection full_control dml --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_all.csv --manifest results/raw/fast_all_manifest.json
+pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post_selection dml --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_all.csv --manifest results/raw/fast_all_manifest.json
 ```
 
 Full default with explicit output:
@@ -197,65 +198,33 @@ pixi run python scenarios/run_simulation.py --mode fast --estimators dml --base-
 All estimators:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post_selection full_control dml --base-seed 12345 --output results/raw/fast_all.csv --manifest results/raw/fast_all_manifest.json
+pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post_selection dml --base-seed 12345 --output results/raw/fast_all.csv --manifest results/raw/fast_all_manifest.json
 ```
 
 ## Output Folders
 
 - `results/raw`: raw estimator-level CSV files and run manifests
-- `results/clean`: standardized historical result conversions
-- `results/summary`: aggregated summary CSV files
-- `results/tables`: thesis-ready CSV tables
-- `results/figures`: generated diagnostic figures
-
-DML-only production runs write the 15-column thesis schema directly. Historical
-wide DML files remain unchanged and can be converted deterministically:
-
-```powershell
-pixi run python scenarios/clean_dml_results.py results/raw/dml_ivqr/wide.csv results/clean/dml_ivqr/clean.csv
-```
-
-Post-selection-only runs likewise write their 17-column thesis schema directly.
-Historical wide files can be converted without overwriting them:
-
-```powershell
-pixi run python scenarios/clean_post_selection_results.py results/raw/post_selection_ivqr/wide.csv results/clean/post_selection_ivqr/clean.csv
-```
-
-Oracle-only runs use the same 15-column common schema as DML. Historical Oracle
-files can be converted without overwriting them:
-
-```powershell
-pixi run python scenarios/clean_oracle_results.py results/raw/oracle_ivqr/wide.csv results/clean/oracle_ivqr/clean.csv
-```
+- `results/tables`: final thesis tables in CSV and LaTeX formats
+- `results/figures`: final thesis figures in PDF and PNG formats
 
 Simulation outputs are ignored by git except for `.gitkeep` placeholders.
 
-## Automatic Reports
+## Final Results Analysis
 
-Automatic reports are intentionally compact. Each simulation run writes simple
-tables and figures focused on coverage, runtime, weak-instrument behavior, and
-estimator comparison unless `--no-reports` is used.
+Simulation and final analysis are separate workflows. After the completed R=500
+files are present under `results/raw`, generate the thesis outputs with:
 
-Tables:
+```powershell
+pixi run results
+```
 
-- `main_summary.csv`
-- `coverage_by_pi.csv`
-- `runtime_summary.csv`
-- `coverage_by_tau.csv`
-
-Figures:
-
-- `coverage_by_pi.png`
-- `runtime_by_estimator.png`
-- `coverage_overall.png`
-- `weak_iv_diagnostic.png`
-
-Detailed thesis-specific tables can be produced separately from the raw CSVs.
+This command loads and validates the oracle, post-selection, and DML result
+files, then writes the final tables to `results/tables/` and figures to
+`results/figures/`. It does not run simulations or alter the raw files.
 
 ## Key Diagnostics
 
-Raw results and summaries include diagnostics for:
+Raw results include diagnostics for:
 
 - coverage
 - confidence-region length

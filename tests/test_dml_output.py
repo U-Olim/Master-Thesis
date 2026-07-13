@@ -1,15 +1,11 @@
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
 
 from simulation.dml_output import (
     REQUIRED_DML_COLUMNS,
-    clean_dml_results_csv,
     clean_dml_results_frame,
 )
-from reporting.summaries import aggregate_results
 
 
 def _wide_frame() -> pd.DataFrame:
@@ -41,20 +37,19 @@ def _wide_frame() -> pd.DataFrame:
 
 
 def test_clean_dml_output_exact_schema_and_no_extra_columns() -> None:
-    cleaned, summary = clean_dml_results_frame(_wide_frame())
+    cleaned = clean_dml_results_frame(_wide_frame())
 
     assert tuple(cleaned.columns) == REQUIRED_DML_COLUMNS
     assert len(cleaned.columns) == 15
-    assert summary.output_columns == 15
     assert not any("runtime" in column for column in cleaned.columns)
     assert set(cleaned.columns) == set(REQUIRED_DML_COLUMNS)
 
 
 def test_clean_dml_output_preserves_rows_and_values() -> None:
     source = _wide_frame()
-    cleaned, summary = clean_dml_results_frame(source)
+    cleaned = clean_dml_results_frame(source)
 
-    assert len(cleaned) == len(source) == summary.input_rows == summary.output_rows
+    assert len(cleaned) == len(source)
     for column in (
         "dgp",
         "n",
@@ -77,34 +72,20 @@ def test_clean_dml_output_preserves_rows_and_values() -> None:
 
 
 def test_clean_dml_output_preserves_missing_confidence_region() -> None:
-    cleaned, summary = clean_dml_results_frame(_wide_frame())
+    cleaned = clean_dml_results_frame(_wide_frame())
 
     assert len(cleaned) == 2
     assert cleaned.loc[1, ["cr_lower", "cr_upper", "cr_length"]].isna().all()
     assert bool(cleaned.loc[1, "covered"]) is False
-    assert summary.empty_confidence_regions == 1
 
 
 def test_clean_dml_output_renames_covered_and_removes_runtime() -> None:
-    cleaned, _ = clean_dml_results_frame(_wide_frame())
+    cleaned = clean_dml_results_frame(_wide_frame())
 
     assert "covered" in cleaned
     assert "cr_covers_true" not in cleaned
     assert cleaned["covered"].tolist() == [True, False]
     assert all("runtime" not in column.lower() for column in cleaned.columns)
-
-
-def test_clean_dml_csv_writes_exact_header(tmp_path: Path) -> None:
-    source = tmp_path / "wide.csv"
-    output = tmp_path / "clean" / "dml.csv"
-    _wide_frame().to_csv(source, index=False)
-
-    clean_dml_results_csv(source, output)
-
-    assert output.read_text(encoding="utf-8").splitlines()[0] == ",".join(
-        REQUIRED_DML_COLUMNS
-    )
-    assert tuple(pd.read_csv(output).columns) == REQUIRED_DML_COLUMNS
 
 
 def test_clean_dml_output_reports_duplicates_without_deleting() -> None:
@@ -131,15 +112,3 @@ def test_clean_dml_output_rejects_missing_design_parameter() -> None:
 
     with pytest.raises(ValueError, match="seed must not be missing"):
         clean_dml_results_frame(source)
-
-
-def test_clean_dml_output_remains_compatible_with_aggregation() -> None:
-    cleaned, _ = clean_dml_results_frame(_wide_frame())
-
-    summary = aggregate_results(cleaned, expected_replications=2)
-
-    assert summary.loc[0, "bias"] == pytest.approx(0.0)
-    assert summary.loc[0, "rmse"] == pytest.approx(0.1)
-    assert summary.loc[0, "coverage"] == pytest.approx(0.5)
-    assert summary.loc[0, "cr_empty_rate"] == pytest.approx(0.5)
-    assert pd.isna(summary.loc[0, "mean_runtime_seconds"])

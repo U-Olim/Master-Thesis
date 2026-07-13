@@ -5,7 +5,6 @@ from dgp import Design, generate_data, get_oracle_control_indices
 from estimators import (
     EstimationResult,
     estimate_dml_ivqr,
-    estimate_full_control_ivqr,
     estimate_oracle_ivqr,
     estimate_post_selection_ivqr,
 )
@@ -33,14 +32,12 @@ def test_estimators_return_estimation_results_with_expected_names() -> None:
             selection_cv=2,
             quantreg_max_iter=100,
         ),
-        estimate_full_control_ivqr(data, tau=0.5, alphas=alphas, max_iter=100),
         estimate_dml_ivqr(data, tau=0.5, alphas=alphas, k_folds=2),
     ]
     assert all(isinstance(result, EstimationResult) for result in results)
     assert [result.estimator for result in results] == [
         "oracle",
         "post_selection_ivqr",
-        "full_control_ivqr",
         "dml_ivqr",
     ]
     for result in results:

@@ -43,6 +43,7 @@ master-thesis-ivqr = { path = ".", editable = true }
 [tool.pixi.tasks]
 fast = "python scenarios/run_simulation.py --mode fast"
 full = "python scenarios/run_simulation.py --mode full"
-import_check = "python -c \"import dgp; import estimators; import ivqr; import simulation; import reporting\""
+import_check = "python -c \"import analysis; import dgp; import estimators; import ivqr; import simulation\""
+results = "python scripts/make_results.py"
 test = "pytest tests -m 'not slow'"
 test_slow = "pytest tests -m slow"

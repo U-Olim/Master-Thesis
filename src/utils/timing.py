@@ -48,19 +48,11 @@ ORACLE_RUNTIME_STAGES: tuple[str, ...] = (
     "oracle_runtime_confidence_region_sec",
 )
 
-FULL_CONTROL_RUNTIME_STAGES: tuple[str, ...] = (
-    "fc_runtime_total_sec",
-    "fc_runtime_alpha_loop_sec",
-    "fc_runtime_score_eval_sec",
-    "fc_runtime_confidence_region_sec",
-)
-
 RUNTIME_COLUMNS: tuple[str, ...] = (
     GENERAL_RUNTIME_STAGES
     + DML_RUNTIME_STAGES
     + POST_SELECTION_RUNTIME_STAGES
     + ORACLE_RUNTIME_STAGES
-    + FULL_CONTROL_RUNTIME_STAGES
 )
 
 
@@ -92,10 +84,6 @@ class RuntimeDiagnosticColumns(TypedDict, total=False):
     oracle_runtime_alpha_loop_sec: float
     oracle_runtime_score_eval_sec: float
     oracle_runtime_confidence_region_sec: float
-    fc_runtime_total_sec: float
-    fc_runtime_alpha_loop_sec: float
-    fc_runtime_score_eval_sec: float
-    fc_runtime_confidence_region_sec: float
 
 
 @dataclass
@@ -215,21 +203,11 @@ def estimator_runtime_columns(
                 "oracle_runtime_confidence_region_sec": confidence_region_sec,
             }
         )
-    elif estimator == "full_control_ivqr":
-        columns.update(
-            {
-                "fc_runtime_total_sec": total_sec,
-                "fc_runtime_alpha_loop_sec": alpha_loop_sec,
-                "fc_runtime_score_eval_sec": score_eval_sec,
-                "fc_runtime_confidence_region_sec": confidence_region_sec,
-            }
-        )
     return columns
 
 
 __all__ = [
     "DML_RUNTIME_STAGES",
-    "FULL_CONTROL_RUNTIME_STAGES",
     "GENERAL_RUNTIME_STAGES",
     "ORACLE_RUNTIME_STAGES",
     "POST_SELECTION_RUNTIME_STAGES",

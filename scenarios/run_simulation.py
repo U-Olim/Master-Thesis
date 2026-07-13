@@ -17,9 +17,6 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from reporting.figures import write_figures  # noqa: E402
-from reporting.summaries import aggregate_results_file  # noqa: E402
-from reporting.tables import write_tables  # noqa: E402
 from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_ALPHA_MAX,
@@ -34,14 +31,8 @@ from simulation.config import (  # noqa: E402
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
-    FAST_FIGURES_DIR,
     FAST_OUTPUT,
-    FAST_SUMMARY_OUTPUT,
-    FAST_TABLES_DIR,
-    FULL_FIGURES_DIR,
     FULL_OUTPUT,
-    FULL_SUMMARY_OUTPUT,
-    FULL_TABLES_DIR,
     N_VALUES,
     PI_VALUES,
     P_VALUES,
@@ -140,10 +131,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--rerun-failed", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--no-reports", action="store_true")
-    parser.add_argument("--summary-output", default=None)
-    parser.add_argument("--tables-dir", default=None)
-    parser.add_argument("--figures-dir", default=None)
     parser.add_argument("--show-quantreg-warnings", action="store_true")
     return parser.parse_args(argv)
 
@@ -159,21 +146,6 @@ def _apply_defaults(args: argparse.Namespace) -> None:
     args.rep_end = args.reps - 1 if args.rep_end is None else args.rep_end
     args.output = _default_output_for_mode(args.mode) if args.output is None else Path(args.output)
     args.manifest = None if args.manifest is None else Path(args.manifest)
-    args.summary_output = (
-        Path(FAST_SUMMARY_OUTPUT if args.mode == "fast" else FULL_SUMMARY_OUTPUT)
-        if args.summary_output is None
-        else Path(args.summary_output)
-    )
-    args.tables_dir = (
-        Path(FAST_TABLES_DIR if args.mode == "fast" else FULL_TABLES_DIR)
-        if args.tables_dir is None
-        else Path(args.tables_dir)
-    )
-    args.figures_dir = (
-        Path(FAST_FIGURES_DIR if args.mode == "fast" else FULL_FIGURES_DIR)
-        if args.figures_dir is None
-        else Path(args.figures_dir)
-    )
 
 
 def _validate_args(args: argparse.Namespace) -> None:
@@ -246,8 +218,6 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
 
 
 def _validate_resume_manifest(args: argparse.Namespace) -> None:
-    if args.manifest is None:
-        raise ValueError("--resume requires --manifest")
     if not args.manifest.exists():
         raise FileNotFoundError("--resume requires an existing --manifest file")
     payload = json.loads(args.manifest.read_text(encoding="utf-8"))
@@ -318,29 +288,6 @@ def _print_dry_run(
     print(f"Expected design rows: {designs_in_run}")
     print(f"Output: {args.output}")
     print(f"Manifest: {args.manifest}")
-    print("Reports: skipped by --no-reports" if args.no_reports else "Reports: generated after successful run")
-
-
-def _block_replications(args: argparse.Namespace) -> int:
-    return int(args.rep_end - args.rep_start + 1)
-
-
-def _make_reports(args: argparse.Namespace) -> None:
-    if args.no_reports:
-        print("Reports: skipped by --no-reports")
-        return
-    summary = aggregate_results_file(
-        args.output,
-        args.summary_output,
-        expected_replications=_block_replications(args),
-    )
-    tables = write_tables(summary, args.tables_dir)
-    figures = write_figures(summary, args.figures_dir)
-    print(f"Summary: {args.summary_output}")
-    for name, path in tables.items():
-        print(f"Table ({name}): {path}")
-    for name, path in figures.items():
-        print(f"Figure ({name}): {path}")
 
 
 def _count_rows(path: Path) -> int | None:
@@ -393,8 +340,6 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    if args.manifest is not None:
-        args.manifest.parent.mkdir(parents=True, exist_ok=True)
     _write_manifest(
         args,
         total_designs=len(designs),
@@ -428,7 +373,6 @@ def main(argv: list[str] | None = None) -> None:
         elapsed = time.perf_counter() - start
         print(f"Completed {completed}/{len(designs_to_run)} designs in {elapsed:.2f} seconds")
 
-    _make_reports(args)
     final_rows = _count_rows(args.output)
     print(f"Mode: {args.mode}")
     print(f"Completed designs: {completed}")

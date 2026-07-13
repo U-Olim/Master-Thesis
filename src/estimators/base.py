@@ -175,10 +175,6 @@ class EstimationResult:
     oracle_runtime_alpha_loop_sec: float | None = None
     oracle_runtime_score_eval_sec: float | None = None
     oracle_runtime_confidence_region_sec: float | None = None
-    fc_runtime_total_sec: float | None = None
-    fc_runtime_alpha_loop_sec: float | None = None
-    fc_runtime_score_eval_sec: float | None = None
-    fc_runtime_confidence_region_sec: float | None = None
 
     ps_n_selected_controls: int | None = None
     ps_n_selected_instruments: int | None = None

@@ -1,13 +1,9 @@
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
 
-from reporting.summaries import aggregate_results
 from simulation.post_selection_output import (
     REQUIRED_POST_SELECTION_COLUMNS,
-    clean_post_selection_results_csv,
     clean_post_selection_results_frame,
 )
 
@@ -44,19 +40,19 @@ def _wide_frame() -> pd.DataFrame:
 
 
 def test_clean_post_selection_exact_schema_and_no_extra_columns() -> None:
-    cleaned, summary = clean_post_selection_results_frame(_wide_frame())
+    cleaned = clean_post_selection_results_frame(_wide_frame())
 
     assert tuple(cleaned.columns) == REQUIRED_POST_SELECTION_COLUMNS
-    assert len(cleaned.columns) == 17 == summary.output_columns
+    assert len(cleaned.columns) == 17
     assert set(cleaned.columns) == set(REQUIRED_POST_SELECTION_COLUMNS)
     assert not any("runtime" in column for column in cleaned.columns)
 
 
 def test_clean_post_selection_preserves_rows_and_values() -> None:
     source = _wide_frame()
-    cleaned, summary = clean_post_selection_results_frame(source)
+    cleaned = clean_post_selection_results_frame(source)
 
-    assert len(cleaned) == len(source) == summary.input_rows == summary.output_rows
+    assert len(cleaned) == len(source)
     mappings = {
         "covered": "cr_covers_true",
         "n_selected_controls": "ps_n_selected_controls",
@@ -73,16 +69,15 @@ def test_clean_post_selection_preserves_rows_and_values() -> None:
 
 
 def test_clean_post_selection_preserves_missing_confidence_region() -> None:
-    cleaned, summary = clean_post_selection_results_frame(_wide_frame())
+    cleaned = clean_post_selection_results_frame(_wide_frame())
 
     assert len(cleaned) == 2
     assert cleaned.loc[1, ["cr_lower", "cr_upper", "cr_length"]].isna().all()
     assert bool(cleaned.loc[1, "covered"]) is False
-    assert summary.empty_confidence_regions == 1
 
 
 def test_clean_post_selection_applies_all_required_renames() -> None:
-    cleaned, _ = clean_post_selection_results_frame(_wide_frame())
+    cleaned = clean_post_selection_results_frame(_wide_frame())
 
     assert cleaned["covered"].tolist() == [True, False]
     assert cleaned["n_selected_controls"].tolist() == [3, 4]
@@ -90,19 +85,6 @@ def test_clean_post_selection_applies_all_required_renames() -> None:
     assert "cr_covers_true" not in cleaned
     assert "ps_n_selected_controls" not in cleaned
     assert "ps_selection_lasso_multiplier" not in cleaned
-
-
-def test_clean_post_selection_csv_writes_exact_header(tmp_path: Path) -> None:
-    source = tmp_path / "wide.csv"
-    output = tmp_path / "clean" / "post_selection.csv"
-    _wide_frame().to_csv(source, index=False)
-
-    clean_post_selection_results_csv(source, output)
-
-    assert output.read_text(encoding="utf-8").splitlines()[0] == ",".join(
-        REQUIRED_POST_SELECTION_COLUMNS
-    )
-    assert tuple(pd.read_csv(output).columns) == REQUIRED_POST_SELECTION_COLUMNS
 
 
 def test_clean_post_selection_rejects_duplicate_identifiers() -> None:
@@ -141,16 +123,3 @@ def test_clean_post_selection_validates_selection_variables(
 
     with pytest.raises(ValueError, match=message):
         clean_post_selection_results_frame(source)
-
-
-def test_clean_post_selection_remains_compatible_with_aggregation() -> None:
-    cleaned, _ = clean_post_selection_results_frame(_wide_frame())
-
-    summary = aggregate_results(cleaned, expected_replications=2)
-
-    assert summary.loc[0, "bias"] == pytest.approx(0.0)
-    assert summary.loc[0, "rmse"] == pytest.approx(0.1)
-    assert summary.loc[0, "coverage"] == pytest.approx(0.5)
-    assert summary.loc[0, "cr_empty_rate"] == pytest.approx(0.5)
-    assert summary.loc[0, "mean_selected_controls"] == pytest.approx(3.5)
-    assert summary.loc[0, "selection_lasso_multiplier"] == pytest.approx(1.8)
