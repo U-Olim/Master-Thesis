@@ -100,6 +100,7 @@ _CI_LENGTH_CANDIDATES: tuple[str, ...] = (
     "mean_ci_length",
 )
 _COVERAGE_CANDIDATES: tuple[str, ...] = (
+    "covered",
     "covers",
     "cr_covers_true",
     "coverage",
@@ -224,6 +225,13 @@ def _normalized_metrics(df: pd.DataFrame) -> pd.DataFrame:
             _to_numeric(df[source])
             if source is not None
             else pd.Series(np.nan, index=df.index)
+        )
+    confidence_region_columns = ("cr_lower", "cr_upper", "cr_length")
+    if columns["empty_ci"] is None and set(confidence_region_columns).issubset(
+        df.columns
+    ):
+        out["empty_ci"] = (
+            df[list(confidence_region_columns)].isna().all(axis=1).astype(float)
         )
     failed = _failed_series(df, columns)
     boundary = _boundary_series(df, columns)

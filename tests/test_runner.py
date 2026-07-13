@@ -1,12 +1,12 @@
 import json
 import importlib.util
-import math
 import os
 from pathlib import Path
 import subprocess
 import sys
 from types import ModuleType
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -16,7 +16,11 @@ from simulation.runner import (
     make_design_seed,
     make_simulation_grid,
     normalize_estimator_names,
+    run_simulation_batch,
 )
+from simulation.dml_output import REQUIRED_DML_COLUMNS
+from simulation.post_selection_output import REQUIRED_POST_SELECTION_COLUMNS
+from simulation.oracle_output import REQUIRED_ORACLE_COLUMNS
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -470,7 +474,45 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
     assert "batch_size" not in payload["resume_signature"]
 
 
-def test_tiny_dml_run_writes_custom_dml_options_and_diagnostics(
+def test_tiny_oracle_run_writes_clean_common_schema(tmp_path: Path) -> None:
+    output = tmp_path / "raw" / "tiny_oracle.csv"
+    result = _run_cli(
+        tmp_path,
+        "--mode",
+        "fast",
+        "--estimators",
+        "oracle",
+        "--reps",
+        "1",
+        "--dgps",
+        "dgp1",
+        "--n-values",
+        "40",
+        "--p-values",
+        "3",
+        "--pi-values",
+        "1.0",
+        "--taus",
+        "0.5",
+        "--max-designs",
+        "1",
+        "--n-jobs",
+        "1",
+        "--alpha-grid-size",
+        "3",
+        "--no-reports",
+        "--output",
+        str(output),
+    )
+
+    assert result.returncode == 0, result.stderr
+    written = pd.read_csv(output)
+    assert tuple(written.columns) == REQUIRED_ORACLE_COLUMNS
+    assert written["estimator"].tolist() == ["oracle"]
+    assert not any("runtime" in column for column in written.columns)
+
+
+def test_tiny_dml_run_writes_clean_schema_and_keeps_options_in_manifest(
     tmp_path: Path,
 ) -> None:
     output = tmp_path / "raw" / "tiny_dml.csv"
@@ -516,16 +558,7 @@ def test_tiny_dml_run_writes_custom_dml_options_and_diagnostics(
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
     assert written["estimator"].tolist() == ["dml_ivqr"]
-    for column in (
-        "dml_quantile_penalty",
-        "dml_ridge_alpha",
-        "dml_quantile_solver",
-        "dml_qr_fit_count",
-    ):
-        assert column in written.columns
-    assert _cell_float(written, "dml_quantile_penalty") == 0.05
-    assert _cell_float(written, "dml_ridge_alpha") == 0.5
-    assert _cell_str(written, "dml_quantile_solver") == "highs-ds"
+    assert tuple(written.columns) == REQUIRED_DML_COLUMNS
 
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     assert payload["parameters"]["dml_quantile_penalty"] == 0.05
@@ -536,7 +569,7 @@ def test_tiny_dml_run_writes_custom_dml_options_and_diagnostics(
     assert payload["resume_signature"]["dml_quantile_solver"] == "highs-ds"
 
 
-def test_tiny_dml_run_writes_sane_aggregate_diagnostics(tmp_path: Path) -> None:
+def test_tiny_dml_run_excludes_diagnostics_and_runtime(tmp_path: Path) -> None:
     output = tmp_path / "raw" / "tiny_dml_diagnostics.csv"
     result = _run_cli(
         tmp_path,
@@ -570,16 +603,26 @@ def test_tiny_dml_run_writes_sane_aggregate_diagnostics(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
-    for column in (
-        "dml_runtime_mean_alpha_sec",
-        "dml_runtime_max_alpha_sec",
-        "dml_qr_nonzero_mean",
-        "dml_z_resid_var_mean",
-    ):
-        assert column in written.columns
-        value = written[column].iloc[0]
-        assert isinstance(value, (int, float))
-        assert pd.isna(value) or math.isfinite(float(value))
+    assert tuple(written.columns) == REQUIRED_DML_COLUMNS
+    assert not any("runtime" in column for column in written.columns)
+    assert "dml_quantile_solver" not in written.columns
+
+
+def test_dml_append_rejects_legacy_wide_output_schema(tmp_path: Path) -> None:
+    output = tmp_path / "raw" / "legacy_dml.csv"
+    output.parent.mkdir(parents=True)
+    pd.DataFrame({"estimator": ["dml_ivqr"], "failed": [False]}).to_csv(
+        output, index=False
+    )
+
+    with pytest.raises(ValueError, match="different schema"):
+        run_simulation_batch(
+            [],
+            np.linspace(-1.0, 1.0, 3),
+            estimators=("dml",),
+            output_path=output,
+            append=True,
+        )
 
 
 def test_block_run_reports_block_replication_completion(tmp_path: Path) -> None:
@@ -676,7 +719,7 @@ def test_default_run_reports_default_replication_completion(tmp_path: Path) -> N
     assert summary_frame["completion_rate"].tolist() == [1.0]
 
 
-def test_tiny_post_selection_run_writes_lasso_multiplier_diagnostics(
+def test_tiny_post_selection_run_writes_clean_schema_and_manifest_options(
     tmp_path: Path,
 ) -> None:
     output = tmp_path / "raw" / "tiny_post_selection.csv"
@@ -718,9 +761,10 @@ def test_tiny_post_selection_run_writes_lasso_multiplier_diagnostics(
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
     assert written["estimator"].tolist() == ["post_selection_ivqr"]
-    assert _cell_float(written, "ps_selection_lasso_multiplier") == 1.2
-    assert "ps_lasso_alpha_y_cv" in written.columns
-    assert "ps_lasso_alpha_y_final" in written.columns
+    assert tuple(written.columns) == REQUIRED_POST_SELECTION_COLUMNS
+    assert _cell_float(written, "selection_lasso_multiplier") == 1.2
+    assert "ps_lasso_alpha_y_cv" not in written.columns
+    assert "runtime_seconds" not in written.columns
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     assert payload["parameters"]["selection_lasso_multiplier"] == 1.2
     assert payload["resume_signature"]["selection_lasso_multiplier"] == 1.2

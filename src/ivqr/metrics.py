@@ -11,12 +11,8 @@ import pandas as pd
 RAW_RESULT_REQUIRED_COLUMNS = {
     "alpha_hat",
     "alpha_true",
-    "failed",
     "converged",
     "cr_length",
-    "cr_covers_true",
-    "cr_empty",
-    "runtime_seconds",
 }
 
 
@@ -32,6 +28,12 @@ def validate_metric_input(df: pd.DataFrame) -> None:
     missing = sorted(RAW_RESULT_REQUIRED_COLUMNS - set(df.columns))
     if missing:
         raise ValueError(f"metric input is missing required columns: {missing}")
+    if "covered" not in df.columns and "cr_covers_true" not in df.columns:
+        raise ValueError("metric input must contain covered or cr_covers_true")
+
+
+def _coverage_column(df: pd.DataFrame) -> str:
+    return "covered" if "covered" in df.columns else "cr_covers_true"
 
 
 def _to_numeric(series: pd.Series) -> pd.Series:
@@ -101,11 +103,13 @@ def _mean_bool(series: pd.Series) -> float:
 
 def _successful_rows(df: pd.DataFrame) -> pd.DataFrame:
     validate_metric_input(df)
-    if "status" in df.columns:
+    if "status" in df.columns and "failed" in df.columns:
         status_ok = df["status"].astype(str).str.strip().str.lower() == "ok"
         failed_mask = _to_bool(df["failed"]).fillna(False)
         return df.loc[status_ok & ~failed_mask]
-    return df.loc[~_to_bool(df["failed"]).fillna(False)]
+    if "failed" in df.columns:
+        return df.loc[~_to_bool(df["failed"]).fillna(False)]
+    return df
 
 
 def estimation_errors(df: pd.DataFrame) -> pd.Series:
@@ -154,14 +158,14 @@ def coverage(df: pd.DataFrame) -> float:
     successful = _successful_rows(df)
     if successful.empty:
         return float(np.nan)
-    values = _to_bool(successful["cr_covers_true"]).fillna(False)
+    values = _to_bool(successful[_coverage_column(successful)]).fillna(False)
     return float(values.astype(float).mean())
 
 
 def coverage_valid_only(df: pd.DataFrame) -> float:
     """Return coverage over successful rows with nonmissing coverage values."""
     successful = _successful_rows(df)
-    return _mean_bool(successful["cr_covers_true"])
+    return _mean_bool(successful[_coverage_column(successful)])
 
 
 def average_cr_length_valid_only(df: pd.DataFrame) -> float:
@@ -201,6 +205,8 @@ def average_cr_hull_length(df: pd.DataFrame) -> float:
 def failure_rate(df: pd.DataFrame) -> float:
     """Return the mean failed indicator across all rows."""
     validate_metric_input(df)
+    if "failed" not in df.columns:
+        return float(np.nan)
     return _mean_bool(df["failed"])
 
 
@@ -215,7 +221,12 @@ def non_convergence_rate(df: pd.DataFrame) -> float:
 
 def cr_empty_rate(df: pd.DataFrame) -> float:
     validate_metric_input(df)
-    return _mean_bool(df["cr_empty"])
+    if "cr_empty" in df.columns:
+        return _mean_bool(df["cr_empty"])
+    if {"cr_lower", "cr_upper", "cr_length"}.issubset(df.columns):
+        empty = df[["cr_lower", "cr_upper", "cr_length"]].isna().all(axis=1)
+        return float(empty.mean())
+    return float(np.nan)
 
 
 def cr_disconnected_rate(df: pd.DataFrame) -> float:
@@ -287,9 +298,14 @@ def mean_failed_alpha_rate(df: pd.DataFrame) -> float:
 
 def mean_selected_controls(df: pd.DataFrame) -> float:
     validate_metric_input(df)
-    if "selected_controls" not in df.columns:
-        return float(np.nan)
-    return _mean_nonnegative_numeric(df["selected_controls"])
+    for column in (
+        "n_selected_controls",
+        "selected_controls",
+        "ps_n_selected_controls",
+    ):
+        if column in df.columns:
+            return _mean_nonnegative_numeric(df[column])
+    return float(np.nan)
 
 
 def critical_value_multiplier(df: pd.DataFrame) -> float:
@@ -305,17 +321,33 @@ def critical_value_multiplier(df: pd.DataFrame) -> float:
     return float(values.mean())
 
 
-def ps_selection_lasso_multiplier(df: pd.DataFrame) -> float:
+def selection_lasso_multiplier(df: pd.DataFrame) -> float:
     validate_metric_input(df)
-    if "ps_selection_lasso_multiplier" not in df.columns:
+    column = next(
+        (
+            candidate
+            for candidate in (
+                "selection_lasso_multiplier",
+                "ps_selection_lasso_multiplier",
+            )
+            if candidate in df.columns
+        ),
+        None,
+    )
+    if column is None:
         return float(np.nan)
-    values = _to_nonnegative_numeric(df["ps_selection_lasso_multiplier"]).dropna()
+    values = _to_nonnegative_numeric(df[column]).dropna()
     if values.empty:
         return float(np.nan)
     unique_values = values.unique()
     if unique_values.size == 1:
         return float(unique_values[0])
     return float(values.mean())
+
+
+def ps_selection_lasso_multiplier(df: pd.DataFrame) -> float:
+    """Backward-compatible alias for selection_lasso_multiplier."""
+    return selection_lasso_multiplier(df)
 
 
 def mean_critical_value_adjusted(df: pd.DataFrame) -> float:
@@ -329,6 +361,8 @@ def mean_critical_value_adjusted(df: pd.DataFrame) -> float:
 
 def mean_runtime_seconds(df: pd.DataFrame) -> float:
     validate_metric_input(df)
+    if "runtime_seconds" not in df.columns:
+        return float(np.nan)
     return _mean_nonnegative_numeric(df["runtime_seconds"])
 
 
@@ -406,7 +440,7 @@ def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
         "mean_failed_alpha_rate": mean_failed_alpha_rate(df),
         "mean_selected_controls": mean_selected_controls(df),
         "critical_value_multiplier": critical_value_multiplier(df),
-        "ps_selection_lasso_multiplier": ps_selection_lasso_multiplier(df),
+        "selection_lasso_multiplier": selection_lasso_multiplier(df),
         "mean_critical_value_adjusted": mean_critical_value_adjusted(df),
         "mean_runtime_seconds": mean_runtime_seconds(df),
         "mean_runtime_total_sec": mean_runtime_total_sec(df),
@@ -445,6 +479,7 @@ __all__ = [
     "mean_failed_alpha_rate",
     "mean_selected_controls",
     "critical_value_multiplier",
+    "selection_lasso_multiplier",
     "ps_selection_lasso_multiplier",
     "mean_critical_value_adjusted",
     "mean_runtime_seconds",

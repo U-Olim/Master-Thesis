@@ -9,11 +9,20 @@ from typing import Any
 
 import pandas as pd
 
+from simulation.post_selection_output import clean_post_selection_results_csv
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULT_DIR = REPO_ROOT / "results" / "raw" / "post_selection_ivqr"
 OUTPUT_CSV = RESULT_DIR / "post_selection_ivqr_full.csv"
 OUTPUT_XLSX = RESULT_DIR / "post_selection_ivqr_full.xlsx"
+CLEAN_OUTPUT_CSV = (
+    REPO_ROOT
+    / "results"
+    / "clean"
+    / "post_selection_ivqr"
+    / "post_selection_ivqr_full.csv"
+)
 
 EXPECTED_BLOCKS = (
     ("post_selection_R500_lasso180_grid21_block000_099.csv", 0, 99),
@@ -179,6 +188,7 @@ def assemble(*, write_xlsx: bool = True) -> None:
     combined = combined.loc[sort_order].reset_index(drop=True)
     raw_combined = raw_combined.loc[sort_order].reset_index(drop=True)
     raw_combined.to_csv(OUTPUT_CSV, index=False)
+    clean_post_selection_results_csv(OUTPUT_CSV, CLEAN_OUTPUT_CSV)
 
     if write_xlsx:
         _write_formatted_xlsx(combined, OUTPUT_XLSX)
@@ -239,6 +249,7 @@ def assemble(*, write_xlsx: bool = True) -> None:
     print(f"Duplicate count by natural key ({', '.join(NATURAL_KEY)}): {duplicate_count}")
     print(f"Missing replication count: {len(missing_reps)}")
     print(f"Final CSV: {OUTPUT_CSV}")
+    print(f"Clean thesis CSV: {CLEAN_OUTPUT_CSV}")
     if write_xlsx:
         print(f"Formatted XLSX: {OUTPUT_XLSX}")
     print(

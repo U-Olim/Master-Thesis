@@ -48,7 +48,7 @@ SUMMARY_METRIC_COLUMNS: tuple[str, ...] = (
     "mean_failed_alpha_rate",
     "mean_selected_controls",
     "critical_value_multiplier",
-    "ps_selection_lasso_multiplier",
+    "selection_lasso_multiplier",
     "mean_critical_value_adjusted",
     "mean_runtime_seconds",
     "mean_runtime_total_sec",

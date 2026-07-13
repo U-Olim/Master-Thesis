@@ -42,6 +42,9 @@ from simulation.config import (
     DGPS,
     ESTIMATORS,
 )
+from simulation.dml_output import clean_dml_results_frame
+from simulation.oracle_output import clean_oracle_results_frame
+from simulation.post_selection_output import clean_post_selection_results_frame
 from simulation.results import (
     MAX_ERROR_MESSAGE_LENGTH,
     RESULT_COLUMNS,
@@ -601,10 +604,24 @@ def run_simulation_batch(
         rows.sort(key=_row_sort_key)
 
     results = pd.DataFrame(rows, columns=RESULT_COLUMNS)
+    if estimators == ("dml",):
+        results, _ = clean_dml_results_frame(results)
+    elif estimators == ("oracle",):
+        results, _ = clean_oracle_results_frame(results)
+    elif estimators == ("post_selection",):
+        results, _ = clean_post_selection_results_frame(results)
     if output_path is not None:
         path = Path(output_path)
         if path.exists() and path.is_dir():
             raise ValueError("output_path must be a file path")
+        if append and path.exists() and path.stat().st_size > 0:
+            existing_columns = tuple(pd.read_csv(path, nrows=0).columns)
+            if existing_columns != tuple(results.columns):
+                raise ValueError(
+                    "cannot append results with a different schema: "
+                    f"existing file has {len(existing_columns)} columns, "
+                    f"new rows have {len(results.columns)}"
+                )
         path.parent.mkdir(parents=True, exist_ok=True)
         results.to_csv(
             path,

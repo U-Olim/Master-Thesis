@@ -7,10 +7,15 @@ from pathlib import Path
 
 import pandas as pd
 
+from simulation.oracle_output import clean_oracle_results_csv
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULT_DIR = REPO_ROOT / "results" / "raw" / "oracle_ivqr"
 OUTPUT_CSV = RESULT_DIR / "oracle_ivqr_full.csv"
+CLEAN_OUTPUT_CSV = (
+    REPO_ROOT / "results" / "clean" / "oracle_ivqr" / "oracle_ivqr_full.csv"
+)
 
 EXPECTED_BLOCKS = (
     ("oracle_R500_grid21_block000_099.csv", 0, 99),
@@ -122,6 +127,7 @@ def assemble() -> None:
     sort_order = combined.sort_values(NATURAL_KEY, kind="mergesort").index
     raw_combined = raw_combined.loc[sort_order].reset_index(drop=True)
     raw_combined.to_csv(OUTPUT_CSV, index=False)
+    clean_oracle_results_csv(OUTPUT_CSV, CLEAN_OUTPUT_CSV)
 
     # Read back as text to prove every original field representation survived.
     reread = pd.read_csv(
@@ -165,6 +171,7 @@ def assemble() -> None:
     print(f"Duplicate count by natural key: {duplicate_count}")
     print(f"Missing replication count: {len(missing_reps)}")
     print(f"Final CSV: {OUTPUT_CSV}")
+    print(f"Clean thesis CSV: {CLEAN_OUTPUT_CSV}")
     print(
         "CSV read-back integrity: PASS "
         "(shape, columns, source field text, and no index column)"

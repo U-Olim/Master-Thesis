@@ -203,9 +203,31 @@ pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post
 ## Output Folders
 
 - `results/raw`: raw estimator-level CSV files and run manifests
+- `results/clean`: standardized historical result conversions
 - `results/summary`: aggregated summary CSV files
 - `results/tables`: thesis-ready CSV tables
 - `results/figures`: generated diagnostic figures
+
+DML-only production runs write the 15-column thesis schema directly. Historical
+wide DML files remain unchanged and can be converted deterministically:
+
+```powershell
+pixi run python scenarios/clean_dml_results.py results/raw/dml_ivqr/wide.csv results/clean/dml_ivqr/clean.csv
+```
+
+Post-selection-only runs likewise write their 17-column thesis schema directly.
+Historical wide files can be converted without overwriting them:
+
+```powershell
+pixi run python scenarios/clean_post_selection_results.py results/raw/post_selection_ivqr/wide.csv results/clean/post_selection_ivqr/clean.csv
+```
+
+Oracle-only runs use the same 15-column common schema as DML. Historical Oracle
+files can be converted without overwriting them:
+
+```powershell
+pixi run python scenarios/clean_oracle_results.py results/raw/oracle_ivqr/wide.csv results/clean/oracle_ivqr/clean.csv
+```
 
 Simulation outputs are ignored by git except for `.gitkeep` placeholders.
 
