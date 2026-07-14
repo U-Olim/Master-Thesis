@@ -219,23 +219,34 @@ This command loads and validates the oracle, post-selection, and DML result
 files, then writes the final tables to `results/tables/` and figures to
 `results/figures/`. It does not run simulations or alter the raw files.
 
+These three CSVs are the canonical final R=500 inputs. The tracked
+`results/raw/manifest.json` records their row and column counts, file sizes, and
+SHA-256 hashes; `pixi run results` verifies it before analysis. Run
+`pixi run raw_manifest` only when the canonical raw files intentionally change.
+
 The overview tables summarize broad performance patterns. The canonical
 `performance_by_design_cell.csv` and `performance_by_design_cell.tex` tables
 preserve results by DGP, sample size, dimensionality, instrument strength,
 quantile, and estimator.
 
-## Key Diagnostics
+## Final Raw Result Schema
 
-Raw results include diagnostics for:
+All three completed R=500 result files contain:
 
-- coverage
-- confidence-region length
-- boundary hits
-- disconnected confidence regions
-- failed-alpha rate
-- RMSE
-- MAE
-- runtime
+- design identifiers: `dgp`, `n`, `p`, `pi`, `tau`, `rep`, and `seed`;
+- the estimator label `estimator`;
+- the point estimate `alpha_hat` and true parameter `alpha_true`;
+- confidence-region hull bounds `cr_lower` and `cr_upper`, together with the
+  reported accepted-set length `cr_length`;
+- the coverage indicator `covered` and convergence indicator `converged`.
+
+Grid-inverted confidence regions may be disconnected. Consequently,
+`cr_length` may be smaller than `cr_upper - cr_lower`, and coverage cannot
+always be inferred from hull inclusion alone. The post-selection file also
+contains `n_selected_controls` and `selection_lasso_multiplier`.
+
+Aggregate metrics such as bias, MAE, RMSE, and coverage probability are
+computed by the final analysis workflow rather than stored as raw columns.
 
 ## Notes
 

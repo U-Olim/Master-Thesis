@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "number_of_files": 3,
+  "total_rows": 216000,
+  "files": [
+    {
+      "estimator": "oracle",
+      "path": "results/raw/oracle_ivqr/oracle_ivqr.csv",
+      "filename": "oracle_ivqr.csv",
+      "rows": 72000,
+      "columns": 15,
+      "size_bytes": 9730719,
+      "sha256": "404abe76f022926c234eb5005ca66384c489d68fdd10185218565e2552f92bd6"
+    },
+    {
+      "estimator": "post_selection",
+      "path": "results/raw/post_selection_ivqr/post_selection_ivqr.csv",
+      "filename": "post_selection_ivqr.csv",
+      "rows": 72000,
+      "columns": 17,
+      "size_bytes": 11105608,
+      "sha256": "3b25fd0a7e0df652588cc8012c346d4d9eeeb0d2c62a492e8ce8f7e98e5782c6"
+    },
+    {
+      "estimator": "dml",
+      "path": "results/raw/dml_ivqr/dml_ivqr.csv",
+      "filename": "dml_ivqr.csv",
+      "rows": 72000,
+      "columns": 15,
+      "size_bytes": 9160449,
+      "sha256": "27d3c514e7a608083647c9485e1ba4d73267cdf80753e3bae8c22a4ee4c5f803"
+    }
+  ],
+  "final_run_metadata": {
+    "alpha_grid_min": -1.0,
+    "alpha_grid_max": 3.0,
+    "alpha_grid_size": 21,
+    "base_seed": 12345,
+    "critical_value_multiplier": 1.0,
+    "post_selection_lasso_multiplier": 1.8,
+    "dml_k_folds": 3,
+    "dml_quantile_penalty": 0.07,
+    "dml_quantile_solver": "highs-ipm",
+    "dml_ridge_alpha": 1.0
+  }
+}

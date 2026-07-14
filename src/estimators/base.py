@@ -99,8 +99,8 @@ def post_selection_result_diagnostic_kwargs(
 class EstimationResult:
     """Standard result object returned by every estimator.
 
-    The four retained estimators use this common object so simulation,
-    aggregation, and reporting code can consume results uniformly.
+    The retained estimators use this common result object so that the simulation
+    runner can serialize results without estimator-specific branching.
     """
 
     estimator: str

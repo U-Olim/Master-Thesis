@@ -1,5 +1,8 @@
 """Load, validate, and harmonize the completed R=500 result files."""
 
+from collections.abc import Mapping
+import hashlib
+import json
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +21,7 @@ RAW_RESULT_FILES = {
     ),
     "dml": PROJECT_ROOT / "results" / "raw" / "dml_ivqr" / "dml_ivqr.csv",
 }
+RAW_MANIFEST_PATH = PROJECT_ROOT / "results" / "raw" / "manifest.json"
 RAW_ESTIMATOR_LABELS = {
     "oracle": "oracle",
     "post_selection": "post_selection_ivqr",
@@ -52,6 +56,89 @@ NUMERIC_COLUMNS = [
     "cr_upper",
     "cr_length",
 ]
+
+
+def sha256_file(path: str | Path, *, chunk_size: int = 1024 * 1024) -> str:
+    """Return a file's SHA-256 digest using bounded-memory reads."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        while chunk := handle.read(chunk_size):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _manifest_file_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(PROJECT_ROOT.resolve()).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+
+def verify_raw_manifest(
+    manifest_path: str | Path = RAW_MANIFEST_PATH,
+    raw_result_files: Mapping[str, Path] | None = None,
+) -> None:
+    """Verify canonical raw files against their tracked provenance manifest."""
+    manifest = Path(manifest_path)
+    if not manifest.is_file():
+        raise FileNotFoundError(f"Raw-result manifest does not exist: {manifest}")
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise ValueError(f"Cannot read raw-result manifest {manifest}: {exc}") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("files"), list):
+        raise ValueError(f"Raw-result manifest has an invalid structure: {manifest}")
+
+    expected_files = RAW_RESULT_FILES if raw_result_files is None else raw_result_files
+    entries: dict[str, dict[str, object]] = {}
+    for item in payload["files"]:
+        if not isinstance(item, dict) or not isinstance(item.get("estimator"), str):
+            raise ValueError(f"Raw-result manifest has an invalid file entry: {item!r}")
+        estimator = item["estimator"]
+        if estimator in entries:
+            raise ValueError(f"Raw-result manifest repeats estimator: {estimator}")
+        entries[estimator] = item
+
+    expected_estimators = set(expected_files)
+    if set(entries) != expected_estimators:
+        raise ValueError(
+            "Raw-result manifest estimator mismatch: "
+            f"expected {sorted(expected_estimators)}, observed {sorted(entries)}"
+        )
+    if payload.get("number_of_files") != len(expected_files):
+        raise ValueError(
+            "Raw-result manifest number_of_files mismatch: "
+            f"expected {len(expected_files)}, observed {payload.get('number_of_files')}"
+        )
+
+    for estimator, source in expected_files.items():
+        entry = entries[estimator]
+        expected_path = _manifest_file_path(source)
+        if entry.get("path") != expected_path:
+            raise ValueError(
+                f"Raw-result path mismatch for {estimator}: expected {expected_path}, "
+                f"observed {entry.get('path')}"
+            )
+        if entry.get("filename") != source.name:
+            raise ValueError(
+                f"Raw-result filename mismatch for {expected_path}: expected {source.name}, "
+                f"observed {entry.get('filename')}"
+            )
+        if not source.is_file():
+            raise FileNotFoundError(f"Canonical raw result does not exist: {source}")
+        observed_size = source.stat().st_size
+        if entry.get("size_bytes") != observed_size:
+            raise ValueError(
+                f"Raw-result size mismatch for {expected_path}: "
+                f"expected {entry.get('size_bytes')}, observed {observed_size}"
+            )
+        observed_hash = sha256_file(source)
+        if entry.get("sha256") != observed_hash:
+            raise ValueError(
+                f"Raw-result SHA-256 mismatch for {expected_path}: "
+                f"expected {entry.get('sha256')}, observed {observed_hash}"
+            )
 
 
 def require_unique_selection_lasso_multiplier(values: pd.Series) -> float:

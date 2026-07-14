@@ -1,7 +1,7 @@
 """Common Chernozhukov-Hansen inverse-IVQR grid routines.
 
-This module contains the shared low-dimensional CH-IVQR machinery used by
-oracle, post-selection, and the separate full-control benchmark.
+This module contains low-dimensional CH-IVQR machinery. The same inversion
+logic is shared by the Oracle and post-selection IVQR estimators.
 """
 
 from __future__ import annotations

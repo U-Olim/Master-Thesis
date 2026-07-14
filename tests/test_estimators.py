@@ -12,6 +12,7 @@ def _tiny_data():
     return generate_data(Design("dgp1", 80, 20, 1.0, 0.5, rep=0, seed=321))
 
 
+@pytest.mark.slow
 def test_estimators_return_estimation_results_with_expected_names() -> None:
     data = _tiny_data()
     alphas = np.linspace(-1.0, 3.0, 5)
@@ -48,6 +49,7 @@ def test_estimators_return_estimation_results_with_expected_names() -> None:
         assert "runtime_total_sec" in result.diagnostics
 
 
+@pytest.mark.slow
 def test_dml_cached_and_uncached_paths_match_tiny_run() -> None:
     data = _tiny_data()
     alphas = np.linspace(-1.0, 3.0, 3)
@@ -78,6 +80,7 @@ def test_dml_cached_and_uncached_paths_match_tiny_run() -> None:
     assert cached.dml_qr_fit_count == uncached.dml_qr_fit_count
 
 
+@pytest.mark.slow
 def test_post_selection_lasso_multiplier_diagnostics() -> None:
     data = _tiny_data()
     alphas = np.linspace(-1.0, 3.0, 5)

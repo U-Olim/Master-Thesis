@@ -408,6 +408,7 @@ def test_dry_run_rejects_full_control(tmp_path: Path) -> None:
     assert "Unknown estimator name" in result.stderr
 
 
+@pytest.mark.slow
 def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
     output = tmp_path / "raw" / "tiny.csv"
     manifest = tmp_path / "raw" / "tiny_manifest.json"
@@ -473,6 +474,7 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
     assert "batch_size" not in payload["resume_signature"]
 
 
+@pytest.mark.slow
 def test_tiny_oracle_run_writes_clean_common_schema(tmp_path: Path) -> None:
     output = tmp_path / "raw" / "tiny_oracle.csv"
     result = _run_cli(
@@ -510,6 +512,7 @@ def test_tiny_oracle_run_writes_clean_common_schema(tmp_path: Path) -> None:
     assert not any("runtime" in column for column in written.columns)
 
 
+@pytest.mark.slow
 def test_tiny_dml_run_writes_clean_schema_and_keeps_options_in_manifest(
     tmp_path: Path,
 ) -> None:
@@ -566,6 +569,7 @@ def test_tiny_dml_run_writes_clean_schema_and_keeps_options_in_manifest(
     assert payload["resume_signature"]["dml_quantile_solver"] == "highs-ds"
 
 
+@pytest.mark.slow
 def test_tiny_dml_run_excludes_diagnostics_and_runtime(tmp_path: Path) -> None:
     output = tmp_path / "raw" / "tiny_dml_diagnostics.csv"
     result = _run_cli(
@@ -621,6 +625,7 @@ def test_dml_append_rejects_different_output_schema(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.slow
 def test_block_run_writes_requested_replication_block(tmp_path: Path) -> None:
     output = tmp_path / "raw" / "block.csv"
     result = _run_cli(
@@ -659,6 +664,7 @@ def test_block_run_writes_requested_replication_block(tmp_path: Path) -> None:
     assert sorted(written["rep"].unique().tolist()) == [3, 4, 5]
 
 
+@pytest.mark.slow
 def test_default_run_writes_default_replication_block(tmp_path: Path) -> None:
     output = tmp_path / "raw" / "default.csv"
     result = _run_cli(
@@ -693,6 +699,7 @@ def test_default_run_writes_default_replication_block(tmp_path: Path) -> None:
     assert sorted(written["rep"].unique().tolist()) == [0, 1, 2]
 
 
+@pytest.mark.slow
 def test_tiny_post_selection_run_writes_clean_schema_and_manifest_options(
     tmp_path: Path,
 ) -> None:

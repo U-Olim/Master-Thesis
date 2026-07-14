@@ -33,12 +33,19 @@ PERFORMANCE_COLUMNS = [
 def summarize_performance(
     results: pd.DataFrame, group_by: Sequence[str]
 ) -> pd.DataFrame:
-    """Compute common Monte Carlo metrics for explicit groups."""
+    """Compute metrics using all rows as the valid-rate denominator.
+
+    Point metrics use converged rows with finite estimates and truths. Coverage
+    and length metrics use converged rows with complete, valid confidence-region
+    output, so failed replications remain visible without counting as noncoverage.
+    """
     required = {
         *group_by,
         "alpha_hat",
         "alpha_true",
         "covered",
+        "cr_lower",
+        "cr_upper",
         "cr_length",
         "converged",
     }
@@ -57,29 +64,73 @@ def summarize_performance(
             key_values: tuple[object, ...] = (keys,)
         else:
             key_values = keys
-        estimates = group["alpha_hat"].to_numpy(dtype=float)
-        truth = group["alpha_true"].to_numpy(dtype=float)
-        errors = estimates - truth
+        all_estimates = group["alpha_hat"].to_numpy(dtype=float)
+        all_truth = group["alpha_true"].to_numpy(dtype=float)
+        converged = group["converged"].eq(True).to_numpy(dtype=bool)
+        valid_point = converged & np.isfinite(all_estimates) & np.isfinite(all_truth)
+        estimates = all_estimates[valid_point]
+        errors = estimates - all_truth[valid_point]
+
+        lower = group["cr_lower"].to_numpy(dtype=float)
+        upper = group["cr_upper"].to_numpy(dtype=float)
         lengths = group["cr_length"].to_numpy(dtype=float)
-        coverage_values = group["covered"].to_numpy(dtype=float)
-        valid_values = group["converged"].to_numpy(dtype=float)
-        bias = float(np.mean(errors))
+        complete_cr = np.isfinite(lower) & np.isfinite(upper) & np.isfinite(lengths)
+        hull_length = upper - lower
+        covered = group["covered"]
+        covered_true = covered.eq(True).to_numpy(dtype=bool)
+        coverage_consistent = ~covered_true | (
+            (all_truth >= lower) & (all_truth <= upper)
+        )
+        valid_cr = (
+            converged
+            & np.isfinite(all_truth)
+            & covered.notna().to_numpy(dtype=bool)
+            & complete_cr
+            & (lower <= upper)
+            & (lengths >= -1e-10)
+            & (lengths <= hull_length + 1e-9)
+            & coverage_consistent
+        )
+        coverage_values = covered.loc[valid_cr].to_numpy(dtype=float)
+        valid_lengths = lengths[valid_cr]
+
+        bias = float(np.mean(errors)) if errors.size else float("nan")
         record: dict[str, object] = {}
         for column, value in zip(group_by, key_values, strict=True):
             record[column] = value
         record.update(
-            mean_estimate=float(np.mean(estimates)),
-            bias=bias,
-            abs_bias=abs(bias),
-            mae=float(np.mean(np.abs(errors))),
-            rmse=float(np.sqrt(np.mean(np.square(errors)))),
-            estimate_sd=(
-                float(np.std(estimates, ddof=1)) if len(group) > 1 else float("nan")
+            mean_estimate=(
+                float(np.mean(estimates)) if estimates.size else float("nan")
             ),
-            coverage=float(np.mean(coverage_values)),
-            average_cr_length=float(np.nanmean(lengths)),
-            median_cr_length=float(np.nanmedian(lengths)),
-            valid_rate=float(np.mean(valid_values)),
+            bias=bias,
+            abs_bias=abs(bias) if errors.size else float("nan"),
+            mae=(float(np.mean(np.abs(errors))) if errors.size else float("nan")),
+            rmse=(
+                float(np.sqrt(np.mean(np.square(errors))))
+                if errors.size
+                else float("nan")
+            ),
+            estimate_sd=(
+                float(np.std(estimates, ddof=1))
+                if estimates.size > 1
+                else float("nan")
+            ),
+            coverage=(
+                float(np.mean(coverage_values))
+                if coverage_values.size
+                else float("nan")
+            ),
+            average_cr_length=(
+                float(np.mean(valid_lengths))
+                if valid_lengths.size
+                else float("nan")
+            ),
+            median_cr_length=(
+                float(np.median(valid_lengths))
+                if valid_lengths.size
+                else float("nan")
+            ),
+            valid_rate=float(valid_point.sum() / len(group)),
             n_results=int(len(group)),
         )
         records.append(record)

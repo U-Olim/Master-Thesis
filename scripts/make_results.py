@@ -9,12 +9,17 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from analysis.data import RAW_RESULT_FILES, load_all_results  # noqa: E402
+from analysis.data import (  # noqa: E402
+    RAW_RESULT_FILES,
+    load_all_results,
+    verify_raw_manifest,
+)
 from analysis.figures import write_all_figures  # noqa: E402
 from analysis.tables import write_all_tables  # noqa: E402
 
 
 def main() -> None:
+    verify_raw_manifest()
     results = load_all_results()
     table_files = write_all_tables(results, PROJECT_ROOT / "results" / "tables")
     figure_files = write_all_figures(results, PROJECT_ROOT / "results" / "figures")
