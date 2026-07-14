@@ -12,7 +12,7 @@ from analysis.data import require_unique_selection_lasso_multiplier
 ESTIMATOR_NAMES = {
     "oracle": "Oracle IVQR",
     "post_selection": "Post-selection IVQR",
-    "dml": "DML-IVQR",
+    "dml": "DML-style IVQR",
 }
 ESTIMATOR_ORDER = list(ESTIMATOR_NAMES)
 PERFORMANCE_COLUMNS = [

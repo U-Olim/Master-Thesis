@@ -13,7 +13,12 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from analysis.data import RAW_MANIFEST_PATH, RAW_RESULT_FILES, sha256_file  # noqa: E402
+from analysis.data import (  # noqa: E402
+    RAW_MANIFEST_PATH,
+    RAW_RESULT_FILES,
+    sha256_canonical_lf_file,
+    sha256_file,
+)
 
 
 class RawFileManifestEntry(TypedDict):
@@ -23,7 +28,44 @@ class RawFileManifestEntry(TypedDict):
     rows: int
     columns: int
     size_bytes: int
-    sha256: str
+    sha256_bytes: str
+    sha256_canonical_lf: str
+
+
+class CommonFinalRunMetadata(TypedDict):
+    alpha_grid_min: float
+    alpha_grid_max: float
+    alpha_grid_size: int
+    base_seed: int
+    critical_value_multiplier: float
+
+
+class OracleFinalRunMetadata(TypedDict):
+    pixi_task: str
+
+
+class PostSelectionFinalRunMetadata(TypedDict):
+    pixi_task: str
+    selection_lasso_multiplier: float
+
+
+class DmlFinalRunMetadata(TypedDict):
+    pixi_task: str
+    k_folds: int
+    quantile_penalty: float
+    quantile_solver: str
+    ridge_alpha: float
+
+
+class EstimatorFinalRunMetadata(TypedDict):
+    oracle: OracleFinalRunMetadata
+    post_selection: PostSelectionFinalRunMetadata
+    dml: DmlFinalRunMetadata
+
+
+class FinalRunMetadata(TypedDict):
+    common: CommonFinalRunMetadata
+    estimators: EstimatorFinalRunMetadata
 
 
 class RawManifest(TypedDict):
@@ -31,20 +73,31 @@ class RawManifest(TypedDict):
     number_of_files: int
     total_rows: int
     files: list[RawFileManifestEntry]
-    final_run_metadata: dict[str, float | int | str]
+    final_run_metadata: FinalRunMetadata
 
 
-FINAL_RUN_METADATA = {
-    "alpha_grid_min": -1.0,
-    "alpha_grid_max": 3.0,
-    "alpha_grid_size": 21,
-    "base_seed": 12345,
-    "critical_value_multiplier": 1.0,
-    "post_selection_lasso_multiplier": 1.8,
-    "dml_k_folds": 3,
-    "dml_quantile_penalty": 0.07,
-    "dml_quantile_solver": "highs-ipm",
-    "dml_ridge_alpha": 1.0,
+FINAL_RUN_METADATA: FinalRunMetadata = {
+    "common": {
+        "alpha_grid_min": -1.0,
+        "alpha_grid_max": 3.0,
+        "alpha_grid_size": 21,
+        "base_seed": 12345,
+        "critical_value_multiplier": 1.0,
+    },
+    "estimators": {
+        "oracle": {"pixi_task": "final_oracle"},
+        "post_selection": {
+            "pixi_task": "final_post_selection",
+            "selection_lasso_multiplier": 1.8,
+        },
+        "dml": {
+            "pixi_task": "final_dml",
+            "k_folds": 3,
+            "quantile_penalty": 0.07,
+            "quantile_solver": "highs-ipm",
+            "ridge_alpha": 1.0,
+        },
+    },
 }
 
 
@@ -63,12 +116,13 @@ def main() -> None:
                 "rows": len(frame),
                 "columns": len(frame.columns),
                 "size_bytes": path.stat().st_size,
-                "sha256": sha256_file(path),
+                "sha256_bytes": sha256_file(path),
+                "sha256_canonical_lf": sha256_canonical_lf_file(path),
             }
         )
 
     manifest: RawManifest = {
-        "schema_version": 1,
+        "schema_version": 3,
         "number_of_files": len(files),
         "total_rows": sum(item["rows"] for item in files),
         "files": files,

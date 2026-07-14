@@ -25,13 +25,13 @@ Estimators:
 |---|---|
 | Oracle IVQR | Benchmark estimator using the true active controls. |
 | Post-selection IVQR | Feasible sparse estimator using Lasso-based control selection. |
-| DML-IVQR | Cross-fitted DML-style IVQR estimator with quantile-regression nuisance fitting. |
+| DML-style IVQR | Cross-fitted DML-style IVQR estimator with quantile-regression nuisance fitting. |
 
 {{< pagebreak >}}
 
 ## Experiment 1: R = 10 runs
 
-| Metric | Oracle IVQR | Post-selection IVQR | DML-IVQR |
+| Metric | Oracle IVQR | Post-selection IVQR | DML-style IVQR |
 |---|---:|---:|---:|
 | Coverage (%) | 86.04 | 76.74 | **87.99** |
 | CR length | 2.148 | **1.849** | 2.642 |
@@ -39,11 +39,11 @@ Estimators:
 | MAE | **0.607** | 0.647 | 0.753 |
 | Mean runtime (s) | **0.49** | 13.68 | 27.39 |
 
-The first run showed two problems: post-selection undercovered strongly, and DML-IVQR was already computationally expensive. Oracle coverage was also below nominal, which suggested finite-sample and weak-IV difficulty rather than only an implementation problem.
+The first run showed two problems: post-selection undercovered strongly, and DML-style IVQR was already computationally expensive. Oracle coverage was also below nominal, which suggested finite-sample and weak-IV difficulty rather than only an implementation problem.
 
 We then corrected the final sparsity design (DGP1 and DGP3 use s=5, DGP2 uses s=10) and reran the same estimator comparison.
 
-| Metric | Oracle IVQR | Post-selection IVQR | DML-IVQR |
+| Metric | Oracle IVQR | Post-selection IVQR | DML-style IVQR |
 |---|---:|---:|---:|
 | Coverage (%) | **90.00** | 81.46 | 88.26 |
 | CR length | 2.269 | **2.029** | 2.584 |
@@ -51,7 +51,7 @@ We then corrected the final sparsity design (DGP1 and DGP3 use s=5, DGP2 uses s=
 | MAE | 0.613 | **0.610** | 0.783 |
 | Mean runtime (s) | **1.93** | 4.85 | 82.40 |
 
-The sparsity correction improved Oracle and post-selection coverage, but post-selection still undercovered. DML-IVQR remained statistically stable but became too slow in the full sparse design.
+The sparsity correction improved Oracle and post-selection coverage, but post-selection still undercovered. DML-style IVQR remained statistically stable but became too slow in the full sparse design.
 
 ## Experiment 2: Critical-value multiplier
 
@@ -106,9 +106,9 @@ Multiplier 1.8 is kept as the main choice because it balances coverage, accuracy
 | MAE | **0.431** | 0.604 | 0.713 |
 | Mean runtime (s) | 9.40 | **5.37** | 6.66 |
 
-The narrow grid gives mechanically shorter confidence regions and smaller RMSE/MAE because it truncates the search interval, so it is not suitable as final evidence. The wide grid reduces boundary truncation but increases interval length and cost. For final reporting, we use the default grid21 \(-1,3\) for all main estimators to keep results comparable across Oracle, post-selection, and DML-IVQR.
+The narrow grid gives mechanically shorter confidence regions and smaller RMSE/MAE because it truncates the search interval, so it is not suitable as final evidence. The wide grid reduces boundary truncation but increases interval length and cost. For final reporting, we use the default grid21 \(-1,3\) for all main estimators to keep results comparable across Oracle, post-selection, and DML-style IVQR.
 
-## Experiment 6: DML-IVQR. Quantile-regression penalty
+## Experiment 6: DML-style IVQR. Quantile-regression penalty
 
 | Metric | Pen. 0.01 | Pen. 0.02 | Pen. 0.05 | Pen. 0.07 | Pen. 0.10 |
 |---|---:|---:|---:|---:|---:|
@@ -118,7 +118,7 @@ The narrow grid gives mechanically shorter confidence regions and smaller RMSE/M
 | MAE | 0.826 | **0.745** | 0.789 | 0.807 | 0.816 |
 | Mean runtime (s) | 100.62 | 80.15 | 53.69 | **34.09** | 53.18 |
 
-The DML-IVQR problem was dense quantile nuisance fitting: with penalty 0.01 the nuisance models were too large and slow. Penalty 0.07 gave the best balance in the calibration subset: strong coverage, lower runtime, and much sparser nuisance fits.
+The DML-style IVQR problem was dense quantile nuisance fitting: with penalty 0.01 the nuisance models were too large and slow. Penalty 0.07 gave the best balance in the calibration subset: strong coverage, lower runtime, and much sparser nuisance fits.
 
 | Metric | highs-ds | highs-ipm |
 |---|---:|---:|
@@ -128,7 +128,7 @@ The DML-IVQR problem was dense quantile nuisance fitting: with penalty 0.01 the 
 | P95 runtime (s) | 325.80 | **162.50** |
 | Max runtime (s) | 345.10 | **166.90** |
 
-`highs-ipm` gave the same coverage as `highs-ds` in the solver comparison but was substantially faster. Therefore, `highs-ipm` was chosen for the final DML-IVQR runs.
+`highs-ipm` gave the same coverage as `highs-ds` in the solver comparison but was substantially faster. Therefore, `highs-ipm` was chosen for the final DML-style IVQR runs.
 
 ## Experiment 7: Folds and grid size
 
@@ -142,7 +142,7 @@ The DML-IVQR problem was dense quantile nuisance fitting: with penalty 0.01 the 
 
 K2 lowered cross-fitting but lost coverage, while K5 was much slower and did not justify its cost. Smaller grids gave only moderate runtime savings. 
 
-## Experiment 8: DML-IVQR R20 full-design confirmation
+## Experiment 8: DML-style IVQR R20 full-design confirmation
 
 | Metric | K3, pen. 0.01 | K3, pen. 0.07|
 |---|---:|---:|
@@ -152,7 +152,7 @@ K2 lowered cross-fitting but lost coverage, while K5 was much slower and did not
 | MAE | 0.777 | **0.757** |
 | Mean runtime (s) | 59.34 | **31.63** |
 
-The full-design R20 run confirmed that the tuned DML-IVQR setting is not only a calibration improvement. It raised coverage close to nominal while cutting average runtime almost in half.
+The full-design R20 run confirmed that the tuned DML-style IVQR setting is not only a calibration improvement. It raised coverage close to nominal while cutting average runtime almost in half.
 
 ## Experiment 9: Replication depth
 
@@ -161,13 +161,13 @@ The full-design R20 run confirmed that the tuned DML-IVQR setting is not only a 
 | Oracle R10 | 90.00 | 2.269 | 0.860 | 0.613 | **1.93** |
 | Oracle R100 | 90.00 | **2.263** | **0.830** | **0.599** | -- |
 | Post-selection R20, mult. 1.8 | 90.31 | 2.279 | 0.843 | 0.604 | 5.37 |
-| DML-IVQR R20, final | **95.52** | 2.960 | 0.983 | 0.757 | 31.63 |
+| DML-style IVQR R20, final | **95.52** | 2.960 | 0.983 | 0.757 | 31.63 |
 
-The R100 Oracle run confirms that the initial R10 Oracle result was stable. Post-selection and DML-IVQR were tuned with R20 runs because they are more computationally expensive.
+The R100 Oracle run confirms that the initial R10 Oracle result was stable. Post-selection and DML-style IVQR were tuned with R20 runs because they are more computationally expensive.
 
 ## Final decisions
 
-Final DML-IVQR choice: use K=3, quantile penalty 0.07, solver highs-ipm, ridge alpha 1.0, and grid [-1, 3] with 21 points.
+Final DML-style IVQR choice: use K=3, quantile penalty 0.07, solver highs-ipm, ridge alpha 1.0, and grid [-1, 3] with 21 points.
 
 | Component | Final choice |
 |---|---|
@@ -175,6 +175,6 @@ Final DML-IVQR choice: use K=3, quantile penalty 0.07, solver highs-ipm, ridge a
 | Critical-value multiplier | 1.0 |
 | Oracle IVQR | True active controls |
 | Post-selection IVQR | Lasso selection multiplier 1.8 |
-| DML-IVQR | K=3, quantile penalty 0.07, solver highs-ipm, ridge alpha 1.0 |
+| DML-style IVQR | K=3, quantile penalty 0.07, solver highs-ipm, ridge alpha 1.0 |
 
 highs-ipm = HiGHS Interior Point Method

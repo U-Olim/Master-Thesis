@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 3,
   "number_of_files": 3,
   "total_rows": 216000,
   "files": [
@@ -10,7 +10,8 @@
       "rows": 72000,
       "columns": 15,
       "size_bytes": 9730719,
-      "sha256": "404abe76f022926c234eb5005ca66384c489d68fdd10185218565e2552f92bd6"
+      "sha256_bytes": "404abe76f022926c234eb5005ca66384c489d68fdd10185218565e2552f92bd6",
+      "sha256_canonical_lf": "eb71235c3b9cf52e3549ad1e5a60b4d1ad1eee130a6b4af7e6dc2f652e70b113"
     },
     {
       "estimator": "post_selection",
@@ -19,7 +20,8 @@
       "rows": 72000,
       "columns": 17,
       "size_bytes": 11105608,
-      "sha256": "3b25fd0a7e0df652588cc8012c346d4d9eeeb0d2c62a492e8ce8f7e98e5782c6"
+      "sha256_bytes": "3b25fd0a7e0df652588cc8012c346d4d9eeeb0d2c62a492e8ce8f7e98e5782c6",
+      "sha256_canonical_lf": "d20e5dfbc2dbf9b6e1734f31a41cb0eb40008a39c697d7573cd63a4eb9d8d685"
     },
     {
       "estimator": "dml",
@@ -28,19 +30,33 @@
       "rows": 72000,
       "columns": 15,
       "size_bytes": 9160449,
-      "sha256": "27d3c514e7a608083647c9485e1ba4d73267cdf80753e3bae8c22a4ee4c5f803"
+      "sha256_bytes": "27d3c514e7a608083647c9485e1ba4d73267cdf80753e3bae8c22a4ee4c5f803",
+      "sha256_canonical_lf": "cc2f1a7386a5ef2b1c7b373dcdd0b816704209a2e146089e34f2e8ebfc95921e"
     }
   ],
   "final_run_metadata": {
-    "alpha_grid_min": -1.0,
-    "alpha_grid_max": 3.0,
-    "alpha_grid_size": 21,
-    "base_seed": 12345,
-    "critical_value_multiplier": 1.0,
-    "post_selection_lasso_multiplier": 1.8,
-    "dml_k_folds": 3,
-    "dml_quantile_penalty": 0.07,
-    "dml_quantile_solver": "highs-ipm",
-    "dml_ridge_alpha": 1.0
+    "common": {
+      "alpha_grid_min": -1.0,
+      "alpha_grid_max": 3.0,
+      "alpha_grid_size": 21,
+      "base_seed": 12345,
+      "critical_value_multiplier": 1.0
+    },
+    "estimators": {
+      "oracle": {
+        "pixi_task": "final_oracle"
+      },
+      "post_selection": {
+        "pixi_task": "final_post_selection",
+        "selection_lasso_multiplier": 1.8
+      },
+      "dml": {
+        "pixi_task": "final_dml",
+        "k_folds": 3,
+        "quantile_penalty": 0.07,
+        "quantile_solver": "highs-ipm",
+        "ridge_alpha": 1.0
+      }
+    }
   }
 }

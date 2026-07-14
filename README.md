@@ -53,8 +53,8 @@ pixi run test
 pixi run test_slow
 ```
 
-`test_slow` may deselect all tests when no tests are marked `slow`; this is
-expected until long-running production checks are added.
+`pixi run test` runs the fast suite and deselects tests marked `slow`.
+`pixi run test_slow` runs only tests marked `slow`.
 
 ## Simulation Modes
 
@@ -75,7 +75,9 @@ The reduced sparsity keeps the baseline design cleaner while high dimensionality
 is maintained through `p = 200` and `p = 500`. Weak-instrument difficulty is
 still controlled by `pi`.
 
-## Main Commands
+## Simulation Commands
+
+### Development commands
 
 Fast default:
 
@@ -100,6 +102,48 @@ Full default with explicit output:
 ```powershell
 pixi run python scenarios/run_simulation.py --mode full --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/full_results.csv --manifest results/raw/full_manifest.json
 ```
+
+`pixi run fast` and `pixi run full` retain the generic project defaults. In
+particular, their DML defaults are not the tuned settings used for the final
+thesis results.
+
+Generic dry run:
+
+```powershell
+pixi run python scenarios/run_simulation.py --mode fast --dry-run
+```
+
+### Canonical final thesis production commands
+
+The following tasks explicitly encode the final R=500 specification and write
+to the canonical raw-result paths consumed by the analysis layer:
+
+```powershell
+pixi run final_oracle
+pixi run final_post_selection
+pixi run final_dml
+```
+
+These are expensive production simulations. They use full mode, 500
+replications, the 21-point alpha grid on `[-1, 3]`, critical-value multiplier
+`1.0`, and base seed `12345`. The post-selection task additionally uses Lasso
+multiplier `1.8`; the DML task uses three folds, quantile penalty `0.07`, solver
+`highs-ipm`, and ridge alpha `1.0`.
+
+Inspect all three resolved configurations without running simulations:
+
+```powershell
+pixi run final_dry_run
+```
+
+The canonical tasks express complete replication indices 0--499. Equivalent
+jobs may be split with `--rep-start` and `--rep-end`, using distinct block
+outputs and manifests before assembling the canonical files. The repository
+contains historical block-command examples, but its final provenance manifest
+does not establish whether the canonical R=500 files were executed as single
+runs or in blocks.
+
+### Historical calibration and robustness commands
 
 Full R500 runs can be split into replication blocks with `--rep-start` and
 `--rep-end`. `--reps` remains the total planned replication count, while the
@@ -144,12 +188,6 @@ Baseline post-selection:
 
 ```powershell
 pixi run python scenarios/run_simulation.py --mode fast --estimators post_selection --base-seed 12345 --output results/raw/fast_post_selection.csv --manifest results/raw/fast_post_selection_manifest.json
-```
-
-Dry run:
-
-```powershell
-pixi run python scenarios/run_simulation.py --mode fast --dry-run
 ```
 
 ## Post-selection Lasso Multiplier
@@ -206,6 +244,13 @@ pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post
 
 Simulation outputs are ignored by git except for `.gitkeep` placeholders.
 
+## Release Packaging
+
+A clean repository archive should exclude local environments, caches, and test
+artifacts: `.pixi/`, `__pycache__/`, `.pytest_tmp/`, `.pytest_cache/`, and
+`.ruff_cache/`. These paths are already protected by `.gitignore`; packaging a
+release does not require deleting the working environment.
+
 ## Final Results Analysis
 
 Simulation and final analysis are separate workflows. After the completed R=500
@@ -220,9 +265,19 @@ files, then writes the final tables to `results/tables/` and figures to
 `results/figures/`. It does not run simulations or alter the raw files.
 
 These three CSVs are the canonical final R=500 inputs. The tracked
-`results/raw/manifest.json` records their row and column counts, file sizes, and
-SHA-256 hashes; `pixi run results` verifies it before analysis. Run
-`pixi run raw_manifest` only when the canonical raw files intentionally change.
+`results/raw/manifest.json` records their row and column counts, exact byte
+sizes and SHA-256 hashes, and LF-normalized SHA-256 hashes. Exact hashes verify
+byte-for-byte equality; canonical hashes allow equivalent LF and CRLF CSV
+representations while substantive content changes still fail verification.
+Final-run provenance stores the shared grid, seed, and critical-value settings
+once under `common`, with estimator-specific tuning and canonical Pixi task
+names under `estimators`. The post-selection Lasso multiplier is cross-checked
+against its raw result column. The DML fold, penalty, solver, and ridge settings
+are documented provenance because those values are not columns in the final DML
+raw schema and therefore cannot be verified directly from that CSV.
+`pixi run results` verifies the manifest schema, file identities, dimensions,
+row totals, and hashes before analysis. Run `pixi run raw_manifest` only when
+the canonical raw files intentionally change.
 
 The overview tables summarize broad performance patterns. The canonical
 `performance_by_design_cell.csv` and `performance_by_design_cell.tex` tables
