@@ -75,7 +75,12 @@ def test_clean_dml_output_preserves_missing_confidence_region() -> None:
     cleaned = clean_dml_results_frame(_wide_frame())
 
     assert len(cleaned) == 2
-    assert cleaned.loc[1, ["cr_lower", "cr_upper", "cr_length"]].isna().all()
+    assert (
+        cleaned.loc[[1], ["cr_lower", "cr_upper", "cr_length"]]
+        .isna()
+        .all()
+        .all()
+    )
     assert bool(cleaned.loc[1, "covered"]) is False
 
 

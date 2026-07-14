@@ -54,6 +54,18 @@ NUMERIC_COLUMNS = [
 ]
 
 
+def require_unique_selection_lasso_multiplier(values: pd.Series) -> float:
+    """Return the sole nonmissing final-experiment Lasso multiplier."""
+    unique_values = values.dropna().unique()
+    if len(unique_values) != 1:
+        raise ValueError(
+            "Expected exactly one unique selection_lasso_multiplier "
+            f"in final post-selection results, found {len(unique_values)}: "
+            f"{sorted(unique_values.tolist())}"
+        )
+    return float(unique_values[0])
+
+
 def _read_results(
     path: str | Path,
     estimator: str,
@@ -227,6 +239,7 @@ def validate_results(
         selected_rows = results["estimator"].eq("post_selection")
         selected = results.loc[selected_rows, "n_selected_controls"]
         multiplier = results.loc[selected_rows, "selection_lasso_multiplier"]
+        require_unique_selection_lasso_multiplier(multiplier)
         if selected.isna().any() or multiplier.isna().any():
             raise ValueError("Post-selection diagnostics must not be missing")
         if ((selected < 0) | (selected > results.loc[selected_rows, "p"])).any():

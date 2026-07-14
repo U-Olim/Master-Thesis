@@ -2,12 +2,10 @@ import numpy as np
 import pytest
 
 from dgp import Design, generate_data, get_oracle_control_indices
-from estimators import (
-    EstimationResult,
-    estimate_dml_ivqr,
-    estimate_oracle_ivqr,
-    estimate_post_selection_ivqr,
-)
+from estimators import EstimationResult
+from estimators.dml import estimate_dml_ivqr
+from estimators.oracle import estimate_oracle_ivqr
+from estimators.post_selection import estimate_post_selection_ivqr
 
 
 def _tiny_data():

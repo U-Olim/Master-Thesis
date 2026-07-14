@@ -6,7 +6,11 @@ import pytest
 
 from analysis.data import COMMON_COLUMNS, IDENTIFIER_COLUMNS, load_all_results, validate_results
 from analysis.figures import plot_coverage_vs_strength
-from analysis.tables import make_performance_by_strength_table, summarize_performance
+from analysis.tables import (
+    make_performance_by_design_cell_table,
+    make_performance_by_strength_table,
+    summarize_performance,
+)
 
 
 @pytest.fixture(scope="module")
@@ -30,7 +34,11 @@ def _synthetic_results() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "estimator": ["oracle", "oracle"],
+            "dgp": ["dgp1", "dgp1"],
+            "n": [500, 500],
+            "p": [200, 200],
             "pi": [0.5, 0.5],
+            "tau": [0.5, 0.5],
             "alpha_hat": [1.0, 3.0],
             "alpha_true": [2.0, 2.0],
             "covered": [True, False],
@@ -40,11 +48,54 @@ def _synthetic_results() -> pd.DataFrame:
     )
 
 
+def _post_selection_validation_results(multipliers: list[float]) -> pd.DataFrame:
+    size = len(multipliers)
+    return pd.DataFrame(
+        {
+            "estimator": ["post_selection"] * size,
+            "dgp": ["dgp1"] * size,
+            "n": [500] * size,
+            "p": [200] * size,
+            "pi": [0.5] * size,
+            "tau": [0.5] * size,
+            "rep": range(size),
+            "seed": range(100, 100 + size),
+            "alpha_hat": [1.0] * size,
+            "alpha_true": [1.0] * size,
+            "cr_lower": [0.5] * size,
+            "cr_upper": [1.5] * size,
+            "cr_length": [1.0] * size,
+            "covered": [True] * size,
+            "converged": [True] * size,
+            "n_selected_controls": [5] * size,
+            "selection_lasso_multiplier": multipliers,
+        }
+    )
+
+
+def test_single_selection_lasso_multiplier_is_valid() -> None:
+    results = _post_selection_validation_results([1.8, 1.8, 1.8])
+    validate_results(results, expected_replications=3)
+
+
+def test_conflicting_selection_lasso_multipliers_are_rejected() -> None:
+    results = _post_selection_validation_results([1.8, 1.8, 1.2])
+    with pytest.raises(ValueError, match=r"found 2: \[1\.2, 1\.8\]"):
+        validate_results(results, expected_replications=3)
+
+
+def test_missing_selection_lasso_multipliers_are_rejected() -> None:
+    results = _post_selection_validation_results([np.nan, np.nan])
+    with pytest.raises(ValueError, match=r"found 0: \[\]"):
+        validate_results(results, expected_replications=2)
+
+
 def test_metric_calculations_are_exact() -> None:
     metrics = summarize_performance(_synthetic_results(), ["estimator"]).iloc[0]
     assert metrics["mean_estimate"] == pytest.approx(2.0)
     assert metrics["bias"] == pytest.approx(0.0)
-    assert metrics["absolute_bias"] == pytest.approx(0.0)
+    assert metrics["abs_bias"] == pytest.approx(0.0)
+    assert metrics["mae"] == pytest.approx(1.0)
     assert metrics["rmse"] == pytest.approx(1.0)
     assert metrics["estimate_sd"] == pytest.approx(np.sqrt(2.0))
     assert metrics["coverage"] == pytest.approx(0.5)
@@ -53,12 +104,38 @@ def test_metric_calculations_are_exact() -> None:
     assert metrics["valid_rate"] == pytest.approx(0.5)
 
 
+def test_nonzero_bias_and_mae_are_distinct_metrics() -> None:
+    results = _synthetic_results().assign(
+        alpha_true=[0.0, 0.0], alpha_hat=[1.0, 3.0]
+    )
+    metrics = summarize_performance(results, ["estimator"]).iloc[0]
+    assert metrics["bias"] == pytest.approx(2.0)
+    assert metrics["abs_bias"] == pytest.approx(2.0)
+    assert metrics["mae"] == pytest.approx(2.0)
+    assert metrics["rmse"] == pytest.approx(np.sqrt(5.0))
+
+
+def test_design_cell_table_preserves_all_grouping_dimensions() -> None:
+    results = _synthetic_results().iloc[[0]].copy()
+    results = pd.concat(
+        [results, results.assign(pi=1.0, tau=0.75)], ignore_index=True
+    )
+    table = make_performance_by_design_cell_table(results)
+    keys = ["dgp", "n", "p", "pi", "tau", "estimator"]
+    assert len(table) == 2
+    assert not table.duplicated(keys).any()
+    assert set(table["pi"]) == {0.5, 1.0}
+    assert set(table["tau"]) == {0.5, 0.75}
+
+
 def test_strength_table_has_expected_grouping() -> None:
     table = make_performance_by_strength_table(_synthetic_results())
     assert list(table[["pi", "estimator"]].itertuples(index=False, name=None)) == [
         (0.5, "Oracle IVQR")
     ]
-    assert {"bias", "rmse", "coverage", "average_cr_length"}.issubset(table.columns)
+    assert {"bias", "abs_bias", "mae", "rmse", "coverage", "average_cr_length"}.issubset(
+        table.columns
+    )
 
 
 def test_coverage_figure_smoke(tmp_path: Path) -> None:

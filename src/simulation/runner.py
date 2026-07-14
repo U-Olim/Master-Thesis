@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
 from pathlib import Path
-from typing import TypeVar
+from typing import TypeVar, cast, get_args
 import warnings
 
 import numpy as np
@@ -19,7 +19,7 @@ from dgp.designs import Design
 from dgp.generators import generate_data
 from dgp.true_parameters import get_oracle_control_indices, true_alpha
 from estimators.base import EstimationResult
-from estimators.dml import estimate_dml_ivqr
+from estimators.dml import QuantileSolver, estimate_dml_ivqr
 from estimators.oracle import estimate_oracle_ivqr
 from estimators.post_selection import (
     estimate_post_selection_ivqr,
@@ -409,6 +409,13 @@ def _estimator_random_state(design_seed: int) -> int:
     return int(design_seed % (2**32 - 1))
 
 
+def _validate_dml_quantile_solver(solver: str) -> QuantileSolver:
+    """Validate and narrow a runner-level solver string."""
+    if solver not in get_args(QuantileSolver):
+        raise ValueError(f"Unknown quantile solver: {solver}")
+    return cast(QuantileSolver, solver)
+
+
 def run_simulation_design(
     design: Design,
     alphas: np.ndarray,
@@ -473,6 +480,9 @@ def run_simulation_design(
                         critical_value_multiplier=critical_value_multiplier,
                     )
                 elif estimator_name == "dml":
+                    quantile_solver = _validate_dml_quantile_solver(
+                        dml_quantile_solver
+                    )
                     result = estimate_dml_ivqr(
                         data,
                         tau=design.tau,
@@ -481,7 +491,7 @@ def run_simulation_design(
                         fold_random_state=estimator_random_state,
                         quantile_penalty=dml_quantile_penalty,
                         ridge_alpha=dml_ridge_alpha,
-                        quantile_solver=dml_quantile_solver,
+                        quantile_solver=quantile_solver,
                         gmm_ridge=gmm_ridge,
                         critical_value_multiplier=critical_value_multiplier,
                     )

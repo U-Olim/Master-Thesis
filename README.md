@@ -30,17 +30,14 @@ src/
   simulation/   Simulation config, runner, and result-row construction.
   utils/        Validation and timing helpers.
 
-reports/
-  monte_carlo_runs_summary.qmd
+documents/
+  Experiments.qmd  Experiment-design and simulation-run documentation.
+  Experiments.pdf  Rendered experiment-design document.
 
 scripts/
   make_results.py
 
-tests/
-  test_dgp.py
-  test_estimators.py
-  test_ivqr.py
-  test_runner.py
+tests/          Unit and integration tests for simulation and analysis code.
 ```
 
 ## Environment
@@ -221,6 +218,11 @@ pixi run results
 This command loads and validates the oracle, post-selection, and DML result
 files, then writes the final tables to `results/tables/` and figures to
 `results/figures/`. It does not run simulations or alter the raw files.
+
+The overview tables summarize broad performance patterns. The canonical
+`performance_by_design_cell.csv` and `performance_by_design_cell.tex` tables
+preserve results by DGP, sample size, dimensionality, instrument strength,
+quantile, and estimator.
 
 ## Key Diagnostics
 

@@ -6,6 +6,8 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 
+from analysis.data import require_unique_selection_lasso_multiplier
+
 
 ESTIMATOR_NAMES = {
     "oracle": "Oracle IVQR",
@@ -16,7 +18,8 @@ ESTIMATOR_ORDER = list(ESTIMATOR_NAMES)
 PERFORMANCE_COLUMNS = [
     "mean_estimate",
     "bias",
-    "absolute_bias",
+    "abs_bias",
+    "mae",
     "rmse",
     "estimate_sd",
     "coverage",
@@ -41,29 +44,42 @@ def summarize_performance(
     }
     missing = required.difference(results.columns)
     if missing:
-        raise ValueError(f"Cannot calculate metrics; missing columns: {sorted(missing)}")
+        raise ValueError(
+            f"Cannot calculate metrics; missing columns: {sorted(missing)}"
+        )
 
     records: list[dict[str, object]] = []
     grouper: str | list[str] = list(group_by)
     if len(group_by) == 1:
         grouper = group_by[0]
     for keys, group in results.groupby(grouper, dropna=False, sort=True):
-        key_values = (keys,) if len(group_by) == 1 else keys
+        if len(group_by) == 1 or not isinstance(keys, tuple):
+            key_values: tuple[object, ...] = (keys,)
+        else:
+            key_values = keys
         estimates = group["alpha_hat"].to_numpy(dtype=float)
-        errors = estimates - group["alpha_true"].to_numpy(dtype=float)
+        truth = group["alpha_true"].to_numpy(dtype=float)
+        errors = estimates - truth
         lengths = group["cr_length"].to_numpy(dtype=float)
+        coverage_values = group["covered"].to_numpy(dtype=float)
+        valid_values = group["converged"].to_numpy(dtype=float)
         bias = float(np.mean(errors))
-        record = dict(zip(group_by, key_values, strict=True))
+        record: dict[str, object] = {}
+        for column, value in zip(group_by, key_values, strict=True):
+            record[column] = value
         record.update(
             mean_estimate=float(np.mean(estimates)),
             bias=bias,
-            absolute_bias=abs(bias),
+            abs_bias=abs(bias),
+            mae=float(np.mean(np.abs(errors))),
             rmse=float(np.sqrt(np.mean(np.square(errors)))),
-            estimate_sd=float(np.std(estimates, ddof=1)) if len(group) > 1 else np.nan,
-            coverage=float(group["covered"].mean()),
+            estimate_sd=(
+                float(np.std(estimates, ddof=1)) if len(group) > 1 else float("nan")
+            ),
+            coverage=float(np.mean(coverage_values)),
             average_cr_length=float(np.nanmean(lengths)),
             median_cr_length=float(np.nanmedian(lengths)),
-            valid_rate=float(group["converged"].mean()),
+            valid_rate=float(np.mean(valid_values)),
             n_results=int(len(group)),
         )
         records.append(record)
@@ -77,7 +93,9 @@ def _display_estimators(table: pd.DataFrame) -> pd.DataFrame:
     displayed["estimator"] = pd.Categorical(
         displayed["estimator"], categories=order, ordered=True
     )
-    sort_columns = [column for column in displayed.columns if column not in PERFORMANCE_COLUMNS]
+    sort_columns = [
+        column for column in displayed.columns if column not in PERFORMANCE_COLUMNS
+    ]
     displayed = displayed.sort_values(sort_columns).reset_index(drop=True)
     displayed["estimator"] = displayed["estimator"].astype(str)
     return displayed
@@ -99,6 +117,12 @@ def make_performance_by_dgp_table(results: pd.DataFrame) -> pd.DataFrame:
     return _display_estimators(summarize_performance(results, ["dgp", "estimator"]))
 
 
+def make_performance_by_design_cell_table(results: pd.DataFrame) -> pd.DataFrame:
+    return _display_estimators(
+        summarize_performance(results, ["dgp", "n", "p", "pi", "tau", "estimator"])
+    )
+
+
 def make_post_selection_table(results: pd.DataFrame) -> pd.DataFrame:
     selected = results.loc[results["estimator"].eq("post_selection")]
     if selected.empty or "n_selected_controls" not in selected:
@@ -114,8 +138,10 @@ def make_post_selection_table(results: pd.DataFrame) -> pd.DataFrame:
         )
         .reset_index()
     )
-    diagnostics["selection_lasso_multiplier"] = float(
-        selected["selection_lasso_multiplier"].iloc[0]
+    diagnostics["selection_lasso_multiplier"] = (
+        require_unique_selection_lasso_multiplier(
+            selected["selection_lasso_multiplier"]
+        )
     )
     return diagnostics
 
@@ -128,8 +154,16 @@ def _write_table(table: pd.DataFrame, output_dir: Path, name: str) -> list[Path]
     return [csv_path, tex_path]
 
 
+def _is_missing_scalar(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, (float, np.floating)):
+        return bool(np.isnan(value))
+    return False
+
+
 def _latex_text(value: object) -> str:
-    if pd.isna(value):
+    if _is_missing_scalar(value):
         return ""
     if isinstance(value, (int, np.integer)):
         return str(value)
@@ -155,8 +189,10 @@ def _write_latex(table: pd.DataFrame, path: Path) -> None:
     path.write_text("\n".join(rows), encoding="utf-8")
 
 
-def write_all_tables(results: pd.DataFrame, output_dir: str | Path) -> dict[str, list[Path]]:
-    """Write the five final tables as CSV and LaTeX."""
+def write_all_tables(
+    results: pd.DataFrame, output_dir: str | Path
+) -> dict[str, list[Path]]:
+    """Write the six final tables as CSV and LaTeX."""
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     tables = {
@@ -164,6 +200,7 @@ def write_all_tables(results: pd.DataFrame, output_dir: str | Path) -> dict[str,
         "performance_by_strength": make_performance_by_strength_table(results),
         "performance_by_quantile": make_performance_by_quantile_table(results),
         "performance_by_dgp": make_performance_by_dgp_table(results),
+        "performance_by_design_cell": make_performance_by_design_cell_table(results),
         "post_selection_diagnostics": make_post_selection_table(results),
     }
     return {

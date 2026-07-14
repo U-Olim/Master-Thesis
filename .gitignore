@@ -19,15 +19,11 @@ htmlcov/
 .agents/
 
 # Generated simulation outputs
-results/raw/*.csv
-results/raw/*.json
-results/clean/**/*.csv
-results/summary/*.csv
+results/raw/**/*.csv
+results/raw/**/*.json
 results/tables/*
 results/figures/*
 !results/raw/.gitkeep
-!results/clean/.gitkeep
-!results/summary/.gitkeep
 !results/tables/.gitkeep
 !results/figures/.gitkeep
 

@@ -33,15 +33,6 @@ DF_T: int = 5
 FAST_OUTPUT: str = "results/raw/fast_results.csv"
 FULL_OUTPUT: str = "results/raw/full_results.csv"
 
-FAST_SUMMARY_OUTPUT: str = "results/summary/fast_summary.csv"
-FULL_SUMMARY_OUTPUT: str = "results/summary/full_summary.csv"
-
-FAST_TABLES_DIR: str = "results/tables/fast"
-FULL_TABLES_DIR: str = "results/tables/full"
-
-FAST_FIGURES_DIR: str = "results/figures/fast"
-FULL_FIGURES_DIR: str = "results/figures/full"
-
 
 __all__ = [
     "DEFAULT_ALPHA_GRID_SIZE",
@@ -60,14 +51,8 @@ __all__ = [
     "DF_T",
     "DGPS",
     "ESTIMATORS",
-    "FAST_FIGURES_DIR",
     "FAST_OUTPUT",
-    "FAST_SUMMARY_OUTPUT",
-    "FAST_TABLES_DIR",
-    "FULL_FIGURES_DIR",
     "FULL_OUTPUT",
-    "FULL_SUMMARY_OUTPUT",
-    "FULL_TABLES_DIR",
     "N_VALUES",
     "PI_VALUES",
     "P_VALUES",
