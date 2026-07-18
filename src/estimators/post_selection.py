@@ -20,6 +20,7 @@ DML-style residualized IVQR estimator.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from time import perf_counter
 from typing import Any
 
@@ -36,10 +37,12 @@ from estimators.base import (
 )
 from ivqr.ch_inverse import (
     AlphaEvaluation,
+    HardFailurePolicy,
     IterationWarningPolicy,
     as_2d_instruments,
     evaluate_alpha_ch_ivqr as _evaluate_alpha_ch_ivqr,
     validate_iteration_warning_policy,
+    validate_hard_failure_policy,
 )
 from ivqr.alpha_grid import (
     DEFAULT_ALPHA_MAX,
@@ -49,7 +52,8 @@ from ivqr.alpha_grid import (
 )
 from ivqr.confidence_regions import (
     adjust_critical_value,
-    argmin_grid,
+    argmin_grid_usable,
+    classify_alpha_grid,
     critical_value_chi_square,
     invert_score_test,
     merge_region_and_grid_diagnostics,
@@ -336,6 +340,10 @@ def _failed_result(
     failed_alpha_count: int | None = None,
     ps_diagnostics: dict[str, Any] | None = None,
     runtime_diagnostics: RuntimeDiagnosticColumns | None = None,
+    hard_failure_policy: HardFailurePolicy = "unresolved",
+    usable_alpha_evaluations: int | None = None,
+    unresolved_alpha_evaluations: int | None = None,
+    cr_unresolved_alphas: str = "[]",
 ) -> EstimationResult:
     if runtime_seconds < 0:
         raise ValueError("runtime_seconds must be nonnegative")
@@ -369,6 +377,25 @@ def _failed_result(
         cr_disconnected=None,
         selected_controls=selected_controls,
         runtime_seconds=runtime_seconds,
+        hard_failure_policy=hard_failure_policy,
+        cr_status=(
+            "fully_unresolved"
+            if unresolved_alpha_evaluations and usable_alpha_evaluations == 0
+            else "not_applicable"
+        ),
+        cr_is_numerically_resolved=(False if unresolved_alpha_evaluations else None),
+        cr_unresolved_count=unresolved_alpha_evaluations or 0,
+        cr_unresolved_alphas=cr_unresolved_alphas,
+        coverage_status=(
+            "coverage_unresolved" if unresolved_alpha_evaluations else "unknown"
+        ),
+        point_estimate_status=(
+            "fully_unresolved"
+            if unresolved_alpha_evaluations and usable_alpha_evaluations == 0
+            else "not_applicable"
+        ),
+        usable_alpha_evaluations=usable_alpha_evaluations,
+        unresolved_alpha_evaluations=unresolved_alpha_evaluations,
         **(
             estimator_runtime_columns(
                 estimator="post_selection_ivqr",
@@ -541,11 +568,14 @@ def estimate_post_selection_ivqr(
     selection_lasso_multiplier: float = 1.0,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
+    hard_failure_policy: HardFailurePolicy = "unresolved",
 ) -> EstimationResult:
     """Estimate post-selection IVQR by Lasso selection and CH inverse-IVQR.
 
     Valid iteration-warning fits are used by default.  Pass ``"reject"`` only
     when reproducing simulations generated with the legacy warning policy.
+    Hard failures are unresolved by default; ``"legacy_reject"`` retains the
+    historical sentinel-statistic behavior for reproducibility.
     """
     start = perf_counter()
     selection_sec = float("nan")
@@ -563,6 +593,7 @@ def estimate_post_selection_ivqr(
     iteration_warning_policy = validate_iteration_warning_policy(
         iteration_warning_policy
     )
+    hard_failure_policy = validate_hard_failure_policy(hard_failure_policy)
     y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
     z_2d = as_2d_instruments(z)
     _validate_selection_config(selection_cv, selection_max_iter, x.shape[0])
@@ -693,7 +724,13 @@ def estimate_post_selection_ivqr(
             usable_flags.append(evaluation.usable)
     alpha_loop_sec = perf_counter() - alpha_loop_start
 
-    statistics, num_failed = sanitize_grid_statistics(statistics, usable_flags)
+    usable = np.asarray(usable_flags, dtype=bool) & np.isfinite(statistics)
+    num_failed = int(np.sum(~usable))
+    inference_statistics = statistics.copy()
+    inference_usable = usable.copy()
+    if hard_failure_policy == "legacy_reject":
+        inference_statistics, _ = sanitize_grid_statistics(statistics, usable)
+        inference_usable = np.ones(len(alphas), dtype=bool)
     if num_failed == len(alphas):
         runtime_seconds = perf_counter() - start
         return _failed_result(
@@ -707,6 +744,10 @@ def estimate_post_selection_ivqr(
             runtime_seconds=runtime_seconds,
             alpha_grid_size=len(alphas),
             failed_alpha_count=num_failed,
+            hard_failure_policy=hard_failure_policy,
+            usable_alpha_evaluations=0,
+            unresolved_alpha_evaluations=num_failed,
+            cr_unresolved_alphas=json.dumps([float(value) for value in alphas]),
             ps_diagnostics=ps_diagnostics,
             runtime_diagnostics=estimator_runtime_columns(
                 estimator="post_selection_ivqr",
@@ -718,16 +759,21 @@ def estimate_post_selection_ivqr(
         )
 
     confidence_region_start = perf_counter()
-    alpha_hat, min_statistic, at_boundary = argmin_grid(alphas, statistics)
+    point_estimate = argmin_grid_usable(alphas, inference_statistics, inference_usable)
+    alpha_hat = point_estimate.alpha_hat
+    min_statistic = point_estimate.statistic
+    at_boundary = point_estimate.at_boundary
     critical = critical_value_chi_square(confidence_level, df=z_2d.shape[1])
     adjusted_critical = adjust_critical_value(critical, critical_value_multiplier)
-    accepted_mask = statistics <= adjusted_critical
+    masks = classify_alpha_grid(
+        inference_statistics, inference_usable, adjusted_critical
+    )
     diagnostics = summarize_alpha_grid_diagnostics(
         alpha_grid=alphas,
-        accepted_mask=accepted_mask,
+        accepted_mask=masks.accepted,
         alpha_hat=alpha_hat,
         failed_alpha_count=num_failed,
-        test_stats=statistics,
+        test_stats=np.where(inference_usable, inference_statistics, np.nan),
         critical_value=adjusted_critical,
         critical_value_nominal=critical,
         critical_value_multiplier=critical_value_multiplier,
@@ -735,12 +781,13 @@ def estimate_post_selection_ivqr(
     )
     region = invert_score_test(
         alphas=alphas,
-        statistics=statistics,
+        statistics=inference_statistics,
         critical_value=critical,
         critical_value_multiplier=critical_value_multiplier,
         alpha_true=data.alpha_true,
         statistic_reference=0.0,
         inversion_type="absolute",
+        usable=inference_usable,
     )
     diagnostics = merge_region_and_grid_diagnostics(region, diagnostics)
     confidence_region_sec = perf_counter() - confidence_region_start
@@ -768,6 +815,15 @@ def estimate_post_selection_ivqr(
         cr_disconnected=diagnostics["cr_disconnected"],
         selected_controls=int(selected_indices.size),
         runtime_seconds=runtime_seconds,
+        hard_failure_policy=hard_failure_policy,
+        cr_status=region.status,
+        cr_is_numerically_resolved=region.is_numerically_resolved,
+        cr_unresolved_count=region.unresolved_count,
+        cr_unresolved_alphas=json.dumps(region.unresolved_alphas),
+        coverage_status=region.coverage_status,
+        point_estimate_status=point_estimate.status,
+        usable_alpha_evaluations=int(np.sum(usable)),
+        unresolved_alpha_evaluations=num_failed,
         # First-stage diagnostics are computed inside the combined
         # post-selection diagnostics helper, so first-stage timing is not
         # cleanly separable and is intentionally reported as NaN.

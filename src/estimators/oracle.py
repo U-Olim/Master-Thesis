@@ -34,6 +34,7 @@ _CH_COMPATIBILITY_KWARGS = {
     "critical_value_multiplier",
     "max_iter",
     "iteration_warning_policy",
+    "hard_failure_policy",
 }
 
 

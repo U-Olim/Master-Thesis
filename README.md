@@ -220,6 +220,15 @@ Oracle or post-selection simulation results. That mode rejects every
 iteration-limit fit through the historical failed-alpha path. The DML
 estimator does not use this policy.
 
+Genuine unusable CH alpha evaluations use `hard_failure_policy="unresolved"`
+in production. They are excluded from the usable-only point-estimate argmin,
+are neither accepted nor rejected, and cannot be used for confidence-region
+boundary interpolation. Confidence-region and coverage outputs explicitly
+record partial or full numerical non-resolution. Set
+`hard_failure_policy="legacy_reject"` only to reproduce the historical
+sentinel-statistic rejection behavior. This policy applies to Oracle and
+post-selection CH inference only; DML estimation is unchanged.
+
 ## Reproducibility and Separate Estimator Runs
 
 The project uses a fixed default base seed, `12345`. Each design cell has a

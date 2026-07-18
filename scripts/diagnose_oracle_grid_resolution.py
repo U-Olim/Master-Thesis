@@ -22,13 +22,17 @@ from dgp.designs import Design
 from dgp.generators import generate_data
 from dgp.true_parameters import get_oracle_control_indices, true_alpha
 from ivqr.ch_inverse import (
+    HARD_FAILURE_POLICIES,
     ITERATION_WARNING_POLICIES,
     AlphaEvaluation,
     IterationWarningPolicy,
+    HardFailurePolicy,
     evaluate_alpha_ch_ivqr,
+    validate_hard_failure_policy,
 )
 from ivqr.confidence_regions import (
-    argmin_grid,
+    argmin_grid_usable,
+    classify_alpha_grid,
     critical_value_chi_square,
     invert_score_test,
     sanitize_grid_statistics,
@@ -141,6 +145,7 @@ def _evaluate_grid(
     cached_evaluations: dict[float, tuple[AlphaEvaluation, float]],
     alpha_true: float,
     direct_accepted: bool | None,
+    hard_failure_policy: HardFailurePolicy = "unresolved",
 ) -> dict[str, Any]:
     """Construct one production-style confidence region from cached evaluations."""
     raw_statistics = np.array(
@@ -152,7 +157,13 @@ def _evaluate_grid(
         dtype=bool,
     )
     evaluations = [cached_evaluations[float(alpha)][0] for alpha in alphas]
-    statistics, failed_count = sanitize_grid_statistics(raw_statistics, usable_flags)
+    usable_flags &= np.isfinite(raw_statistics)
+    failed_count = int(np.sum(~usable_flags))
+    statistics = raw_statistics.copy()
+    inference_usable = usable_flags.copy()
+    if hard_failure_policy == "legacy_reject":
+        statistics, _ = sanitize_grid_statistics(raw_statistics, usable_flags)
+        inference_usable = np.ones(len(alphas), dtype=bool)
     warning_evaluations = [
         item for item in evaluations if item.warning_type is not None
     ]
@@ -192,6 +203,15 @@ def _evaluate_grid(
             "finite_statistic_available": False,
             "statistic_used_for_inference": False,
             "failure_reason": "All alpha-grid evaluations failed",
+            "hard_failure_policy": hard_failure_policy,
+            "cr_status": "fully_unresolved",
+            "cr_is_numerically_resolved": False,
+            "coverage_status": "coverage_unresolved",
+            "point_estimate_status": "fully_unresolved",
+            "usable_alpha_evaluations": 0,
+            "unresolved_alpha_evaluations": failed_count,
+            "accepted_alpha_evaluations": 0,
+            "cr_unresolved_alphas": json.dumps([float(value) for value in alphas]),
             "interpolated_true_alpha_accepted": np.nan,
             "direct_vs_interpolated_mismatch": np.nan,
             "interpolation_vs_region_mismatch": np.nan,
@@ -202,7 +222,10 @@ def _evaluate_grid(
             "exact_grid_point_consistency_mismatch": False,
         }
 
-    alpha_hat, _minimum, _boundary = argmin_grid(alphas, statistics)
+    point_estimate = argmin_grid_usable(alphas, statistics, inference_usable)
+    if point_estimate.alpha_hat is None:
+        raise RuntimeError("at least one usable alpha was expected")
+    alpha_hat = point_estimate.alpha_hat
     region = invert_score_test(
         alphas=alphas,
         statistics=statistics,
@@ -210,14 +233,24 @@ def _evaluate_grid(
         alpha_true=alpha_true,
         statistic_reference=0.0,
         inversion_type="absolute",
+        usable=inference_usable,
     )
-    accepted = statistics <= CRITICAL_VALUE
-    interpolated_accepted = interpolated_acceptance_at_alpha(
-        alphas, statistics, alpha_true
+    masks = classify_alpha_grid(statistics, inference_usable, CRITICAL_VALUE)
+    accepted = masks.accepted
+    interpolated_accepted: bool | float = (
+        np.nan
+        if region.coverage_status == "coverage_unresolved"
+        else bool(region.covers_true)
     )
-    covered = bool(region.covers_true)
+    covered: bool | float = (
+        np.nan if region.covers_true is None else bool(region.covers_true)
+    )
     exact_point, exact_mismatch = exact_grid_consistency(
-        alphas, accepted, alpha_true, covered, direct_accepted
+        alphas,
+        accepted,
+        alpha_true,
+        False if region.covers_true is None else bool(region.covers_true),
+        direct_accepted if region.covers_true is not None else None,
     )
     direct_available = direct_accepted is not None
     return {
@@ -230,7 +263,7 @@ def _evaluate_grid(
         "cr_upper": np.nan if region.upper is None else region.upper,
         "cr_length": region.length,
         "cr_components": _components_json(region.blocks),
-        "full_grid_accepted": bool(np.all(accepted)),
+        "full_grid_accepted": region.full_grid_accepted,
         "empty_cr": region.empty,
         "number_of_connected_components": region.n_blocks,
         "number_of_alpha_evaluations": len(alphas),
@@ -240,8 +273,6 @@ def _evaluate_grid(
         "usable_warning_evaluations": usable_warning_count,
         "unusable_warning_evaluations": len(warning_evaluations) - usable_warning_count,
         "runtime_seconds": runtime,
-        # Match production behavior: partial alpha failures are sanitized, while
-        # a replication fails only when every alpha evaluation fails.
         "converged": True,
         "usable": True,
         "warning_type": "iteration_limit" if iteration_warning else "",
@@ -256,22 +287,43 @@ def _evaluate_grid(
             if failed_count == 0
             else f"ok; failed_alpha_points={failed_count}/{len(alphas)}"
         ),
+        "hard_failure_policy": hard_failure_policy,
+        "cr_status": region.status,
+        "cr_is_numerically_resolved": region.is_numerically_resolved,
+        "coverage_status": region.coverage_status,
+        "point_estimate_status": point_estimate.status,
+        "usable_alpha_evaluations": int(np.sum(usable_flags)),
+        "unresolved_alpha_evaluations": (
+            failed_count if hard_failure_policy == "unresolved" else 0
+        ),
+        "accepted_alpha_evaluations": int(np.sum(masks.accepted)),
+        "cr_unresolved_alphas": json.dumps(region.unresolved_alphas),
         "interpolated_true_alpha_accepted": interpolated_accepted,
         "direct_vs_interpolated_mismatch": (
             bool(direct_accepted != interpolated_accepted)
-            if direct_available
+            if direct_available and not pd.isna(interpolated_accepted)
             else np.nan
         ),
-        "interpolation_vs_region_mismatch": bool(interpolated_accepted != covered),
+        "interpolation_vs_region_mismatch": (
+            bool(interpolated_accepted != covered)
+            if not pd.isna(interpolated_accepted) and not pd.isna(covered)
+            else np.nan
+        ),
         "coverage_loss_vs_direct": (
-            bool(direct_accepted and not covered) if direct_available else np.nan
+            bool(direct_accepted and not covered)
+            if direct_available and not pd.isna(covered)
+            else np.nan
         ),
         "interpolation_loss_vs_direct": (
             bool(direct_accepted and not interpolated_accepted)
-            if direct_available
+            if direct_available and not pd.isna(interpolated_accepted)
             else np.nan
         ),
-        "reconstruction_loss": bool(interpolated_accepted and not covered),
+        "reconstruction_loss": (
+            bool(interpolated_accepted and not covered)
+            if not pd.isna(interpolated_accepted) and not pd.isna(covered)
+            else np.nan
+        ),
         "alpha_true_exact_grid_point": exact_point,
         "exact_grid_point_consistency_mismatch": exact_mismatch,
     }
@@ -314,7 +366,10 @@ def load_direct_calibration(path: Path) -> dict[tuple[object, ...], bool | None]
             int(row.seed),
         )
         usable = bool(getattr(row, "usable", row.converged))
-        lookup[key] = bool(not row.rejected) if usable else None
+        legacy_reject = getattr(row, "hard_failure_policy", "") == "legacy_reject"
+        lookup[key] = (
+            bool(not row.rejected) if usable else (False if legacy_reject else None)
+        )
     return lookup
 
 
@@ -324,8 +379,10 @@ def run_diagnostic(
     *,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
+    hard_failure_policy: HardFailurePolicy = "unresolved",
 ) -> pd.DataFrame:
     """Evaluate fixed and adaptive grids for all deterministic designs."""
+    hard_failure_policy = validate_hard_failure_policy(hard_failure_policy)
     rows: list[dict[str, Any]] = []
     for design_index, design in enumerate(designs, start=1):
         data = generate_data(design)
@@ -381,6 +438,7 @@ def run_diagnostic(
                 cached_evaluations=cache,
                 alpha_true=alpha_true,
                 direct_accepted=direct_accepted,
+                hard_failure_policy=hard_failure_policy,
             )
             rows.append(
                 {
@@ -393,6 +451,7 @@ def run_diagnostic(
                     "seed": design.seed,
                     "alpha_true": alpha_true,
                     "iteration_warning_policy": iteration_warning_policy,
+                    "hard_failure_policy": hard_failure_policy,
                     "direct_true_alpha_accepted": (
                         np.nan if direct_accepted is None else direct_accepted
                     ),
@@ -415,6 +474,12 @@ def _summarize_group(group: pd.DataFrame) -> dict[str, Any]:
     successful = group.loc[group["converged"].astype(bool)]
     requested = len(group)
     successes = len(successful)
+    coverage_resolved = successful.loc[
+        successful["coverage_status"].isin(["covered", "not_covered"])
+    ]
+    coverage_unresolved = successful.loc[
+        successful["coverage_status"] == "coverage_unresolved"
+    ]
 
     def mean_boolean(column: str) -> float:
         values = successful[column].dropna()
@@ -428,6 +493,66 @@ def _summarize_group(group: pd.DataFrame) -> dict[str, Any]:
         "direct_true_alpha_acceptance": mean_boolean("direct_true_alpha_accepted"),
         "direct_true_alpha_rejection_rate": mean_boolean("direct_true_alpha_rejected"),
         "coverage": mean_boolean("covered"),
+        "valid_coverage_denominator": len(coverage_resolved),
+        "covered_count": int((coverage_resolved["coverage_status"] == "covered").sum()),
+        "not_covered_count": int(
+            (coverage_resolved["coverage_status"] == "not_covered").sum()
+        ),
+        "coverage_unresolved_count": len(coverage_unresolved),
+        "conditional_coverage_resolved": (
+            float((coverage_resolved["coverage_status"] == "covered").mean())
+            if len(coverage_resolved)
+            else np.nan
+        ),
+        "unresolved_replication_rate": float(
+            successful["cr_status"]
+            .isin(["partially_unresolved", "fully_unresolved"])
+            .mean()
+        )
+        if successes
+        else np.nan,
+        "resolved_replications": int(
+            successful["cr_is_numerically_resolved"].astype(bool).sum()
+        )
+        if "cr_is_numerically_resolved" in successful
+        else int(
+            (
+                ~successful["cr_status"].isin(
+                    ["partially_unresolved", "fully_unresolved"]
+                )
+            ).sum()
+        ),
+        "partially_unresolved_replications": int(
+            (successful["cr_status"] == "partially_unresolved").sum()
+        ),
+        "fully_unresolved_replications": int(
+            (group["cr_status"] == "fully_unresolved").sum()
+        ),
+        "valid_empty_region_rate": float(
+            (successful["cr_status"] == "empty_valid").mean()
+        )
+        if successes
+        else np.nan,
+        "unresolved_apparent_empty_count": int(
+            (
+                successful["empty_cr"].astype(bool)
+                & (successful["cr_status"] == "partially_unresolved")
+            ).sum()
+        ),
+        "valid_full_grid_rate": float(
+            (successful["cr_status"] == "full_grid_valid").mean()
+        )
+        if successes
+        else np.nan,
+        "unresolved_apparent_full_grid_count": int(
+            (
+                (successful["unresolved_alpha_evaluations"] > 0)
+                & (
+                    successful["accepted_alpha_evaluations"]
+                    == successful["usable_alpha_evaluations"]
+                )
+            ).sum()
+        ),
         "bias": float(successful["bias"].mean()) if successes else np.nan,
         "rmse": (
             float(np.sqrt(successful["squared_error"].mean())) if successes else np.nan
@@ -506,6 +631,7 @@ def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
         "pi",
         "tau",
         "iteration_warning_policy",
+        "hard_failure_policy",
         "grid_variant",
     ]
     rows: list[dict[str, Any]] = []
@@ -529,6 +655,7 @@ def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
                 "iteration_warning_policy": str(
                     group["iteration_warning_policy"].iloc[0]
                 ),
+                "hard_failure_policy": str(group["hard_failure_policy"].iloc[0]),
                 "grid_variant": grid_variant,
                 **_summarize_group(group),
             }
@@ -568,6 +695,15 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--hard-failure-policy",
+        choices=HARD_FAILURE_POLICIES,
+        default="unresolved",
+        help=(
+            "unresolved is the production default; legacy_reject reproduces "
+            "sentinel rejection"
+        ),
+    )
+    parser.add_argument(
         "--calibration-replications",
         type=Path,
         default=None,
@@ -580,16 +716,19 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
     policy = args.iteration_warning_policy
+    hard_failure_policy = args.hard_failure_policy
+    policy_stem = f"{policy}_{hard_failure_policy}"
     summary_output = _safe_output_path(
         args.summary_output
-        or POLICY_OUTPUT_DIRECTORY / f"oracle_grid_resolution_{policy}_summary.csv"
+        or POLICY_OUTPUT_DIRECTORY / f"oracle_grid_resolution_{policy_stem}_summary.csv"
     )
     replication_output = _safe_output_path(
         args.replication_output
-        or POLICY_OUTPUT_DIRECTORY / f"oracle_grid_resolution_{policy}_replications.csv"
+        or POLICY_OUTPUT_DIRECTORY
+        / f"oracle_grid_resolution_{policy_stem}_replications.csv"
     )
     calibration_input = args.calibration_replications or (
-        POLICY_OUTPUT_DIRECTORY / f"oracle_calibration_{policy}_replications.csv"
+        POLICY_OUTPUT_DIRECTORY / f"oracle_calibration_{policy_stem}_replications.csv"
     )
     direct_lookup = load_direct_calibration(calibration_input)
     designs = make_simulation_grid(
@@ -607,6 +746,7 @@ def main() -> None:
     )
     print("QuantReg covariance: robust / epa / hsheather (production default)")
     print(f"Iteration-warning policy: {policy}")
+    print(f"Hard-failure policy: {hard_failure_policy}")
     print(f"Direct true-alpha calibration input: {calibration_input}")
 
     replications = run_diagnostic(
@@ -614,6 +754,7 @@ def main() -> None:
         direct_lookup,
         max_iter=args.max_iter,
         iteration_warning_policy=policy,
+        hard_failure_policy=hard_failure_policy,
     )
     summary = summarize_replications(replications)
     replication_output.parent.mkdir(parents=True, exist_ok=True)

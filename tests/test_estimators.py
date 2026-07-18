@@ -16,6 +16,7 @@ from ivqr.ch_inverse import (
     estimate_ch_ivqr_controls,
     evaluate_alpha_ch_ivqr,
 )
+from simulation.results import build_simulation_result_row
 
 
 def _tiny_data():
@@ -30,10 +31,12 @@ def test_ch_and_post_selection_public_defaults_use_valid_warning_fits() -> None:
         estimate_post_selection_ivqr,
     )
     for function in functions:
-        parameter = inspect.signature(function).parameters[
-            "iteration_warning_policy"
-        ]
+        parameter = inspect.signature(function).parameters["iteration_warning_policy"]
         assert parameter.default == "use_if_valid"
+    for function in (estimate_ch_ivqr_controls, estimate_post_selection_ivqr):
+        parameter = inspect.signature(function).parameters["hard_failure_policy"]
+        assert parameter.default == "unresolved"
+    assert "hard_failure_policy" not in inspect.signature(estimate_dml_ivqr).parameters
 
 
 def test_oracle_propagates_iteration_warning_policy(monkeypatch) -> None:
@@ -52,8 +55,10 @@ def test_oracle_propagates_iteration_warning_policy(monkeypatch) -> None:
         tau=0.5,
         oracle_indices=np.array([0]),
         iteration_warning_policy="use_if_valid",
+        hard_failure_policy="unresolved",
     )
     assert captured["iteration_warning_policy"] == "use_if_valid"
+    assert captured["hard_failure_policy"] == "unresolved"
     assert result.estimator == "oracle"
 
 
@@ -91,6 +96,96 @@ def test_post_selection_evaluator_propagates_iteration_warning_policy(
     )
     assert captured["iteration_warning_policy"] == "use_if_valid"
     assert result is expected
+
+
+def test_unresolved_status_fields_are_serialized() -> None:
+    design = Design("dgp1", 80, 20, 1.0, 0.5, rep=0, seed=321)
+    result = EstimationResult(
+        estimator="oracle",
+        alpha_hat=1.0,
+        alpha_true=1.0,
+        tau=0.5,
+        converged=True,
+        failed=False,
+        message="ok",
+        objective_value=1.0,
+        at_grid_boundary=False,
+        alpha_grid_size=3,
+        failed_alpha_count=1,
+        cr_lower=1.0,
+        cr_upper=1.0,
+        cr_length=0.0,
+        cr_covers_true=True,
+        cr_empty=False,
+        cr_disconnected=False,
+        selected_controls=5,
+        runtime_seconds=0.1,
+        hard_failure_policy="unresolved",
+        cr_status="partially_unresolved",
+        cr_is_numerically_resolved=False,
+        cr_unresolved_count=1,
+        cr_unresolved_alphas="[0.0]",
+        coverage_status="covered",
+        point_estimate_status="potentially_unresolved",
+        usable_alpha_evaluations=2,
+        unresolved_alpha_evaluations=1,
+    )
+    row = build_simulation_result_row(design, result, np.array([0.0, 1.0, 2.0]))
+    for field in (
+        "hard_failure_policy",
+        "cr_status",
+        "cr_is_numerically_resolved",
+        "cr_unresolved_count",
+        "cr_unresolved_alphas",
+        "coverage_status",
+        "point_estimate_status",
+        "usable_alpha_evaluations",
+        "unresolved_alpha_evaluations",
+    ):
+        assert row[field] == getattr(result, field)
+
+
+def test_ch_hard_failure_policy_controls_inference_not_alpha_usability(
+    monkeypatch,
+) -> None:
+    def fake_evaluate(**kwargs):
+        alpha = float(kwargs["alpha"])
+        usable = alpha != 1.0
+        return AlphaEvaluation(
+            statistic={0.0: 1.0, 1.0: np.inf, 2.0: 5.0}[alpha],
+            gamma_hat=np.array([0.0]),
+            cov_gamma=np.array([[1.0]]),
+            dim_z=1,
+            converged=usable,
+            usable=usable,
+            warning_type=None,
+            failure_reason=None if usable else "numerical_failure",
+            message="ok" if usable else "numerical_failure",
+        )
+
+    monkeypatch.setattr("ivqr.ch_inverse.evaluate_alpha_ch_ivqr", fake_evaluate)
+    data = _tiny_data()
+    kwargs = {
+        "data": data,
+        "tau": 0.5,
+        "x_controls": data.x[:, :1],
+        "estimator_name": "oracle",
+        "alphas": np.array([0.0, 1.0, 2.0]),
+    }
+    production = estimate_ch_ivqr_controls(**kwargs)
+    legacy = estimate_ch_ivqr_controls(**kwargs, hard_failure_policy="legacy_reject")
+
+    assert production.cr_status == "partially_unresolved"
+    assert production.cr_covers_true is None
+    assert production.coverage_status == "coverage_unresolved"
+    assert production.point_estimate_status == "potentially_unresolved"
+    assert production.unresolved_alpha_evaluations == 1
+
+    assert legacy.hard_failure_policy == "legacy_reject"
+    assert legacy.cr_status == "valid"
+    assert legacy.cr_covers_true is False
+    assert legacy.coverage_status == "not_covered"
+    assert legacy.failed_alpha_count == 1
 
 
 @pytest.mark.slow

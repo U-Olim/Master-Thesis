@@ -53,6 +53,11 @@ def test_summary_uses_successful_replications_and_scipy_critical_value() -> None
     assert summary["rejection_rate"] == pytest.approx(0.5)
     assert summary["implied_coverage"] == pytest.approx(0.5)
     assert summary["mean_wald"] == pytest.approx(3.0)
+    assert summary["valid_coverage_denominator"] == 2
+    assert summary["covered_count"] == 1
+    assert summary["not_covered_count"] == 1
+    assert summary["coverage_unresolved_count"] == 1
+    assert summary["conditional_coverage_resolved"] == pytest.approx(0.5)
     assert summary["theoretical_chi2_q95"] == pytest.approx(
         diagnostic.chi2.ppf(0.95, df=1)
     )

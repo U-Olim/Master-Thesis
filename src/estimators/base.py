@@ -127,6 +127,15 @@ class EstimationResult:
     selected_controls: int | None
     runtime_seconds: float
     error_type: str | None = None
+    hard_failure_policy: str = "not_applicable"
+    cr_status: str = "not_applicable"
+    cr_is_numerically_resolved: bool | None = None
+    cr_unresolved_count: int = 0
+    cr_unresolved_alphas: str = "[]"
+    coverage_status: str = "unknown"
+    point_estimate_status: str = "not_applicable"
+    usable_alpha_evaluations: int | None = None
+    unresolved_alpha_evaluations: int | None = None
 
     alpha_grid_min: float | None = None
     alpha_grid_max: float | None = None
@@ -238,6 +247,11 @@ class EstimationResult:
             "n_blocks": self.cr_n_blocks,
             "disconnected": self.cr_disconnected,
             "hull_length": self.cr_hull_length,
+            "status": self.cr_status,
+            "is_numerically_resolved": self.cr_is_numerically_resolved,
+            "unresolved_count": self.cr_unresolved_count,
+            "unresolved_alphas": self.cr_unresolved_alphas,
+            "coverage_status": self.coverage_status,
         }
 
     @property

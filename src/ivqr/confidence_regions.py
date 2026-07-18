@@ -12,27 +12,60 @@ alpha grid.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from scipy.stats import chi2
 
 
 FAILED_ALPHA_STATISTIC = 1e12
+ConfidenceRegionStatus = Literal[
+    "valid",
+    "partially_unresolved",
+    "fully_unresolved",
+    "empty_valid",
+    "full_grid_valid",
+]
+CoverageStatus = Literal["covered", "not_covered", "coverage_unresolved", "unknown"]
+PointEstimateStatus = Literal["resolved", "potentially_unresolved", "fully_unresolved"]
 
 
 __all__ = [
     "FAILED_ALPHA_STATISTIC",
+    "AlphaGridMasks",
     "ConfidenceRegion",
+    "PointEstimateResult",
     "adjust_critical_value",
     "invert_score_test",
     "critical_value_chi_square",
     "validate_critical_value_multiplier",
     "sanitize_grid_statistics",
+    "classify_alpha_grid",
     "argmin_grid",
+    "argmin_grid_usable",
     "summarize_alpha_grid_diagnostics",
     "merge_region_and_grid_diagnostics",
 ]
+
+
+@dataclass(frozen=True)
+class AlphaGridMasks:
+    """Disjoint inferential states for each alpha-grid evaluation."""
+
+    usable: np.ndarray
+    accepted: np.ndarray
+    rejected: np.ndarray
+    unresolved: np.ndarray
+
+
+@dataclass(frozen=True)
+class PointEstimateResult:
+    """Grid argmin restricted to finite usable alpha evaluations."""
+
+    alpha_hat: float | None
+    statistic: float | None
+    at_boundary: bool
+    status: PointEstimateStatus
 
 
 @dataclass(frozen=True)
@@ -55,6 +88,14 @@ class ConfidenceRegion:
     critical_value_multiplier: float
     critical_value_adjusted: float
     statistic_reference: float
+    status: ConfidenceRegionStatus
+    is_numerically_resolved: bool
+    unresolved_count: int
+    unresolved_alphas: tuple[float, ...]
+    usable_count: int
+    rejected_count: int
+    full_grid_accepted: bool
+    coverage_status: CoverageStatus
 
     @property
     def region_length(self) -> float:
@@ -153,6 +194,48 @@ def _readonly_copy(values: np.ndarray) -> np.ndarray:
     return copied
 
 
+def _readonly_bool_copy(values: np.ndarray) -> np.ndarray:
+    copied = np.array(values, dtype=bool, copy=True)
+    copied.setflags(write=False)
+    return copied
+
+
+def classify_alpha_grid(
+    statistics: np.ndarray,
+    usable: np.ndarray | list[bool],
+    critical_value: float,
+) -> AlphaGridMasks:
+    """Partition alpha evaluations into accepted, rejected, and unresolved.
+
+    A failed evaluation is unresolved regardless of its numeric placeholder.
+    The returned masks are pairwise disjoint and exhaustive.
+    """
+    statistics = np.asarray(statistics, dtype=float)
+    usable_array = np.asarray(usable)
+    critical_value = _validate_critical_value(critical_value)
+    if statistics.ndim != 1 or statistics.size == 0:
+        raise ValueError("statistics must be a nonempty one-dimensional array")
+    if usable_array.dtype != np.bool_ or usable_array.ndim != 1:
+        raise ValueError("usable must be a one-dimensional boolean array")
+    if statistics.size != usable_array.size:
+        raise ValueError("statistics and usable must have equal length")
+    usable_mask = usable_array & np.isfinite(statistics)
+    unresolved = ~usable_mask
+    accepted = usable_mask & (statistics <= critical_value)
+    rejected = usable_mask & (statistics > critical_value)
+    if not np.all(accepted | rejected | unresolved):
+        raise RuntimeError("alpha inference masks must be exhaustive")
+    overlap = (accepted & rejected) | (accepted & unresolved) | (rejected & unresolved)
+    if np.any(overlap):
+        raise RuntimeError("alpha inference masks must be pairwise disjoint")
+    return AlphaGridMasks(
+        usable=_readonly_bool_copy(usable_mask),
+        accepted=_readonly_bool_copy(accepted),
+        rejected=_readonly_bool_copy(rejected),
+        unresolved=_readonly_bool_copy(unresolved),
+    )
+
+
 def _accepted_blocks(
     alpha_candidates: np.ndarray,
     accepted: np.ndarray,
@@ -219,23 +302,30 @@ def _accepted_blocks_interpolated(
     statistic_values: np.ndarray,
     critical_value: float,
     accepted: np.ndarray,
+    usable: np.ndarray,
 ) -> tuple[tuple[float, float], ...]:
     alpha_candidates = _as_1d_array(alpha_candidates, "alpha candidates")
-    statistic_values = _as_1d_array(statistic_values, "statistic values")
+    statistic_values = np.asarray(statistic_values, dtype=float)
     _validate_strictly_increasing(alpha_candidates)
 
     accepted_array = np.asarray(accepted)
     if accepted_array.dtype != np.bool_:
         raise ValueError("accepted mask must be boolean")
     accepted = accepted_array
+    usable_array = np.asarray(usable)
+    if usable_array.dtype != np.bool_ or usable_array.ndim != 1:
+        raise ValueError("usable mask must be one-dimensional and boolean")
+    usable = usable_array
     if accepted.ndim != 1:
         raise ValueError("accepted mask must be one-dimensional")
     if not (
-        accepted.size == alpha_candidates.size == statistic_values.size
+        accepted.size == usable.size == alpha_candidates.size == statistic_values.size
     ):
         raise ValueError(
             "accepted mask, alpha candidates, and statistic values must have equal length"
         )
+    if not np.all(np.isfinite(statistic_values[usable])):
+        raise ValueError("usable statistic values must be finite")
     if not np.any(accepted):
         return ()
 
@@ -249,7 +339,7 @@ def _accepted_blocks_interpolated(
         end = int(block[-1])
 
         lower = float(alpha_candidates[start])
-        if start > 0:
+        if start > 0 and usable[start - 1]:
             lower = _interpolate_crossing(
                 float(alpha_candidates[start - 1]),
                 float(statistic_values[start - 1]),
@@ -259,7 +349,7 @@ def _accepted_blocks_interpolated(
             )
 
         upper = float(alpha_candidates[end])
-        if end < alpha_candidates.size - 1:
+        if end < alpha_candidates.size - 1 and usable[end + 1]:
             upper = _interpolate_crossing(
                 float(alpha_candidates[end]),
                 float(statistic_values[end]),
@@ -273,6 +363,35 @@ def _accepted_blocks_interpolated(
     return tuple(blocks)
 
 
+def _coverage_from_grid(
+    alphas: np.ndarray,
+    blocks: tuple[tuple[float, float], ...],
+    masks: AlphaGridMasks,
+    alpha_true: float | None,
+) -> tuple[bool | None, CoverageStatus]:
+    """Return tri-state coverage using only the truth's resolved neighborhood."""
+    if alpha_true is None:
+        return None, "unknown"
+    alpha_true = float(alpha_true)
+    if not np.isfinite(alpha_true):
+        raise ValueError("alpha_true must be finite when provided")
+    if any(lower <= alpha_true <= upper for lower, upper in blocks):
+        return True, "covered"
+    exact = np.flatnonzero(np.isclose(alphas, alpha_true, rtol=0.0, atol=1e-12))
+    if exact.size:
+        index = int(exact[0])
+        if masks.unresolved[index]:
+            return None, "coverage_unresolved"
+        return False, "not_covered"
+    if alpha_true < alphas[0] or alpha_true > alphas[-1]:
+        return False, "not_covered"
+    right = int(np.searchsorted(alphas, alpha_true, side="right"))
+    left = right - 1
+    if masks.unresolved[left] or masks.unresolved[right]:
+        return None, "coverage_unresolved"
+    return False, "not_covered"
+
+
 def invert_score_test(
     alphas: np.ndarray,
     statistics: np.ndarray,
@@ -281,18 +400,28 @@ def invert_score_test(
     statistic_reference: float | None = None,
     inversion_type: str = "absolute",
     critical_value_multiplier: float = 1.0,
+    usable: np.ndarray | list[bool] | None = None,
 ) -> ConfidenceRegion:
     """Invert a grid-evaluated score test into a confidence region.
 
-    In this project, confidence regions are formed by inverting the scalar
-    alpha objective over a grid. Failed alpha evaluations should be represented
-    by large finite statistics before calling this function.
+    Unusable evaluations are unresolved: they are neither rejected nor used
+    for boundary interpolation. Omitting ``usable`` preserves the all-usable
+    behavior for callers whose supplied statistics are already valid.
     """
-    alphas, statistics = _validate_grid_and_statistics(
-        alphas,
-        statistics,
-        sort_alphas=True,
+    alphas = _as_1d_array(alphas, "alpha grid")
+    statistics = np.asarray(statistics, dtype=float)
+    if statistics.ndim != 1 or statistics.size != alphas.size:
+        raise ValueError("alpha grid and statistics must be matching vectors")
+    usable_array = (
+        np.ones(alphas.size, dtype=bool) if usable is None else np.asarray(usable)
     )
+    if usable_array.dtype != np.bool_ or usable_array.shape != alphas.shape:
+        raise ValueError("usable must be a boolean vector matching the alpha grid")
+    order = np.argsort(alphas)
+    alphas = alphas[order]
+    statistics = statistics[order]
+    usable_array = usable_array[order]
+    _validate_strictly_increasing(alphas)
     critical_value_nominal = _validate_critical_value(critical_value)
     critical_value_multiplier = validate_critical_value_multiplier(
         critical_value_multiplier
@@ -310,15 +439,52 @@ def invert_score_test(
     )
 
     statistic_values = statistics - statistic_reference
-    accepted_mask = statistic_values <= critical_value_adjusted
-    accepted = alphas[accepted_mask]
+    masks = classify_alpha_grid(statistic_values, usable_array, critical_value_adjusted)
+    accepted = alphas[masks.accepted]
     blocks = _accepted_blocks_interpolated(
         alphas,
         statistic_values,
         critical_value_adjusted,
-        accepted_mask,
+        masks.accepted,
+        masks.usable,
     )
-    covers_true = _covers_alpha(blocks, alpha_true)
+    covers_true, coverage_status = _coverage_from_grid(
+        alphas, blocks, masks, alpha_true
+    )
+    unresolved_alphas = tuple(float(value) for value in alphas[masks.unresolved])
+    unresolved_count = len(unresolved_alphas)
+    usable_count = int(np.sum(masks.usable))
+    rejected_count = int(np.sum(masks.rejected))
+    fully_resolved = unresolved_count == 0
+    full_grid_accepted = fully_resolved and accepted.size == alphas.size
+    if usable_count == 0:
+        status: ConfidenceRegionStatus = "fully_unresolved"
+    elif unresolved_count:
+        status = "partially_unresolved"
+    elif accepted.size == 0:
+        status = "empty_valid"
+    elif full_grid_accepted:
+        status = "full_grid_valid"
+    else:
+        status = "valid"
+
+    shared = {
+        "covers_true": covers_true,
+        "selected_grid": _readonly_copy(accepted),
+        "critical_value": critical_value_adjusted,
+        "critical_value_nominal": critical_value_nominal,
+        "critical_value_multiplier": critical_value_multiplier,
+        "critical_value_adjusted": critical_value_adjusted,
+        "statistic_reference": statistic_reference,
+        "status": status,
+        "is_numerically_resolved": fully_resolved,
+        "unresolved_count": unresolved_count,
+        "unresolved_alphas": unresolved_alphas,
+        "usable_count": usable_count,
+        "rejected_count": rejected_count,
+        "full_grid_accepted": full_grid_accepted,
+        "coverage_status": coverage_status,
+    }
 
     if accepted.size == 0:
         return ConfidenceRegion(
@@ -331,18 +497,14 @@ def invert_score_test(
             n_blocks=0,
             empty=True,
             disconnected=False,
-            covers_true=covers_true,
-            selected_grid=_readonly_copy(accepted),
-            critical_value=critical_value_adjusted,
-            critical_value_nominal=critical_value_nominal,
-            critical_value_multiplier=critical_value_multiplier,
-            critical_value_adjusted=critical_value_adjusted,
-            statistic_reference=statistic_reference,
+            **shared,
         )
 
     lower = float(min(block_lower for block_lower, _block_upper in blocks))
     upper = float(max(block_upper for _block_lower, block_upper in blocks))
-    region_length = float(sum(block_upper - block_lower for block_lower, block_upper in blocks))
+    region_length = float(
+        sum(block_upper - block_lower for block_lower, block_upper in blocks)
+    )
     hull_length = upper - lower
 
     return ConfidenceRegion(
@@ -355,13 +517,7 @@ def invert_score_test(
         n_blocks=len(blocks),
         empty=False,
         disconnected=len(blocks) > 1,
-        covers_true=covers_true,
-        selected_grid=_readonly_copy(accepted),
-        critical_value=critical_value_adjusted,
-        critical_value_nominal=critical_value_nominal,
-        critical_value_multiplier=critical_value_multiplier,
-        critical_value_adjusted=critical_value_adjusted,
-        statistic_reference=statistic_reference,
+        **shared,
     )
 
 
@@ -437,6 +593,36 @@ def argmin_grid(
     at_boundary = min_index == 0 or min_index == alphas.size - 1
 
     return alpha_hat, min_statistic, bool(at_boundary)
+
+
+def argmin_grid_usable(
+    alphas: np.ndarray,
+    statistics: np.ndarray,
+    usable: np.ndarray | list[bool],
+) -> PointEstimateResult:
+    """Minimize over usable finite statistics without selecting failures."""
+    alphas = _as_1d_array(alphas, "alpha grid")
+    statistics = np.asarray(statistics, dtype=float)
+    usable_array = np.asarray(usable)
+    if statistics.ndim != 1 or statistics.shape != alphas.shape:
+        raise ValueError("statistics must match the alpha grid")
+    if usable_array.dtype != np.bool_ or usable_array.shape != alphas.shape:
+        raise ValueError("usable must be a boolean vector matching the alpha grid")
+    _validate_strictly_increasing(alphas)
+    valid = usable_array & np.isfinite(statistics)
+    if not np.any(valid):
+        return PointEstimateResult(None, None, False, "fully_unresolved")
+    valid_indices = np.flatnonzero(valid)
+    index = int(valid_indices[int(np.argmin(statistics[valid]))])
+    status: PointEstimateStatus = (
+        "resolved" if np.all(valid) else "potentially_unresolved"
+    )
+    return PointEstimateResult(
+        alpha_hat=float(alphas[index]),
+        statistic=float(statistics[index]),
+        at_boundary=index == 0 or index == alphas.size - 1,
+        status=status,
+    )
 
 
 def _nan() -> float:
@@ -526,14 +712,16 @@ def summarize_alpha_grid_diagnostics(
     max_test_stat = _nan()
     test_stat_at_alpha_hat = _nan()
     if test_stats is not None:
-        stats = _as_1d_array(test_stats, "test_stats")
-        if stats.size != alpha_grid_size:
+        stats = np.asarray(test_stats, dtype=float)
+        if stats.ndim != 1 or stats.size != alpha_grid_size:
             raise ValueError("test_stats and alpha grid must have equal length")
-        min_test_stat = float(np.min(stats))
-        max_test_stat = float(np.max(stats))
+        finite_stats = stats[np.isfinite(stats)]
+        if finite_stats.size:
+            min_test_stat = float(np.min(finite_stats))
+            max_test_stat = float(np.max(finite_stats))
         if np.isfinite(alpha_hat_value):
             matches = np.flatnonzero(np.isclose(alphas, alpha_hat_value))
-            if matches.size > 0:
+            if matches.size > 0 and np.isfinite(stats[int(matches[0])]):
                 test_stat_at_alpha_hat = float(stats[int(matches[0])])
 
     if critical_value_nominal is None:
@@ -598,4 +786,3 @@ def merge_region_and_grid_diagnostics(
         }
     )
     return diagnostics
-
