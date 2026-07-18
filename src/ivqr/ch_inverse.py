@@ -7,6 +7,7 @@ logic is shared by the Oracle and post-selection IVQR estimators.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Callable
 import json
 from time import perf_counter
 from typing import Literal, cast
@@ -49,6 +50,7 @@ from utils.validation import (
 IterationWarningPolicy = Literal["reject", "use_if_valid"]
 AlphaInferenceStatus = Literal["valid", "unresolved"]
 HardFailurePolicy = Literal["unresolved", "legacy_reject"]
+GridStrategy = Literal["fixed", "adaptive"]
 ITERATION_WARNING_POLICIES: tuple[IterationWarningPolicy, ...] = (
     "use_if_valid",
     "reject",
@@ -58,6 +60,10 @@ HARD_FAILURE_POLICIES: tuple[HardFailurePolicy, ...] = (
     "unresolved",
     "legacy_reject",
 )
+GRID_STRATEGIES: tuple[GridStrategy, ...] = ("fixed", "adaptive")
+DEFAULT_REFINEMENT_TOLERANCE = 0.025
+DEFAULT_MAX_REFINEMENT_DEPTH = 10
+DEFAULT_MAX_ALPHA_EVALUATIONS = 201
 
 
 @dataclass(frozen=True)
@@ -88,6 +94,37 @@ class AlphaEvaluation:
         return "valid" if self.usable else "unresolved"
 
 
+@dataclass(frozen=True)
+class AlphaGridEvaluation:
+    """Cached, sorted evaluations and adaptive-refinement metadata."""
+
+    alphas: np.ndarray
+    evaluations: tuple[AlphaEvaluation, ...]
+    grid_strategy: GridStrategy
+    initial_alpha_grid_size: int
+    refinement_tolerance: float
+    refinement_depth_reached: int
+    refinement_limit_hit: bool
+    max_alpha_evaluations_hit: bool
+    number_of_refined_intervals: int
+    number_of_unresolved_refinement_barriers: int
+
+    @property
+    def final_alpha_evaluations(self) -> int:
+        return len(self.evaluations)
+
+    @property
+    def spacings(self) -> tuple[float | None, float | None, float | None]:
+        differences = np.diff(self.alphas)
+        if differences.size == 0:
+            return None, None, None
+        return (
+            float(np.min(differences)),
+            float(np.median(differences)),
+            float(np.max(differences)),
+        )
+
+
 def validate_iteration_warning_policy(
     policy: IterationWarningPolicy | str,
 ) -> IterationWarningPolicy:
@@ -106,6 +143,160 @@ def validate_hard_failure_policy(
         choices = ", ".join(HARD_FAILURE_POLICIES)
         raise ValueError(f"hard_failure_policy must be one of: {choices}")
     return cast(HardFailurePolicy, policy)
+
+
+def validate_grid_strategy(strategy: GridStrategy | str) -> GridStrategy:
+    """Validate the production CH alpha-grid strategy."""
+    if strategy not in GRID_STRATEGIES:
+        choices = ", ".join(GRID_STRATEGIES)
+        raise ValueError(f"grid_strategy must be one of: {choices}")
+    return cast(GridStrategy, strategy)
+
+
+def evaluate_ch_alpha_grid(
+    initial_alphas: np.ndarray,
+    evaluate_alpha: Callable[[float], AlphaEvaluation],
+    *,
+    critical_value: float,
+    grid_strategy: GridStrategy = "adaptive",
+    refinement_tolerance: float = DEFAULT_REFINEMENT_TOLERANCE,
+    max_refinement_depth: int = DEFAULT_MAX_REFINEMENT_DEPTH,
+    max_alpha_evaluations: int = DEFAULT_MAX_ALPHA_EVALUATIONS,
+) -> AlphaGridEvaluation:
+    """Evaluate and optionally refine valid CH acceptance transitions.
+
+    Adaptive refinement bisects only adjacent, usable accepted/rejected pairs.
+    An unresolved midpoint becomes a permanent barrier. Evaluations are cached
+    by their exact float value, so a candidate is fitted at most once per call.
+    """
+    strategy = validate_grid_strategy(grid_strategy)
+    raw_alphas = np.asarray(initial_alphas, dtype=float)
+    if raw_alphas.ndim != 1 or raw_alphas.size == 0:
+        raise ValueError("initial_alphas must be a nonempty vector")
+    if not np.all(np.isfinite(raw_alphas)):
+        raise ValueError("initial_alphas must contain only finite values")
+    alphas = np.unique(raw_alphas)
+    if not np.isfinite(critical_value) or critical_value < 0:
+        raise ValueError("critical_value must be finite and nonnegative")
+    if not np.isfinite(refinement_tolerance) or refinement_tolerance <= 0:
+        raise ValueError("refinement_tolerance must be positive and finite")
+    if (
+        not isinstance(max_refinement_depth, int)
+        or isinstance(max_refinement_depth, bool)
+        or max_refinement_depth < 0
+    ):
+        raise ValueError("max_refinement_depth must be a nonnegative integer")
+    if (
+        not isinstance(max_alpha_evaluations, int)
+        or isinstance(max_alpha_evaluations, bool)
+        or max_alpha_evaluations < 1
+    ):
+        raise ValueError("max_alpha_evaluations must be a positive integer")
+    if strategy == "adaptive" and alphas.size > max_alpha_evaluations:
+        raise ValueError("max_alpha_evaluations must cover the unique initial grid")
+
+    cache: dict[float, AlphaEvaluation] = {}
+
+    def cached_evaluate(alpha: float) -> AlphaEvaluation:
+        key = float(alpha)
+        if key not in cache:
+            cache[key] = evaluate_alpha(key)
+        return cache[key]
+
+    for alpha in alphas:
+        cached_evaluate(float(alpha))
+
+    depth_by_interval = {
+        (float(left), float(right)): 0
+        for left, right in zip(alphas[:-1], alphas[1:], strict=True)
+    }
+    depth_reached = 0
+    depth_limit_hit = False
+    evaluation_limit_hit = False
+    refined_intervals = 0
+    unresolved_barriers = 0
+
+    if strategy == "adaptive":
+        while True:
+            points = np.array(sorted(cache), dtype=float)
+            transitions: list[tuple[float, float, int]] = []
+            for left, right in zip(points[:-1], points[1:], strict=True):
+                left_key, right_key = float(left), float(right)
+                left_eval, right_eval = cache[left_key], cache[right_key]
+                if not (
+                    left_eval.usable
+                    and right_eval.usable
+                    and np.isfinite(left_eval.statistic)
+                    and np.isfinite(right_eval.statistic)
+                ):
+                    continue
+                changes = (left_eval.statistic <= critical_value) != (
+                    right_eval.statistic <= critical_value
+                )
+                if not changes or right_key - left_key <= refinement_tolerance + 1e-12:
+                    continue
+                depth = depth_by_interval.get((left_key, right_key), 0)
+                if depth >= max_refinement_depth:
+                    depth_limit_hit = True
+                    continue
+                transitions.append((left_key, right_key, depth))
+            if not transitions:
+                break
+            progressed = False
+            for left, right, depth in transitions:
+                if len(cache) >= max_alpha_evaluations:
+                    evaluation_limit_hit = True
+                    break
+                midpoint = float(left + (right - left) / 2.0)
+                if midpoint in cache:
+                    continue
+                evaluation = cached_evaluate(midpoint)
+                progressed = True
+                refined_intervals += 1
+                child_depth = depth + 1
+                depth_reached = max(depth_reached, child_depth)
+                depth_by_interval.pop((left, right), None)
+                depth_by_interval[(left, midpoint)] = child_depth
+                depth_by_interval[(midpoint, right)] = child_depth
+                if not evaluation.usable or not np.isfinite(evaluation.statistic):
+                    unresolved_barriers += 1
+            if evaluation_limit_hit or not progressed:
+                break
+
+    final_alphas = np.array(sorted(cache), dtype=float)
+    final_alphas.setflags(write=False)
+    return AlphaGridEvaluation(
+        alphas=final_alphas,
+        evaluations=tuple(cache[float(alpha)] for alpha in final_alphas),
+        grid_strategy=strategy,
+        initial_alpha_grid_size=int(alphas.size),
+        refinement_tolerance=float(refinement_tolerance),
+        refinement_depth_reached=depth_reached,
+        refinement_limit_hit=depth_limit_hit or evaluation_limit_hit,
+        max_alpha_evaluations_hit=evaluation_limit_hit,
+        number_of_refined_intervals=refined_intervals,
+        number_of_unresolved_refinement_barriers=unresolved_barriers,
+    )
+
+
+def grid_metadata_kwargs(grid: AlphaGridEvaluation) -> dict[str, object]:
+    minimum, median, maximum = grid.spacings
+    return {
+        "grid_strategy": grid.grid_strategy,
+        "initial_alpha_grid_size": grid.initial_alpha_grid_size,
+        "final_alpha_evaluations": grid.final_alpha_evaluations,
+        "refinement_tolerance": grid.refinement_tolerance,
+        "refinement_depth_reached": grid.refinement_depth_reached,
+        "refinement_limit_hit": grid.refinement_limit_hit,
+        "max_alpha_evaluations_hit": grid.max_alpha_evaluations_hit,
+        "number_of_refined_intervals": grid.number_of_refined_intervals,
+        "number_of_unresolved_refinement_barriers": (
+            grid.number_of_unresolved_refinement_barriers
+        ),
+        "minimum_final_grid_spacing": minimum,
+        "median_final_grid_spacing": median,
+        "maximum_final_grid_spacing": maximum,
+    }
 
 
 def _failed_alpha_evaluation(
@@ -453,6 +644,8 @@ def failed_ch_ivqr_result(
     usable_alpha_evaluations: int | None = None,
     unresolved_alpha_evaluations: int | None = None,
     cr_unresolved_alphas: str = "[]",
+    grid_strategy: GridStrategy = "adaptive",
+    grid_evaluation: AlphaGridEvaluation | None = None,
 ) -> EstimationResult:
     """Create a standard failed result for any CH-IVQR-style estimator."""
     if not np.isfinite(runtime_seconds) or runtime_seconds < 0:
@@ -484,9 +677,11 @@ def failed_ch_ivqr_result(
         cr_length=None,
         cr_covers_true=None,
         cr_empty=True,
-        cr_disconnected=None,
+        cr_disconnected=False,
         selected_controls=selected_controls,
         runtime_seconds=runtime_seconds,
+        cr_components=(),
+        cr_n_blocks=0,
         hard_failure_policy=hard_failure_policy,
         cr_status=(
             "fully_unresolved"
@@ -506,6 +701,8 @@ def failed_ch_ivqr_result(
         ),
         usable_alpha_evaluations=usable_alpha_evaluations,
         unresolved_alpha_evaluations=unresolved_alpha_evaluations,
+        grid_strategy=grid_strategy,
+        **({} if grid_evaluation is None else grid_metadata_kwargs(grid_evaluation)),
         **(
             estimator_runtime_columns(estimator=estimator, total_sec=runtime_seconds)
             if runtime_diagnostics is None
@@ -528,6 +725,10 @@ def estimate_ch_ivqr_controls(
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
     hard_failure_policy: HardFailurePolicy = "unresolved",
+    grid_strategy: GridStrategy = "adaptive",
+    refinement_tolerance: float = DEFAULT_REFINEMENT_TOLERANCE,
+    max_refinement_depth: int = DEFAULT_MAX_REFINEMENT_DEPTH,
+    max_alpha_evaluations: int = DEFAULT_MAX_ALPHA_EVALUATIONS,
     selected_controls: int | None = None,
 ) -> EstimationResult:
     """Estimate alpha by CH inverse-IVQR using a supplied control matrix.
@@ -536,7 +737,11 @@ def estimate_ch_ivqr_controls(
     ``iteration_warning_policy="reject"`` for legacy-result reproducibility.
     Genuine unusable fits are unresolved by default; set
     ``hard_failure_policy="legacy_reject"`` only to reproduce sentinel-based
-    rejection from historical simulations.
+    rejection from historical simulations. Production uses
+    ``grid_strategy="adaptive"`` with a 0.025 boundary tolerance, depth limit
+    10, and at most 201 alpha evaluations. ``"fixed"`` reproduces the legacy
+    initial-grid estimator. Adaptive point estimation minimizes over all usable
+    initial and refined evaluations.
     """
     start = perf_counter()
     alpha_loop_sec = float("nan")
@@ -546,6 +751,7 @@ def estimate_ch_ivqr_controls(
         iteration_warning_policy
     )
     hard_failure_policy = validate_hard_failure_policy(hard_failure_policy)
+    grid_strategy = validate_grid_strategy(grid_strategy)
     critical_value_multiplier = validate_critical_value_multiplier(
         critical_value_multiplier
     )
@@ -573,6 +779,7 @@ def estimate_ch_ivqr_controls(
             alpha_grid_size=None,
             failed_alpha_count=None,
             selected_controls=selected_controls,
+            grid_strategy=grid_strategy,
         )
 
     if alphas is None:
@@ -580,23 +787,35 @@ def estimate_ch_ivqr_controls(
     else:
         alphas = validate_alpha_grid(alphas)
 
-    statistics = np.empty(len(alphas), dtype=float)
-    usable_flags: list[bool] = []
+    critical = critical_value_chi_square(confidence_level, df=z_2d.shape[1])
+    adjusted_critical = adjust_critical_value(critical, critical_value_multiplier)
     alpha_loop_start = perf_counter()
-    for j, alpha in enumerate(alphas):
-        evaluation = evaluate_alpha_ch_ivqr(
+    grid_evaluation = evaluate_ch_alpha_grid(
+        alphas,
+        lambda alpha: evaluate_alpha_ch_ivqr(
             y=y,
             d=d,
             x_controls=x_controls,
             z=z_2d,
-            alpha=float(alpha),
+            alpha=alpha,
             tau=tau,
             max_iter=max_iter,
             iteration_warning_policy=iteration_warning_policy,
-        )
-        statistics[j] = evaluation.statistic
-        usable_flags.append(evaluation.usable)
+        ),
+        critical_value=adjusted_critical,
+        grid_strategy=grid_strategy,
+        refinement_tolerance=refinement_tolerance,
+        max_refinement_depth=max_refinement_depth,
+        max_alpha_evaluations=max_alpha_evaluations,
+    )
     alpha_loop_sec = perf_counter() - alpha_loop_start
+
+    alphas = grid_evaluation.alphas
+    statistics = np.array(
+        [evaluation.statistic for evaluation in grid_evaluation.evaluations],
+        dtype=float,
+    )
+    usable_flags = [evaluation.usable for evaluation in grid_evaluation.evaluations]
 
     usable = np.asarray(usable_flags, dtype=bool) & np.isfinite(statistics)
     num_failed = int(np.sum(~usable))
@@ -628,6 +847,8 @@ def estimate_ch_ivqr_controls(
                 total_sec=runtime_seconds,
                 alpha_loop_sec=alpha_loop_sec,
             ),
+            grid_strategy=grid_strategy,
+            grid_evaluation=grid_evaluation,
         )
 
     confidence_region_start = perf_counter()
@@ -635,8 +856,6 @@ def estimate_ch_ivqr_controls(
     alpha_hat = point_estimate.alpha_hat
     min_statistic = point_estimate.statistic
     at_boundary = point_estimate.at_boundary
-    critical = critical_value_chi_square(confidence_level, df=z_2d.shape[1])
-    adjusted_critical = adjust_critical_value(critical, critical_value_multiplier)
     masks = classify_alpha_grid(
         inference_statistics, inference_usable, adjusted_critical
     )
@@ -662,6 +881,8 @@ def estimate_ch_ivqr_controls(
         usable=inference_usable,
     )
     diagnostics = merge_region_and_grid_diagnostics(region, diagnostics)
+    if grid_strategy == "adaptive":
+        diagnostics["alpha_grid_step"] = None
     confidence_region_sec = perf_counter() - confidence_region_start
     runtime_seconds = perf_counter() - start
 
@@ -683,6 +904,7 @@ def estimate_ch_ivqr_controls(
         cr_covers_true=region.covers_true,
         cr_empty=diagnostics["cr_empty"],
         cr_disconnected=diagnostics["cr_disconnected"],
+        cr_components=region.components,
         selected_controls=selected_controls,
         runtime_seconds=runtime_seconds,
         hard_failure_policy=hard_failure_policy,
@@ -694,6 +916,7 @@ def estimate_ch_ivqr_controls(
         point_estimate_status=point_estimate.status,
         usable_alpha_evaluations=int(np.sum(usable)),
         unresolved_alpha_evaluations=num_failed,
+        **grid_metadata_kwargs(grid_evaluation),
         **estimator_runtime_columns(
             estimator=estimator_name,
             total_sec=runtime_seconds,
@@ -707,6 +930,12 @@ def estimate_ch_ivqr_controls(
 __all__ = [
     "AlphaInferenceStatus",
     "AlphaEvaluation",
+    "AlphaGridEvaluation",
+    "GridStrategy",
+    "GRID_STRATEGIES",
+    "DEFAULT_REFINEMENT_TOLERANCE",
+    "DEFAULT_MAX_REFINEMENT_DEPTH",
+    "DEFAULT_MAX_ALPHA_EVALUATIONS",
     "HardFailurePolicy",
     "HARD_FAILURE_POLICIES",
     "IterationWarningPolicy",
@@ -716,8 +945,11 @@ __all__ = [
     "ch_ivqr_design",
     "wald_statistic",
     "evaluate_alpha_ch_ivqr",
+    "evaluate_ch_alpha_grid",
     "failed_ch_ivqr_result",
+    "grid_metadata_kwargs",
     "estimate_ch_ivqr_controls",
     "validate_iteration_warning_policy",
     "validate_hard_failure_policy",
+    "validate_grid_strategy",
 ]

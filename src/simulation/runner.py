@@ -25,6 +25,11 @@ from estimators.post_selection import (
     estimate_post_selection_ivqr,
     validate_selection_lasso_multiplier,
 )
+from ivqr.ch_inverse import (
+    validate_grid_strategy,
+    validate_hard_failure_policy,
+    validate_iteration_warning_policy,
+)
 from simulation.config import (
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_ALPHA_MAX,
@@ -37,6 +42,12 @@ from simulation.config import (
     DEFAULT_DML_RIDGE_ALPHA,
     DEFAULT_ESTIMATORS,
     DEFAULT_N_JOBS,
+    DEFAULT_GRID_STRATEGY,
+    DEFAULT_REFINEMENT_TOLERANCE,
+    DEFAULT_MAX_REFINEMENT_DEPTH,
+    DEFAULT_MAX_ALPHA_EVALUATIONS,
+    DEFAULT_ITERATION_WARNING_POLICY,
+    DEFAULT_HARD_FAILURE_POLICY,
     DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
     ESTIMATORS,
@@ -115,6 +126,12 @@ class WorkerArgs:
     critical_value_multiplier: float
     selection_lasso_multiplier: float
     show_quantreg_warnings: bool
+    grid_strategy: str
+    refinement_tolerance: float
+    max_refinement_depth: int
+    max_alpha_evaluations: int
+    iteration_warning_policy: str
+    hard_failure_policy: str
 
 
 @contextmanager
@@ -429,6 +446,12 @@ def run_simulation_design(
     critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     selection_lasso_multiplier: float = 1.0,
     show_quantreg_warnings: bool = False,
+    grid_strategy: str = DEFAULT_GRID_STRATEGY,
+    refinement_tolerance: float = DEFAULT_REFINEMENT_TOLERANCE,
+    max_refinement_depth: int = DEFAULT_MAX_REFINEMENT_DEPTH,
+    max_alpha_evaluations: int = DEFAULT_MAX_ALPHA_EVALUATIONS,
+    iteration_warning_policy: str = DEFAULT_ITERATION_WARNING_POLICY,
+    hard_failure_policy: str = DEFAULT_HARD_FAILURE_POLICY,
 ) -> list[dict[str, object]]:
     """Generate one dataset and run requested estimators on it."""
     design = _validate_design(design)
@@ -450,6 +473,11 @@ def run_simulation_design(
         selection_lasso_multiplier
     )
     alphas = validate_alpha_grid(alphas)
+    grid_strategy = validate_grid_strategy(grid_strategy)
+    iteration_warning_policy = validate_iteration_warning_policy(
+        iteration_warning_policy
+    )
+    hard_failure_policy = validate_hard_failure_policy(hard_failure_policy)
 
     data = generate_data(design)
     estimator_random_state = _estimator_random_state(design.seed)
@@ -466,6 +494,12 @@ def run_simulation_design(
                         max_iter=quantreg_max_iter,
                         gmm_ridge=gmm_ridge,
                         critical_value_multiplier=critical_value_multiplier,
+                        grid_strategy=grid_strategy,
+                        refinement_tolerance=refinement_tolerance,
+                        max_refinement_depth=max_refinement_depth,
+                        max_alpha_evaluations=max_alpha_evaluations,
+                        iteration_warning_policy=iteration_warning_policy,
+                        hard_failure_policy=hard_failure_policy,
                     )
                 elif estimator_name == "post_selection":
                     result = estimate_post_selection_ivqr(
@@ -478,6 +512,12 @@ def run_simulation_design(
                         selection_random_state=estimator_random_state,
                         selection_lasso_multiplier=selection_lasso_multiplier,
                         critical_value_multiplier=critical_value_multiplier,
+                        grid_strategy=grid_strategy,
+                        refinement_tolerance=refinement_tolerance,
+                        max_refinement_depth=max_refinement_depth,
+                        max_alpha_evaluations=max_alpha_evaluations,
+                        iteration_warning_policy=iteration_warning_policy,
+                        hard_failure_policy=hard_failure_policy,
                     )
                 elif estimator_name == "dml":
                     quantile_solver = _validate_dml_quantile_solver(
@@ -530,6 +570,12 @@ def _run_worker(args: WorkerArgs) -> list[dict[str, object]]:
         critical_value_multiplier=args.critical_value_multiplier,
         selection_lasso_multiplier=args.selection_lasso_multiplier,
         show_quantreg_warnings=args.show_quantreg_warnings,
+        grid_strategy=args.grid_strategy,
+        refinement_tolerance=args.refinement_tolerance,
+        max_refinement_depth=args.max_refinement_depth,
+        max_alpha_evaluations=args.max_alpha_evaluations,
+        iteration_warning_policy=args.iteration_warning_policy,
+        hard_failure_policy=args.hard_failure_policy,
     )
 
 
@@ -553,6 +599,12 @@ def run_simulation_batch(
     selection_lasso_multiplier: float = 1.0,
     n_jobs: int = DEFAULT_N_JOBS,
     show_quantreg_warnings: bool = False,
+    grid_strategy: str = DEFAULT_GRID_STRATEGY,
+    refinement_tolerance: float = DEFAULT_REFINEMENT_TOLERANCE,
+    max_refinement_depth: int = DEFAULT_MAX_REFINEMENT_DEPTH,
+    max_alpha_evaluations: int = DEFAULT_MAX_ALPHA_EVALUATIONS,
+    iteration_warning_policy: str = DEFAULT_ITERATION_WARNING_POLICY,
+    hard_failure_policy: str = DEFAULT_HARD_FAILURE_POLICY,
 ) -> pd.DataFrame:
     """Run a batch of designs and optionally persist the raw rows to CSV."""
     designs = [_validate_design(design) for design in designs]
@@ -582,6 +634,12 @@ def run_simulation_batch(
             critical_value_multiplier=critical_value_multiplier,
             selection_lasso_multiplier=selection_lasso_multiplier,
             show_quantreg_warnings=show_quantreg_warnings,
+            grid_strategy=grid_strategy,
+            refinement_tolerance=refinement_tolerance,
+            max_refinement_depth=max_refinement_depth,
+            max_alpha_evaluations=max_alpha_evaluations,
+            iteration_warning_policy=iteration_warning_policy,
+            hard_failure_policy=hard_failure_policy,
         )
         for design in designs
     ]

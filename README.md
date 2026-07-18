@@ -229,6 +229,33 @@ record partial or full numerical non-resolution. Set
 sentinel-statistic rejection behavior. This policy applies to Oracle and
 post-selection CH inference only; DML estimation is unchanged.
 
+## CH Alpha-Grid Strategy
+
+Oracle and post-selection use `grid_strategy="adaptive"` in production. They
+start from the configured initial grid and bisect only adjacent usable points
+whose valid acceptance decisions differ. Refinement stops at tolerance `0.025`,
+depth `10`, or `201` total alpha evaluations; an unresolved midpoint is a
+barrier and is never refined or interpolated through. Evaluations are cached,
+and the adaptive point estimate minimizes over all usable initial and refined
+points.
+
+Set `grid_strategy="fixed"` (CLI: `--grid-strategy fixed`) to reproduce the
+original fixed-grid estimator and its initial-grid point estimate. The adaptive
+limits can be configured with `--refinement-tolerance`,
+`--max-refinement-depth`, and `--max-alpha-evaluations`. These options apply
+only to the shared CH path; DML keeps its supplied fixed alpha grid and does not
+receive the CH refinement options.
+
+CH result rows preserve the complete confidence region in `cr_components` as
+compact JSON, for example `[[-1.0,-0.42],[0.18,1.36]]`. Internally the same
+geometry is an immutable `tuple[tuple[float, float], ...]`. `cr_lower` and
+`cr_upper` are only the outer hull endpoints, while `cr_length` is the sum of
+component lengths; a disconnected hull must not be read as one accepted
+interval. Empty or fully unresolved CH regions serialize as `[]` and remain
+distinguishable through `cr_status`. DML uses a null component value. Readers
+retain older rows without this column as “components unavailable” and never
+reconstruct components from hull bounds.
+
 ## Reproducibility and Separate Estimator Runs
 
 The project uses a fixed default base seed, `12345`. Each design cell has a

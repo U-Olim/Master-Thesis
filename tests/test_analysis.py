@@ -17,10 +17,18 @@ from analysis.data import (
 )
 from analysis.figures import plot_coverage_vs_strength
 from analysis.tables import (
+    format_confidence_region_components,
     make_performance_by_design_cell_table,
     make_performance_by_strength_table,
     summarize_performance,
 )
+
+
+def test_reporting_formats_disconnected_components_without_using_the_hull() -> None:
+    assert format_confidence_region_components(
+        "[[-1.0,-0.42],[0.18,1.36]]"
+    ) == "[-1.000, -0.420] ∪ [0.180, 1.360]"
+    assert format_confidence_region_components(None) is None
 
 
 @pytest.fixture(scope="module")

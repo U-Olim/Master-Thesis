@@ -5,14 +5,24 @@ from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp import Design, generate_data
 from ivqr.alpha_grid import alpha_grid
-from ivqr.ch_inverse import evaluate_alpha_ch_ivqr
+from ivqr.ch_inverse import (
+    AlphaEvaluation,
+    evaluate_alpha_ch_ivqr,
+    evaluate_ch_alpha_grid,
+    validate_grid_strategy,
+)
 from ivqr.confidence_regions import (
     FAILED_ALPHA_STATISTIC,
     argmin_grid_usable,
     classify_alpha_grid,
     invert_score_test,
+    format_cr_components,
+    parse_cr_components,
+    serialize_cr_components,
     sanitize_grid_statistics,
     summarize_alpha_grid_diagnostics,
+    validate_cr_components,
+    validate_cr_geometry,
 )
 from ivqr.moments import quantile_score
 
@@ -20,6 +30,206 @@ from ivqr.moments import quantile_score
 def test_alpha_grid_size_and_bounds() -> None:
     grid = alpha_grid(-1.0, 3.0, 1.0)
     np.testing.assert_allclose(grid, np.array([-1.0, 0.0, 1.0, 2.0, 3.0]))
+
+
+@pytest.mark.parametrize(
+    ("components", "encoded"),
+    [
+        (((0.2, 1.4),), "[[0.2,1.4]]"),
+        (((-1.0, -0.42), (0.18, 1.36)), "[[-1.0,-0.42],[0.18,1.36]]"),
+        ((), "[]"),
+    ],
+)
+def test_cr_component_json_round_trip(components, encoded: str) -> None:
+    assert serialize_cr_components(components) == encoded
+    assert parse_cr_components(encoded) == components
+    assert serialize_cr_components(parse_cr_components(encoded)) == encoded
+
+
+def test_cr_component_json_converts_numpy_scalars_and_formats_union() -> None:
+    components = ((np.float64(-1.0), np.float32(-0.42)), (0.18, 1.36))
+    assert serialize_cr_components(components) == "[[-1.0,-0.41999998688697815],[0.18,1.36]]"
+    assert format_cr_components(components) == "[-1.000, -0.420] ∪ [0.180, 1.360]"
+    assert format_cr_components(()) == "∅"
+    assert parse_cr_components(None) is None
+    assert parse_cr_components(float("nan")) is None
+
+
+@pytest.mark.parametrize(
+    "components",
+    [
+        ((1.0, 0.0),),
+        ((0.0, 1.0), (0.5, 2.0)),
+        ((2.0, 3.0), (0.0, 1.0)),
+        ((0.0, 1.0), (1.0, 2.0)),
+        ((0.0, np.inf),),
+        (("0", 1.0),),
+    ],
+)
+def test_invalid_cr_components_are_rejected(components) -> None:
+    with pytest.raises(ValueError):
+        validate_cr_components(components)
+
+
+def test_cr_geometry_invariants_use_hull_and_total_component_length() -> None:
+    components = ((-1.0, -0.5), (0.25, 1.0))
+    assert validate_cr_geometry(
+        components,
+        lower=-1.0,
+        upper=1.0,
+        length=1.25,
+        n_blocks=2,
+        disconnected=True,
+    ) == components
+    with pytest.raises(ValueError, match="cr_length"):
+        validate_cr_geometry(
+            components,
+            lower=-1.0,
+            upper=1.0,
+            length=2.0,
+            n_blocks=2,
+            disconnected=True,
+        )
+    with pytest.raises(ValueError, match="cr_n_blocks"):
+        validate_cr_geometry(
+            components,
+            lower=-1.0,
+            upper=1.0,
+            length=1.25,
+            n_blocks=1,
+            disconnected=True,
+        )
+
+
+def _alpha_evaluation(statistic: float, usable: bool = True) -> AlphaEvaluation:
+    return AlphaEvaluation(
+        statistic=statistic if usable else np.inf,
+        gamma_hat=np.array([0.0]),
+        cov_gamma=np.array([[1.0]]),
+        dim_z=1,
+        converged=usable,
+        usable=usable,
+        warning_type=None,
+        failure_reason=None if usable else "unresolved",
+        message="ok" if usable else "unresolved",
+    )
+
+
+def test_grid_strategy_validation() -> None:
+    assert validate_grid_strategy("fixed") == "fixed"
+    assert validate_grid_strategy("adaptive") == "adaptive"
+    with pytest.raises(ValueError, match="grid_strategy"):
+        validate_grid_strategy("dense")
+
+
+@pytest.mark.parametrize(
+    ("left", "right", "expected_size"),
+    [(1.0, 2.0, 2), (5.0, 6.0, 2), (1.0, np.inf, 2), (np.inf, 5.0, 2)],
+)
+def test_adaptive_refines_only_usable_acceptance_transitions(
+    left: float, right: float, expected_size: int
+) -> None:
+    calls: list[float] = []
+
+    def evaluate(alpha: float) -> AlphaEvaluation:
+        calls.append(alpha)
+        value = left if alpha == 0.0 else right
+        return _alpha_evaluation(value, usable=np.isfinite(value))
+
+    result = evaluate_ch_alpha_grid(
+        np.array([0.0, 1.0]), evaluate, critical_value=3.0
+    )
+    assert result.final_alpha_evaluations == expected_size
+    assert len(calls) == len(set(calls)) == expected_size
+
+
+def test_adaptive_transition_stops_at_tolerance_and_is_sorted() -> None:
+    calls: list[float] = []
+
+    def evaluate(alpha: float) -> AlphaEvaluation:
+        calls.append(alpha)
+        return _alpha_evaluation(alpha)
+
+    result = evaluate_ch_alpha_grid(
+        np.array([0.2, 0.0, 0.2]),
+        evaluate,
+        critical_value=0.07,
+        refinement_tolerance=0.025,
+    )
+    assert np.all(np.diff(result.alphas) > 0)
+    transition = np.flatnonzero(
+        (result.alphas[:-1] <= 0.07) != (result.alphas[1:] <= 0.07)
+    )
+    assert (
+        result.alphas[transition[0] + 1] - result.alphas[transition[0]]
+        <= 0.025 + 1e-12
+    )
+    assert len(calls) == len(set(calls)) == result.final_alpha_evaluations
+    assert result.initial_alpha_grid_size == 2
+
+
+def test_adaptive_unresolved_midpoint_is_barrier() -> None:
+    def evaluate(alpha: float) -> AlphaEvaluation:
+        if alpha == 0.5:
+            return _alpha_evaluation(np.inf, usable=False)
+        return _alpha_evaluation(alpha * 10.0)
+
+    result = evaluate_ch_alpha_grid(
+        np.array([0.0, 1.0]), evaluate, critical_value=3.0
+    )
+    assert np.array_equal(result.alphas, np.array([0.0, 0.5, 1.0]))
+    assert result.number_of_unresolved_refinement_barriers == 1
+    assert result.number_of_refined_intervals == 1
+
+
+def test_adaptive_refines_disconnected_transitions_independently() -> None:
+    def evaluate(alpha: float) -> AlphaEvaluation:
+        return _alpha_evaluation(1.0 if alpha < 0.5 or alpha > 1.5 else 5.0)
+
+    result = evaluate_ch_alpha_grid(
+        np.array([0.0, 1.0, 2.0]),
+        evaluate,
+        critical_value=3.0,
+        refinement_tolerance=0.2,
+    )
+    assert result.number_of_refined_intervals >= 6
+    assert np.any((result.alphas > 0.0) & (result.alphas < 1.0))
+    assert np.any((result.alphas > 1.0) & (result.alphas < 2.0))
+
+
+def test_adaptive_limits_and_spacing_metadata() -> None:
+    def evaluate(alpha: float) -> AlphaEvaluation:
+        return _alpha_evaluation(alpha)
+    depth = evaluate_ch_alpha_grid(
+        np.array([0.0, 1.0]),
+        evaluate,
+        critical_value=0.2,
+        refinement_tolerance=0.01,
+        max_refinement_depth=1,
+    )
+    assert depth.refinement_limit_hit is True
+    assert depth.refinement_depth_reached == 1
+    limited = evaluate_ch_alpha_grid(
+        np.array([0.0, 1.0]),
+        evaluate,
+        critical_value=0.2,
+        max_alpha_evaluations=3,
+    )
+    assert limited.max_alpha_evaluations_hit is True
+    assert limited.final_alpha_evaluations == 3
+    assert limited.spacings == (0.5, 0.5, 0.5)
+
+
+def test_fixed_grid_is_unchanged_and_uses_initial_argmin_candidates() -> None:
+    result = evaluate_ch_alpha_grid(
+        np.array([0.0, 1.0, 2.0]),
+        lambda alpha: _alpha_evaluation(abs(alpha - 0.25)),
+        critical_value=0.5,
+        grid_strategy="fixed",
+        max_alpha_evaluations=1,
+    )
+    np.testing.assert_array_equal(result.alphas, np.array([0.0, 1.0, 2.0]))
+    assert result.number_of_refined_intervals == 0
 
 
 def test_confidence_region_inversion_on_known_vector() -> None:
@@ -301,6 +511,7 @@ def test_unresolved_point_prevents_boundary_interpolation() -> None:
         usable=[True, False, True],
     )
     assert region.blocks == ((0.0, 0.0),)
+    assert region.components == ((0.0, 0.0),)
     assert region.status == "partially_unresolved"
     assert region.unresolved_alphas == (1.0,)
 
@@ -313,6 +524,7 @@ def test_unresolved_point_does_not_create_statistical_rejection_hole() -> None:
         usable=[True, False, True],
     )
     assert region.blocks == ((0.0, 0.0), (2.0, 2.0))
+    assert serialize_cr_components(region.components) == "[[0.0,0.0],[2.0,2.0]]"
     assert region.rejected_count == 0
     assert region.unresolved_count == 1
 
@@ -334,18 +546,30 @@ def test_empty_full_and_partial_confidence_region_statuses() -> None:
     )
     assert empty.status == "empty_valid"
     assert empty.empty
+    assert serialize_cr_components(empty.components) == "[]"
 
     apparent_empty = invert_score_test(
         np.array([0.0, 1.0]), np.array([5.0, np.inf]), 3.0, usable=[True, False]
     )
     assert apparent_empty.status == "partially_unresolved"
     assert apparent_empty.empty
+    assert serialize_cr_components(apparent_empty.components) == "[]"
+
+    fully_unresolved = invert_score_test(
+        np.array([0.0, 1.0]),
+        np.array([np.inf, np.inf]),
+        3.0,
+        usable=[False, False],
+    )
+    assert fully_unresolved.status == "fully_unresolved"
+    assert serialize_cr_components(fully_unresolved.components) == "[]"
 
     full = invert_score_test(
         np.array([0.0, 1.0]), np.array([1.0, 2.0]), 3.0, usable=[True, True]
     )
     assert full.status == "full_grid_valid"
     assert full.full_grid_accepted
+    assert full.components == ((0.0, 1.0),)
 
     apparent_full = invert_score_test(
         np.array([0.0, 1.0]), np.array([1.0, np.inf]), 3.0, usable=[True, False]

@@ -5,6 +5,32 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from ivqr.confidence_regions import parse_cr_components, validate_cr_geometry
+
+
+GRID_METADATA_COLUMNS: tuple[str, ...] = (
+    "grid_strategy",
+    "initial_alpha_grid_size",
+    "final_alpha_evaluations",
+    "refinement_tolerance",
+    "refinement_depth_reached",
+    "refinement_limit_hit",
+    "max_alpha_evaluations_hit",
+    "number_of_refined_intervals",
+    "number_of_unresolved_refinement_barriers",
+    "minimum_final_grid_spacing",
+    "median_final_grid_spacing",
+    "maximum_final_grid_spacing",
+)
+CR_GEOMETRY_COLUMNS: tuple[str, ...] = (
+    "cr_components",
+    "cr_n_blocks",
+    "cr_disconnected",
+    "cr_status",
+    "cr_is_numerically_resolved",
+    "cr_unresolved_count",
+    "cr_unresolved_alphas",
+)
 
 REQUIRED_CORE_COLUMNS: tuple[str, ...] = (
     "dgp",
@@ -22,6 +48,8 @@ REQUIRED_CORE_COLUMNS: tuple[str, ...] = (
     "cr_length",
     "covered",
     "converged",
+    *CR_GEOMETRY_COLUMNS,
+    *GRID_METADATA_COLUMNS,
 )
 REQUIRED_DML_COLUMNS = REQUIRED_CORE_COLUMNS
 
@@ -34,8 +62,29 @@ CORE_IDENTIFIER_COLUMNS: tuple[str, ...] = (
     "rep",
     "estimator",
 )
-_BOOLEAN_COLUMNS = ("covered", "converged")
+_BOOLEAN_COLUMNS = ("covered", "converged", "cr_disconnected")
 _SOURCE_COLUMNS = {"covered": "cr_covers_true"}
+
+
+def with_neutral_grid_metadata(source: pd.DataFrame) -> pd.DataFrame:
+    """Add neutral grid metadata to legacy inputs and DML rows."""
+    completed = source.copy()
+    defaults: dict[str, object] = {
+        "grid_strategy": "not_applicable",
+        "refinement_limit_hit": False,
+        "max_alpha_evaluations_hit": False,
+        "cr_components": None,
+        "cr_n_blocks": np.nan,
+        "cr_disconnected": np.nan,
+        "cr_status": "unavailable",
+        "cr_is_numerically_resolved": np.nan,
+        "cr_unresolved_count": np.nan,
+        "cr_unresolved_alphas": None,
+    }
+    for column in (*GRID_METADATA_COLUMNS, *CR_GEOMETRY_COLUMNS):
+        if column not in completed.columns:
+            completed[column] = defaults.get(column, np.nan)
+    return completed
 
 
 def _as_boolean(series: pd.Series, column: str) -> pd.Series:
@@ -121,6 +170,30 @@ def _validate_confidence_regions(frame: pd.DataFrame) -> None:
     if invalid_empty_coverage.any():
         raise ValueError("an empty confidence region cannot have covered=True")
 
+    validate_component_columns(frame)
+
+
+def validate_component_columns(frame: pd.DataFrame) -> None:
+    """Validate serialized components against row-level hull diagnostics."""
+    lower = _numeric(frame["cr_lower"], "cr_lower")
+    upper = _numeric(frame["cr_upper"], "cr_upper")
+    length = _numeric(frame["cr_length"], "cr_length")
+    for index, value in frame["cr_components"].items():
+        components = parse_cr_components(value)
+        if components is None:
+            continue
+        n_blocks_value = frame.at[index, "cr_n_blocks"]
+        validate_cr_geometry(
+            components,
+            lower=None if pd.isna(lower.at[index]) else float(lower.at[index]),
+            upper=None if pd.isna(upper.at[index]) else float(upper.at[index]),
+            length=None if pd.isna(length.at[index]) else float(length.at[index]),
+            n_blocks=(
+                None if pd.isna(n_blocks_value) else int(float(n_blocks_value))
+            ),
+            disconnected=frame.at[index, "cr_disconnected"],
+        )
+
 
 def _assert_retained_identity(source: pd.DataFrame, cleaned: pd.DataFrame) -> None:
     for column in REQUIRED_CORE_COLUMNS:
@@ -146,7 +219,7 @@ def clean_core_results_frame(
     *,
     estimator: str,
 ) -> pd.DataFrame:
-    """Select and validate the common 15-column estimator result schema."""
+    """Select and validate the common estimator result schema."""
     if not isinstance(estimator, str) or not estimator:
         raise ValueError("estimator must be a nonempty string")
     if not isinstance(source, pd.DataFrame):
@@ -154,6 +227,7 @@ def clean_core_results_frame(
     if source.columns.duplicated().any():
         duplicates = sorted(set(source.columns[source.columns.duplicated()].astype(str)))
         raise ValueError(f"source has duplicate columns: {duplicates}")
+    source = with_neutral_grid_metadata(source)
 
     source_columns = {
         column: _SOURCE_COLUMNS.get(column, column)
@@ -173,7 +247,7 @@ def clean_core_results_frame(
     for column in _BOOLEAN_COLUMNS:
         cleaned[column] = _as_boolean(cleaned[column], column)
 
-    if len(cleaned.columns) != 15 or tuple(cleaned.columns) != REQUIRED_CORE_COLUMNS:
+    if tuple(cleaned.columns) != REQUIRED_CORE_COLUMNS:
         raise AssertionError("clean common-core schema construction failed")
     if len(cleaned) != len(source):
         raise AssertionError("common-core cleaning changed the row count")
@@ -209,8 +283,12 @@ def clean_dml_results_frame(
 
 __all__ = [
     "CORE_IDENTIFIER_COLUMNS",
+    "GRID_METADATA_COLUMNS",
+    "CR_GEOMETRY_COLUMNS",
     "REQUIRED_CORE_COLUMNS",
     "REQUIRED_DML_COLUMNS",
     "clean_core_results_frame",
     "clean_dml_results_frame",
+    "with_neutral_grid_metadata",
+    "validate_component_columns",
 ]

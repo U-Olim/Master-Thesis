@@ -30,6 +30,12 @@ from simulation.config import (  # noqa: E402
     DEFAULT_DML_RIDGE_ALPHA,
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
+    DEFAULT_GRID_STRATEGY,
+    DEFAULT_REFINEMENT_TOLERANCE,
+    DEFAULT_MAX_REFINEMENT_DEPTH,
+    DEFAULT_MAX_ALPHA_EVALUATIONS,
+    DEFAULT_ITERATION_WARNING_POLICY,
+    DEFAULT_HARD_FAILURE_POLICY,
     DGPS,
     FAST_OUTPUT,
     FULL_OUTPUT,
@@ -87,6 +93,28 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--alpha-min", type=float, default=DEFAULT_ALPHA_MIN)
     parser.add_argument("--alpha-max", type=float, default=DEFAULT_ALPHA_MAX)
     parser.add_argument("--alpha-grid-size", type=int, default=DEFAULT_ALPHA_GRID_SIZE)
+    parser.add_argument(
+        "--grid-strategy", choices=("fixed", "adaptive"), default=DEFAULT_GRID_STRATEGY
+    )
+    parser.add_argument(
+        "--refinement-tolerance", type=float, default=DEFAULT_REFINEMENT_TOLERANCE
+    )
+    parser.add_argument(
+        "--max-refinement-depth", type=int, default=DEFAULT_MAX_REFINEMENT_DEPTH
+    )
+    parser.add_argument(
+        "--max-alpha-evaluations", type=int, default=DEFAULT_MAX_ALPHA_EVALUATIONS
+    )
+    parser.add_argument(
+        "--iteration-warning-policy",
+        choices=("use_if_valid", "reject"),
+        default=DEFAULT_ITERATION_WARNING_POLICY,
+    )
+    parser.add_argument(
+        "--hard-failure-policy",
+        choices=("unresolved", "legacy_reject"),
+        default=DEFAULT_HARD_FAILURE_POLICY,
+    )
     parser.add_argument(
         "--critical-value-multiplier",
         type=float,
@@ -167,6 +195,12 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--alpha-grid-size must be at least 3")
     if args.alpha_max <= args.alpha_min:
         raise ValueError("--alpha-max must exceed --alpha-min")
+    if not np.isfinite(args.refinement_tolerance) or args.refinement_tolerance <= 0:
+        raise ValueError("--refinement-tolerance must be positive and finite")
+    if args.max_refinement_depth < 0:
+        raise ValueError("--max-refinement-depth must be nonnegative")
+    if args.max_alpha_evaluations < args.alpha_grid_size:
+        raise ValueError("--max-alpha-evaluations must cover the initial grid")
     if args.dml_k_folds < 2:
         raise ValueError("--dml-k-folds must be at least 2")
     if not np.isfinite(args.dml_quantile_penalty) or args.dml_quantile_penalty < 0:
@@ -206,6 +240,12 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
         "alpha_min": args.alpha_min,
         "alpha_max": args.alpha_max,
         "alpha_grid_size": args.alpha_grid_size,
+        "grid_strategy": args.grid_strategy,
+        "refinement_tolerance": args.refinement_tolerance,
+        "max_refinement_depth": args.max_refinement_depth,
+        "max_alpha_evaluations": args.max_alpha_evaluations,
+        "iteration_warning_policy": args.iteration_warning_policy,
+        "hard_failure_policy": args.hard_failure_policy,
         "critical_value_multiplier": args.critical_value_multiplier,
         "selection_lasso_multiplier": args.selection_lasso_multiplier,
         "estimators": list(args.estimators),
@@ -277,6 +317,8 @@ def _print_dry_run(
     print(f"taus: {', '.join(map(str, args.taus))}")
     print(f"Estimators: {', '.join(args.estimators)}")
     print(f"Post-selection Lasso multiplier: {args.selection_lasso_multiplier}")
+    print(f"CH grid strategy: {args.grid_strategy}")
+    print(f"CH refinement tolerance: {args.refinement_tolerance}")
     print(f"DML quantile penalty: {args.dml_quantile_penalty}")
     print(f"DML ridge alpha: {args.dml_ridge_alpha}")
     print(f"DML quantile solver: {args.dml_quantile_solver}")
@@ -368,6 +410,12 @@ def main(argv: list[str] | None = None) -> None:
             selection_lasso_multiplier=args.selection_lasso_multiplier,
             n_jobs=args.n_jobs,
             show_quantreg_warnings=args.show_quantreg_warnings,
+            grid_strategy=args.grid_strategy,
+            refinement_tolerance=args.refinement_tolerance,
+            max_refinement_depth=args.max_refinement_depth,
+            max_alpha_evaluations=args.max_alpha_evaluations,
+            iteration_warning_policy=args.iteration_warning_policy,
+            hard_failure_policy=args.hard_failure_policy,
         )
         completed += len(batch)
         elapsed = time.perf_counter() - start

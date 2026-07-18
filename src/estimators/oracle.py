@@ -35,6 +35,10 @@ _CH_COMPATIBILITY_KWARGS = {
     "max_iter",
     "iteration_warning_policy",
     "hard_failure_policy",
+    "grid_strategy",
+    "refinement_tolerance",
+    "max_refinement_depth",
+    "max_alpha_evaluations",
 }
 
 
@@ -71,6 +75,8 @@ def estimate_oracle_ivqr(
 
     The shared CH evaluator uses valid iteration-warning fits by default.
     ``iteration_warning_policy="reject"`` reproduces the legacy behavior.
+    Adaptive grids are the production default; pass ``grid_strategy="fixed"``
+    to reproduce the original fixed-grid estimator.
     """
     if alpha_candidates is None and "alphas" in kwargs:
         alpha_candidates = kwargs.pop("alphas")

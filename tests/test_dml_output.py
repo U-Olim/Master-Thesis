@@ -4,6 +4,7 @@ import pytest
 
 from simulation.dml_output import (
     REQUIRED_DML_COLUMNS,
+    clean_core_results_frame,
     clean_dml_results_frame,
 )
 
@@ -40,9 +41,25 @@ def test_clean_dml_output_exact_schema_and_no_extra_columns() -> None:
     cleaned = clean_dml_results_frame(_wide_frame())
 
     assert tuple(cleaned.columns) == REQUIRED_DML_COLUMNS
-    assert len(cleaned.columns) == 15
+    assert len(cleaned.columns) == len(REQUIRED_DML_COLUMNS)
+    assert cleaned["cr_components"].isna().all()
+    assert cleaned["cr_status"].eq("unavailable").all()
     assert not any("runtime" in column for column in cleaned.columns)
     assert set(cleaned.columns) == set(REQUIRED_DML_COLUMNS)
+
+
+def test_clean_oracle_output_preserves_component_json() -> None:
+    source = _wide_frame()
+    source["estimator"] = "oracle"
+    source["cr_components"] = ["[[0.5,1.5]]", "[]"]
+    source["cr_n_blocks"] = [1, 0]
+    source["cr_disconnected"] = [False, False]
+    source["cr_status"] = ["valid", "empty_valid"]
+    source["cr_is_numerically_resolved"] = [True, True]
+    source["cr_unresolved_count"] = [0, 0]
+    source["cr_unresolved_alphas"] = ["[]", "[]"]
+    cleaned = clean_core_results_frame(source, estimator="oracle")
+    assert cleaned["cr_components"].tolist() == ["[[0.5,1.5]]", "[]"]
 
 
 def test_clean_dml_output_preserves_rows_and_values() -> None:

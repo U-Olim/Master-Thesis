@@ -1,7 +1,7 @@
 """Diagnose Oracle inverse-IVQR confidence-region grid resolution.
 
-The script compares fixed and adaptively refined alpha grids while leaving the
-production Oracle estimator unchanged.  Direct true-alpha acceptance is read
+The script compares fixed and adaptively refined alpha grids using the same
+adaptive helper as production. Direct true-alpha acceptance is read
 from the preceding Oracle calibration diagnostic and joined by deterministic
 design seed.
 """
@@ -28,6 +28,7 @@ from ivqr.ch_inverse import (
     IterationWarningPolicy,
     HardFailurePolicy,
     evaluate_alpha_ch_ivqr,
+    evaluate_ch_alpha_grid,
     validate_hard_failure_policy,
 )
 from ivqr.confidence_regions import (
@@ -35,6 +36,7 @@ from ivqr.confidence_regions import (
     classify_alpha_grid,
     critical_value_chi_square,
     invert_score_test,
+    serialize_cr_components,
     sanitize_grid_statistics,
 )
 from simulation.config import DEFAULT_BASE_SEED, DEFAULT_QUANTREG_MAX_ITER
@@ -57,37 +59,19 @@ FIXED_GRIDS = {
 
 def adaptive_refinement_grid(
     initial_grid: np.ndarray,
-    evaluate_statistic: Callable[[float], float],
+    evaluate_alpha: Callable[[float], AlphaEvaluation],
     *,
     critical_value: float = CRITICAL_VALUE,
     max_spacing: float = ADAPTIVE_MAX_SPACING,
 ) -> np.ndarray:
-    """Refine acceptance-transition intervals until their spacing is small."""
-    if max_spacing <= 0.0 or not np.isfinite(max_spacing):
-        raise ValueError("max_spacing must be positive and finite")
-    points = np.unique(np.asarray(initial_grid, dtype=float))
-    if points.ndim != 1 or points.size < 2 or not np.all(np.isfinite(points)):
-        raise ValueError("initial_grid must contain at least two finite points")
-    if not np.all(np.diff(points) > 0.0):
-        raise ValueError("initial_grid must be strictly increasing")
-
-    statistics = {
-        float(alpha): float(evaluate_statistic(float(alpha))) for alpha in points
-    }
-    while True:
-        transitions: list[tuple[float, float]] = []
-        for left, right in zip(points[:-1], points[1:], strict=True):
-            left_value = statistics[float(left)]
-            right_value = statistics[float(right)]
-            changes = (left_value <= critical_value) != (right_value <= critical_value)
-            if changes and right - left > max_spacing + 1e-12:
-                transitions.append((float(left), float(right)))
-        if not transitions:
-            return points
-        for left, right in transitions:
-            midpoint = float((left + right) / 2.0)
-            statistics[midpoint] = float(evaluate_statistic(midpoint))
-        points = np.array(sorted(statistics), dtype=float)
+    """Return the canonical production-adaptive grid for a diagnostic."""
+    return evaluate_ch_alpha_grid(
+        initial_grid,
+        evaluate_alpha,
+        critical_value=critical_value,
+        grid_strategy="adaptive",
+        refinement_tolerance=max_spacing,
+    ).alphas
 
 
 def interpolated_acceptance_at_alpha(
@@ -133,9 +117,7 @@ def exact_grid_consistency(
 
 
 def _components_json(blocks: tuple[tuple[float, float], ...]) -> str:
-    return json.dumps(
-        [[lower, upper] for lower, upper in blocks], separators=(",", ":")
-    )
+    return serialize_cr_components(blocks)
 
 
 def _evaluate_grid(
@@ -391,7 +373,7 @@ def run_diagnostic(
         x_oracle = data.x[:, oracle_indices]
         cache: dict[float, tuple[AlphaEvaluation, float]] = {}
 
-        def evaluate(alpha: float) -> float:
+        def evaluate(alpha: float) -> AlphaEvaluation:
             alpha = float(alpha)
             if alpha not in cache:
                 start = perf_counter()
@@ -406,7 +388,7 @@ def run_diagnostic(
                     iteration_warning_policy=iteration_warning_policy,
                 )
                 cache[alpha] = (evaluation, perf_counter() - start)
-            return cache[alpha][0].statistic
+            return cache[alpha][0]
 
         key = (
             design.dgp,

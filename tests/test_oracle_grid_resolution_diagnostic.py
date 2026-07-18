@@ -67,12 +67,22 @@ def test_boundary_interpolation_matches_linear_crossing() -> None:
 
 
 def test_adaptive_refinement_stops_at_requested_transition_spacing() -> None:
-    def statistic(alpha: float) -> float:
-        return alpha
+    def evaluation(alpha: float):
+        return diagnostic.AlphaEvaluation(
+            statistic=alpha,
+            gamma_hat=np.array([0.0]),
+            cov_gamma=np.array([[1.0]]),
+            dim_z=1,
+            converged=True,
+            usable=True,
+            warning_type=None,
+            failure_reason=None,
+            message="ok",
+        )
 
     grid = diagnostic.adaptive_refinement_grid(
         np.array([0.0, 0.2]),
-        statistic,
+        evaluation,
         critical_value=0.07,
         max_spacing=0.025,
     )

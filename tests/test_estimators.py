@@ -1,6 +1,8 @@
 import numpy as np
+import pandas as pd
 import pytest
 import inspect
+from dataclasses import replace
 from unittest.mock import Mock
 
 from dgp import Design, generate_data, get_oracle_control_indices
@@ -36,7 +38,9 @@ def test_ch_and_post_selection_public_defaults_use_valid_warning_fits() -> None:
     for function in (estimate_ch_ivqr_controls, estimate_post_selection_ivqr):
         parameter = inspect.signature(function).parameters["hard_failure_policy"]
         assert parameter.default == "unresolved"
+        assert inspect.signature(function).parameters["grid_strategy"].default == "adaptive"
     assert "hard_failure_policy" not in inspect.signature(estimate_dml_ivqr).parameters
+    assert "grid_strategy" not in inspect.signature(estimate_dml_ivqr).parameters
 
 
 def test_oracle_propagates_iteration_warning_policy(monkeypatch) -> None:
@@ -56,9 +60,13 @@ def test_oracle_propagates_iteration_warning_policy(monkeypatch) -> None:
         oracle_indices=np.array([0]),
         iteration_warning_policy="use_if_valid",
         hard_failure_policy="unresolved",
+        grid_strategy="adaptive",
+        refinement_tolerance=0.025,
     )
     assert captured["iteration_warning_policy"] == "use_if_valid"
     assert captured["hard_failure_policy"] == "unresolved"
+    assert captured["grid_strategy"] == "adaptive"
+    assert captured["refinement_tolerance"] == 0.025
     assert result.estimator == "oracle"
 
 
@@ -98,7 +106,7 @@ def test_post_selection_evaluator_propagates_iteration_warning_policy(
     assert result is expected
 
 
-def test_unresolved_status_fields_are_serialized() -> None:
+def test_unresolved_status_fields_are_serialized(tmp_path) -> None:
     design = Design("dgp1", 80, 20, 1.0, 0.5, rep=0, seed=321)
     result = EstimationResult(
         estimator="oracle",
@@ -112,12 +120,13 @@ def test_unresolved_status_fields_are_serialized() -> None:
         at_grid_boundary=False,
         alpha_grid_size=3,
         failed_alpha_count=1,
-        cr_lower=1.0,
+        cr_lower=0.0,
         cr_upper=1.0,
-        cr_length=0.0,
+        cr_length=0.5,
         cr_covers_true=True,
         cr_empty=False,
-        cr_disconnected=False,
+        cr_disconnected=True,
+        cr_components=((0.0, 0.5), (1.0, 1.0)),
         selected_controls=5,
         runtime_seconds=0.1,
         hard_failure_policy="unresolved",
@@ -129,6 +138,19 @@ def test_unresolved_status_fields_are_serialized() -> None:
         point_estimate_status="potentially_unresolved",
         usable_alpha_evaluations=2,
         unresolved_alpha_evaluations=1,
+        grid_strategy="adaptive",
+        initial_alpha_grid_size=3,
+        final_alpha_evaluations=5,
+        refinement_tolerance=0.025,
+        refinement_depth_reached=2,
+        refinement_limit_hit=False,
+        max_alpha_evaluations_hit=False,
+        number_of_refined_intervals=2,
+        number_of_unresolved_refinement_barriers=1,
+        minimum_final_grid_spacing=0.25,
+        median_final_grid_spacing=0.5,
+        maximum_final_grid_spacing=1.0,
+        cr_n_blocks=2,
     )
     row = build_simulation_result_row(design, result, np.array([0.0, 1.0, 2.0]))
     for field in (
@@ -141,8 +163,33 @@ def test_unresolved_status_fields_are_serialized() -> None:
         "point_estimate_status",
         "usable_alpha_evaluations",
         "unresolved_alpha_evaluations",
+        "grid_strategy",
+        "initial_alpha_grid_size",
+        "final_alpha_evaluations",
+        "refinement_tolerance",
+        "refinement_depth_reached",
+        "refinement_limit_hit",
+        "max_alpha_evaluations_hit",
+        "number_of_refined_intervals",
+        "number_of_unresolved_refinement_barriers",
+        "minimum_final_grid_spacing",
+        "median_final_grid_spacing",
+        "maximum_final_grid_spacing",
     ):
         assert row[field] == getattr(result, field)
+    assert row["cr_components"] == "[[0.0,0.5],[1.0,1.0]]"
+    post_row = build_simulation_result_row(
+        design,
+        replace(result, estimator="post_selection_ivqr"),
+        np.array([0.0, 1.0, 2.0]),
+    )
+    assert post_row["cr_components"] == "[[0.0,0.5],[1.0,1.0]]"
+    path = tmp_path / "components.csv"
+    pd.DataFrame([row, post_row]).to_csv(path, index=False)
+    restored = pd.read_csv(path)
+    assert restored["cr_components"].tolist() == [
+        "[[0.0,0.5],[1.0,1.0]]"
+    ] * 2
 
 
 def test_ch_hard_failure_policy_controls_inference_not_alpha_usability(
@@ -186,6 +233,70 @@ def test_ch_hard_failure_policy_controls_inference_not_alpha_usability(
     assert legacy.cr_covers_true is False
     assert legacy.coverage_status == "not_covered"
     assert legacy.failed_alpha_count == 1
+
+
+def test_ch_fixed_strategy_reproduces_legacy_grid_output(monkeypatch) -> None:
+    def fake_evaluate(**kwargs):
+        alpha = float(kwargs["alpha"])
+        return AlphaEvaluation(
+            statistic=(alpha - 1.0) ** 2,
+            gamma_hat=np.array([0.0]),
+            cov_gamma=np.array([[1.0]]),
+            dim_z=1,
+            converged=True,
+            usable=True,
+            warning_type=None,
+            failure_reason=None,
+            message="ok",
+        )
+
+    monkeypatch.setattr("ivqr.ch_inverse.evaluate_alpha_ch_ivqr", fake_evaluate)
+    data = _tiny_data()
+    result = estimate_ch_ivqr_controls(
+        data,
+        tau=0.5,
+        x_controls=data.x[:, :1],
+        estimator_name="oracle",
+        alphas=np.array([0.0, 1.0, 2.0]),
+        grid_strategy="fixed",
+    )
+    assert result.alpha_hat == 1.0
+    assert result.alpha_grid_size == 3
+    assert result.final_alpha_evaluations == 3
+    assert result.number_of_refined_intervals == 0
+    assert result.alpha_grid_step == 1.0
+    assert result.cr_components is not None
+
+
+def test_adaptive_point_estimator_uses_refined_evaluations(monkeypatch) -> None:
+    def fake_evaluate(**kwargs):
+        alpha = float(kwargs["alpha"])
+        return AlphaEvaluation(
+            statistic=20.0 * (alpha - 0.4) ** 2,
+            gamma_hat=np.array([0.0]),
+            cov_gamma=np.array([[1.0]]),
+            dim_z=1,
+            converged=True,
+            usable=True,
+            warning_type=None,
+            failure_reason=None,
+            message="ok",
+        )
+
+    monkeypatch.setattr("ivqr.ch_inverse.evaluate_alpha_ch_ivqr", fake_evaluate)
+    data = _tiny_data()
+    result = estimate_ch_ivqr_controls(
+        data,
+        tau=0.5,
+        x_controls=data.x[:, :1],
+        estimator_name="oracle",
+        alphas=np.array([0.0, 1.0]),
+        grid_strategy="adaptive",
+    )
+    assert result.alpha_hat not in {0.0, 1.0}
+    assert result.final_alpha_evaluations > 2
+    assert result.alpha_grid_step is None
+    assert result.cr_components is not None
 
 
 @pytest.mark.slow

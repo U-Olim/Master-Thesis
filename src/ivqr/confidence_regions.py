@@ -12,6 +12,8 @@ alpha grid.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from numbers import Real
 from typing import Any, Literal
 
 import numpy as np
@@ -28,12 +30,14 @@ ConfidenceRegionStatus = Literal[
 ]
 CoverageStatus = Literal["covered", "not_covered", "coverage_unresolved", "unknown"]
 PointEstimateStatus = Literal["resolved", "potentially_unresolved", "fully_unresolved"]
+CRComponents = tuple[tuple[float, float], ...]
 
 
 __all__ = [
     "FAILED_ALPHA_STATISTIC",
     "AlphaGridMasks",
     "ConfidenceRegion",
+    "CRComponents",
     "PointEstimateResult",
     "adjust_critical_value",
     "invert_score_test",
@@ -45,7 +49,129 @@ __all__ = [
     "argmin_grid_usable",
     "summarize_alpha_grid_diagnostics",
     "merge_region_and_grid_diagnostics",
+    "validate_cr_components",
+    "validate_cr_geometry",
+    "serialize_cr_components",
+    "parse_cr_components",
+    "format_cr_components",
 ]
+
+
+def validate_cr_components(components: object) -> CRComponents:
+    """Return canonical finite, sorted, disjoint confidence-region components."""
+    if isinstance(components, (str, bytes)):
+        raise ValueError("cr_components must be a sequence of endpoint pairs")
+    try:
+        raw_components = tuple(components)  # type: ignore[arg-type]
+    except TypeError as exc:
+        raise ValueError("cr_components must be a sequence of endpoint pairs") from exc
+
+    canonical: list[tuple[float, float]] = []
+    previous_upper: float | None = None
+    for component in raw_components:
+        if isinstance(component, (str, bytes)):
+            raise ValueError("each confidence-region component must have two endpoints")
+        try:
+            endpoints = tuple(component)  # type: ignore[arg-type]
+        except TypeError as exc:
+            raise ValueError(
+                "each confidence-region component must have two endpoints"
+            ) from exc
+        if len(endpoints) != 2:
+            raise ValueError("each confidence-region component must have two endpoints")
+        if any(isinstance(value, bool) or not isinstance(value, Real) for value in endpoints):
+            raise ValueError("confidence-region endpoints must be numeric")
+        lower, upper = (float(endpoints[0]), float(endpoints[1]))
+        if not np.isfinite(lower) or not np.isfinite(upper):
+            raise ValueError("confidence-region endpoints must be finite")
+        if lower > upper:
+            raise ValueError("confidence-region component lower bound exceeds upper bound")
+        if previous_upper is not None and lower <= previous_upper:
+            raise ValueError(
+                "confidence-region components must be sorted, disjoint, and non-touching"
+            )
+        canonical.append((lower, upper))
+        previous_upper = upper
+    return tuple(canonical)
+
+
+def serialize_cr_components(components: object) -> str:
+    """Serialize canonical components as deterministic compact JSON."""
+    canonical = validate_cr_components(components)
+    return json.dumps(canonical, separators=(",", ":"), allow_nan=False)
+
+
+def parse_cr_components(value: object) -> CRComponents | None:
+    """Parse component JSON; return ``None`` when components are unavailable."""
+    if value is None or (
+        isinstance(value, Real)
+        and not isinstance(value, bool)
+        and bool(np.isnan(float(value)))
+    ):
+        return None
+    if not isinstance(value, str):
+        raise ValueError("cr_components must be JSON text or null")
+    try:
+        decoded = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ValueError("cr_components is not valid JSON") from exc
+    if decoded is None:
+        return None
+    return validate_cr_components(decoded)
+
+
+def validate_cr_geometry(
+    components: object,
+    *,
+    lower: float | None,
+    upper: float | None,
+    length: float | None,
+    n_blocks: int | None,
+    disconnected: bool | None,
+    atol: float = 1e-9,
+) -> CRComponents:
+    """Validate component geometry against the public hull diagnostics."""
+    canonical = validate_cr_components(components)
+    if n_blocks != len(canonical):
+        raise ValueError("cr_n_blocks must equal the number of cr_components")
+    if not isinstance(disconnected, (bool, np.bool_)) or bool(disconnected) != (
+        len(canonical) > 1
+    ):
+        raise ValueError("cr_disconnected must equal (cr_n_blocks > 1)")
+    if not canonical:
+        if lower is not None and np.isfinite(float(lower)):
+            raise ValueError("empty confidence regions cannot have cr_lower")
+        if upper is not None and np.isfinite(float(upper)):
+            raise ValueError("empty confidence regions cannot have cr_upper")
+        if length is not None and np.isfinite(float(length)):
+            raise ValueError("empty confidence regions cannot have finite cr_length")
+        return canonical
+    if lower is None or upper is None or length is None:
+        raise ValueError("nonempty cr_components require hull bounds and length")
+    lower_value, upper_value, length_value = float(lower), float(upper), float(length)
+    if not all(np.isfinite(value) for value in (lower_value, upper_value, length_value)):
+        raise ValueError("nonempty confidence-region geometry must be finite")
+    expected_length = sum(block_upper - block_lower for block_lower, block_upper in canonical)
+    if not np.isclose(lower_value, canonical[0][0], rtol=0.0, atol=atol):
+        raise ValueError("cr_lower must equal the first component lower endpoint")
+    if not np.isclose(upper_value, canonical[-1][1], rtol=0.0, atol=atol):
+        raise ValueError("cr_upper must equal the last component upper endpoint")
+    if not np.isclose(length_value, expected_length, rtol=1e-9, atol=atol):
+        raise ValueError("cr_length must equal total confidence-region component length")
+    return canonical
+
+
+def format_cr_components(components: object, *, precision: int = 3) -> str:
+    """Format components without misrepresenting disconnected sets as a hull."""
+    if not isinstance(precision, int) or isinstance(precision, bool) or precision < 0:
+        raise ValueError("precision must be a nonnegative integer")
+    canonical = validate_cr_components(components)
+    if not canonical:
+        return "∅"
+    return " ∪ ".join(
+        f"[{lower:.{precision}f}, {upper:.{precision}f}]"
+        for lower, upper in canonical
+    )
 
 
 @dataclass(frozen=True)
@@ -96,6 +222,22 @@ class ConfidenceRegion:
     rejected_count: int
     full_grid_accepted: bool
     coverage_status: CoverageStatus
+
+    def __post_init__(self) -> None:
+        canonical = validate_cr_geometry(
+            self.blocks,
+            lower=self.lower,
+            upper=self.upper,
+            length=self.length,
+            n_blocks=self.n_blocks,
+            disconnected=self.disconnected,
+        )
+        object.__setattr__(self, "blocks", canonical)
+
+    @property
+    def components(self) -> CRComponents:
+        """Return immutable connected components in increasing order."""
+        return self.blocks
 
     @property
     def region_length(self) -> float:
@@ -783,6 +925,7 @@ def merge_region_and_grid_diagnostics(
             "cr_empty": bool(region.empty),
             "cr_n_blocks": int(region.n_blocks),
             "cr_disconnected": bool(region.disconnected),
+            "cr_components": region.components,
         }
     )
     return diagnostics

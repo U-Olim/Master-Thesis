@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ivqr.confidence_regions import CRComponents, validate_cr_geometry
 from utils.timing import RUNTIME_COLUMNS
 
 
@@ -127,6 +128,7 @@ class EstimationResult:
     selected_controls: int | None
     runtime_seconds: float
     error_type: str | None = None
+    cr_components: CRComponents | None = None
     hard_failure_policy: str = "not_applicable"
     cr_status: str = "not_applicable"
     cr_is_numerically_resolved: bool | None = None
@@ -136,6 +138,18 @@ class EstimationResult:
     point_estimate_status: str = "not_applicable"
     usable_alpha_evaluations: int | None = None
     unresolved_alpha_evaluations: int | None = None
+    grid_strategy: str = "not_applicable"
+    initial_alpha_grid_size: int | None = None
+    final_alpha_evaluations: int | None = None
+    refinement_tolerance: float | None = None
+    refinement_depth_reached: int | None = None
+    refinement_limit_hit: bool | None = None
+    max_alpha_evaluations_hit: bool | None = None
+    number_of_refined_intervals: int | None = None
+    number_of_unresolved_refinement_barriers: int | None = None
+    minimum_final_grid_spacing: float | None = None
+    median_final_grid_spacing: float | None = None
+    maximum_final_grid_spacing: float | None = None
 
     alpha_grid_min: float | None = None
     alpha_grid_max: float | None = None
@@ -227,6 +241,18 @@ class EstimationResult:
     dml_qr_nonzero_mean: float | None = None
     dml_z_resid_var_mean: float | None = None
 
+    def __post_init__(self) -> None:
+        if self.cr_components is None:
+            return
+        self.cr_components = validate_cr_geometry(
+            self.cr_components,
+            lower=self.cr_lower,
+            upper=self.cr_upper,
+            length=self.cr_length,
+            n_blocks=self.cr_n_blocks,
+            disconnected=self.cr_disconnected,
+        )
+
     @property
     def status(self) -> str:
         """Return the public estimator status used in simulation CSV rows."""
@@ -238,6 +264,7 @@ class EstimationResult:
         return {
             "lower": self.cr_lower,
             "upper": self.cr_upper,
+            "components": self.cr_components,
             "length": self.cr_length,
             "empty": self.cr_empty,
             "covers_true": self.cr_covers_true,
@@ -263,4 +290,6 @@ class EstimationResult:
             + DML_DIAGNOSTIC_FIELDS
             + RUNTIME_DIAGNOSTIC_FIELDS
         )
-        return {name: getattr(self, name) for name in names}
+        diagnostics = {name: getattr(self, name) for name in names}
+        diagnostics["cr_components"] = self.cr_components
+        return diagnostics

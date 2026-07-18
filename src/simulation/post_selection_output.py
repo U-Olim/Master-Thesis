@@ -5,6 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from simulation.dml_output import (
+    CR_GEOMETRY_COLUMNS,
+    GRID_METADATA_COLUMNS,
+    validate_component_columns,
+    with_neutral_grid_metadata,
+)
+
 
 REQUIRED_POST_SELECTION_COLUMNS: tuple[str, ...] = (
     "dgp",
@@ -22,6 +29,8 @@ REQUIRED_POST_SELECTION_COLUMNS: tuple[str, ...] = (
     "cr_length",
     "covered",
     "converged",
+    *CR_GEOMETRY_COLUMNS,
+    *GRID_METADATA_COLUMNS,
     "n_selected_controls",
     "selection_lasso_multiplier",
 )
@@ -41,7 +50,7 @@ _SOURCE_COLUMNS = {
     "n_selected_controls": "ps_n_selected_controls",
     "selection_lasso_multiplier": "ps_selection_lasso_multiplier",
 }
-_BOOLEAN_COLUMNS = ("covered", "converged")
+_BOOLEAN_COLUMNS = ("covered", "converged", "cr_disconnected")
 
 
 def _as_boolean(series: pd.Series, column: str) -> pd.Series:
@@ -118,6 +127,7 @@ def _validate_confidence_regions(frame: pd.DataFrame) -> None:
     empty = missing.all(axis=1)
     if (empty & actual).any():
         raise ValueError("an empty confidence region cannot have covered=True")
+    validate_component_columns(frame)
 
 
 def _validate_selection_variables(frame: pd.DataFrame) -> None:
@@ -188,6 +198,7 @@ def clean_post_selection_results_frame(
     if source.columns.duplicated().any():
         duplicates = sorted(set(source.columns[source.columns.duplicated()].astype(str)))
         raise ValueError(f"source has duplicate columns: {duplicates}")
+    source = with_neutral_grid_metadata(source)
     _validate_selection_count_agreement(source)
 
     source_columns = {

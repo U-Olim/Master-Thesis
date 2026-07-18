@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from analysis.data import require_unique_selection_lasso_multiplier
+from ivqr.confidence_regions import format_cr_components, parse_cr_components
 
 
 ESTIMATOR_NAMES = {
@@ -28,6 +29,14 @@ PERFORMANCE_COLUMNS = [
     "valid_rate",
     "n_results",
 ]
+
+
+def format_confidence_region_components(value: object, *, precision: int = 3) -> str | None:
+    """Format serialized CR components; keep unavailable legacy rows distinct."""
+    components = parse_cr_components(value)
+    if components is None:
+        return None
+    return format_cr_components(components, precision=precision)
 
 
 def summarize_performance(
