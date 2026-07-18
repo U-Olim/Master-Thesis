@@ -18,7 +18,6 @@ from statsmodels.tools.sm_exceptions import IterationLimitWarning
 from dgp.designs import Design
 from dgp.generators import generate_data
 from dgp.true_parameters import (
-    get_oracle_control_indices,
     true_active_control_indices,
     true_alpha,
 )
@@ -524,7 +523,7 @@ def run_simulation_design(
                 if estimator_name == "oracle":
                     oracle_indices = validate_oracle_support(
                         design,
-                        get_oracle_control_indices(design.dgp, design.p),
+                        true_active_control_indices(design.dgp, design.p),
                     )
                     result = estimate_oracle_ivqr(
                         data,

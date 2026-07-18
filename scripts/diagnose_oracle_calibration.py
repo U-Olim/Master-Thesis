@@ -196,6 +196,7 @@ def evaluate_true_alpha_wald(
 def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
     """Aggregate replication-level Wald diagnostics by design and covariance."""
     replications = replications.copy()
+    rejected = replications["rejected"].astype("boolean").fillna(False)
     defaults: dict[str, object] = {
         "iteration_warning_policy": "reject",
         "hard_failure_policy": "unresolved",
@@ -204,7 +205,7 @@ def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
         "finite_statistic_available": np.isfinite(replications["wald"]),
         "coverage_status": np.where(
             replications["converged"],
-            np.where(replications["rejected"].fillna(False), "not_covered", "covered"),
+            np.where(rejected, "not_covered", "covered"),
             "coverage_unresolved",
         ),
         "cr_status": np.where(replications["converged"], "valid", "fully_unresolved"),

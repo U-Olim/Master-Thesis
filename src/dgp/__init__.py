@@ -8,7 +8,11 @@ from .generators import (
     generate_x,
     make_covariance_matrix,
 )
-from .true_parameters import get_oracle_control_indices, true_alpha
+from .true_parameters import (
+    get_oracle_control_indices,
+    true_active_control_indices,
+    true_alpha,
+)
 
 __all__ = [
     "Design",
@@ -19,6 +23,7 @@ __all__ = [
     "generate_x",
     "make_covariance_matrix",
     "get_oracle_control_indices",
+    "true_active_control_indices",
     "true_alpha",
 ]
 

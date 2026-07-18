@@ -10,7 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import simulation.runner as simulation_runner
 from analysis.data import _read_results
+from dgp import get_oracle_control_indices
 from dgp.designs import Design
 from ivqr.confidence_regions import parse_cr_components
 from simulation.results import RESULT_SCHEMA_VERSION
@@ -48,6 +50,28 @@ def test_oracle_support_invariant_rejects_duplicates() -> None:
     design = Design("dgp1", 80, 20, 1.0, 0.5, 0, 123)
     with pytest.raises(ValueError, match="duplicate"):
         validate_oracle_support(design, np.array([0, 1, 2, 3, 3]))
+
+
+def test_oracle_runner_receives_the_unchanged_coefficient_implied_support(
+    monkeypatch,
+) -> None:
+    captured: dict[str, np.ndarray] = {}
+
+    def capture_oracle(*args, **kwargs):
+        captured["oracle_indices"] = np.asarray(kwargs["oracle_indices"])
+        raise RuntimeError("stop after support capture")
+
+    monkeypatch.setattr(simulation_runner, "estimate_oracle_ivqr", capture_oracle)
+    design = Design("dgp2", 40, 10, 1.0, 0.5, 0, 123)
+    simulation_runner.run_simulation_design(
+        design,
+        np.array([-1.0, 0.0, 1.0]),
+        estimators=("oracle",),
+    )
+    np.testing.assert_array_equal(
+        captured["oracle_indices"],
+        get_oracle_control_indices(design.dgp, design.p),
+    )
 
 
 def test_real_ch_csv_round_trip_preserves_components_and_schema(tmp_path: Path) -> None:
