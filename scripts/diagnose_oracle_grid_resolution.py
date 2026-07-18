@@ -116,10 +116,6 @@ def exact_grid_consistency(
     return True, bool(reference_acceptance != covered)
 
 
-def _components_json(blocks: tuple[tuple[float, float], ...]) -> str:
-    return serialize_cr_components(blocks)
-
-
 def _evaluate_grid(
     *,
     grid_variant: str,
@@ -244,7 +240,7 @@ def _evaluate_grid(
         "cr_lower": np.nan if region.lower is None else region.lower,
         "cr_upper": np.nan if region.upper is None else region.upper,
         "cr_length": region.length,
-        "cr_components": _components_json(region.blocks),
+        "cr_components": serialize_cr_components(region.blocks),
         "full_grid_accepted": region.full_grid_accepted,
         "empty_cr": region.empty,
         "number_of_connected_components": region.n_blocks,

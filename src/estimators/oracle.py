@@ -39,6 +39,8 @@ _CH_COMPATIBILITY_KWARGS = {
     "refinement_tolerance",
     "max_refinement_depth",
     "max_alpha_evaluations",
+    "adaptive_midpoint_probe",
+    "alpha_hat_grid",
 }
 
 

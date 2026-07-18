@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import json
 from pathlib import Path
 import sys
+import subprocess
 import time
 
 import numpy as np
@@ -36,6 +37,8 @@ from simulation.config import (  # noqa: E402
     DEFAULT_MAX_ALPHA_EVALUATIONS,
     DEFAULT_ITERATION_WARNING_POLICY,
     DEFAULT_HARD_FAILURE_POLICY,
+    DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    DEFAULT_ALPHA_HAT_GRID,
     DGPS,
     FAST_OUTPUT,
     FULL_OUTPUT,
@@ -53,9 +56,35 @@ from simulation.runner import (  # noqa: E402
     normalize_estimator_names,
     run_simulation_batch,
 )
+from simulation.results import RESULT_SCHEMA_VERSION  # noqa: E402
 
 
 VALID_MODES = ("fast", "full")
+
+
+def _git_metadata() -> dict[str, object | None]:
+    """Return reproducibility metadata, tolerating non-Git environments."""
+    def run_git(*args: str) -> str | None:
+        try:
+            completed = subprocess.run(
+                ["git", *args],
+                cwd=PROJECT_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            return None
+        return completed.stdout.strip() if completed.returncode == 0 else None
+
+    commit = run_git("rev-parse", "HEAD")
+    branch = run_git("branch", "--show-current")
+    status = run_git("status", "--porcelain")
+    return {
+        "git_commit": commit,
+        "git_branch": branch,
+        "git_dirty": None if status is None else bool(status),
+    }
 
 
 def _default_output_for_mode(mode: str) -> Path:
@@ -114,6 +143,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--hard-failure-policy",
         choices=("unresolved", "legacy_reject"),
         default=DEFAULT_HARD_FAILURE_POLICY,
+    )
+    parser.add_argument(
+        "--adaptive-midpoint-probe",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    )
+    parser.add_argument(
+        "--alpha-hat-grid",
+        choices=("initial", "all_evaluated"),
+        default=DEFAULT_ALPHA_HAT_GRID,
     )
     parser.add_argument(
         "--critical-value-multiplier",
@@ -227,6 +266,7 @@ def _validate_args(args: argparse.Namespace) -> None:
 
 def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
     return {
+        "result_schema_version": RESULT_SCHEMA_VERSION,
         "mode": args.mode,
         "dgps": list(args.dgps),
         "n_values": list(args.n_values),
@@ -246,6 +286,8 @@ def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
         "max_alpha_evaluations": args.max_alpha_evaluations,
         "iteration_warning_policy": args.iteration_warning_policy,
         "hard_failure_policy": args.hard_failure_policy,
+        "adaptive_midpoint_probe": args.adaptive_midpoint_probe,
+        "alpha_hat_grid": args.alpha_hat_grid,
         "critical_value_multiplier": args.critical_value_multiplier,
         "selection_lasso_multiplier": args.selection_lasso_multiplier,
         "estimators": list(args.estimators),
@@ -280,6 +322,8 @@ def _write_manifest(
     payload = {
         "timestamp": datetime.now(UTC).isoformat(),
         "parameters": vars(args),
+        "result_schema_version": RESULT_SCHEMA_VERSION,
+        **_git_metadata(),
         "resume_signature": _resume_signature(args),
         "base_seed": args.base_seed,
         "seed_rule": SEED_RULE_TEXT,
@@ -287,6 +331,19 @@ def _write_manifest(
         "pending_designs": pending_designs,
         "designs_in_run": designs_in_run,
         "estimators": list(args.estimators),
+        "iteration_warning_policy": args.iteration_warning_policy,
+        "hard_failure_policy": args.hard_failure_policy,
+        "grid_strategy": args.grid_strategy,
+        "adaptive_midpoint_probe": args.adaptive_midpoint_probe,
+        "refinement_tolerance": args.refinement_tolerance,
+        "max_refinement_depth": args.max_refinement_depth,
+        "max_alpha_evaluations": args.max_alpha_evaluations,
+        "alpha_hat_grid": args.alpha_hat_grid,
+        "confidence_level": 0.95,
+        "lock_file": {
+            "path": "pixi.lock",
+            "exists": (PROJECT_ROOT / "pixi.lock").is_file(),
+        },
         "alpha_grid": {
             "size": int(alphas.size),
             "min": float(alphas.min()),
@@ -319,6 +376,8 @@ def _print_dry_run(
     print(f"Post-selection Lasso multiplier: {args.selection_lasso_multiplier}")
     print(f"CH grid strategy: {args.grid_strategy}")
     print(f"CH refinement tolerance: {args.refinement_tolerance}")
+    print(f"CH midpoint probe: {args.adaptive_midpoint_probe}")
+    print(f"CH point-estimate grid: {args.alpha_hat_grid}")
     print(f"DML quantile penalty: {args.dml_quantile_penalty}")
     print(f"DML ridge alpha: {args.dml_ridge_alpha}")
     print(f"DML quantile solver: {args.dml_quantile_solver}")
@@ -416,6 +475,8 @@ def main(argv: list[str] | None = None) -> None:
             max_alpha_evaluations=args.max_alpha_evaluations,
             iteration_warning_policy=args.iteration_warning_policy,
             hard_failure_policy=args.hard_failure_policy,
+            adaptive_midpoint_probe=args.adaptive_midpoint_probe,
+            alpha_hat_grid=args.alpha_hat_grid,
         )
         completed += len(batch)
         elapsed = time.perf_counter() - start

@@ -42,3 +42,4 @@ ENV/
 *.egg-info/
 
 results/diagnostics/hard_failure_policy/
+results/diagnostics/final_ch_preflight/

@@ -46,6 +46,7 @@ CORE_COLUMNS = [
 ]
 SELECTION_COLUMNS = ["n_selected_controls", "selection_lasso_multiplier"]
 CR_REPORTING_COLUMNS = [
+    "result_schema_version",
     "cr_components",
     "cr_n_blocks",
     "cr_disconnected",
@@ -355,6 +356,7 @@ def _read_results(
         if column not in frame:
             frame[column] = np.nan
     cr_defaults: dict[str, object] = {
+        "result_schema_version": np.nan,
         "cr_components": None,
         "cr_n_blocks": np.nan,
         "cr_disconnected": np.nan,

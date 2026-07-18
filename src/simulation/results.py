@@ -21,6 +21,7 @@ from utils.timing import RUNTIME_COLUMNS, empty_runtime_columns
 
 POST_SELECTION_WARNING_NONE = ""
 MAX_ERROR_MESSAGE_LENGTH = 500
+RESULT_SCHEMA_VERSION = 4
 
 RESULT_COLUMNS: tuple[str, ...] = (
     "dgp",
@@ -30,6 +31,7 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "tau",
     "rep",
     "seed",
+    "result_schema_version",
     "estimator",
     "alpha_hat",
     "alpha_true",
@@ -65,6 +67,12 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "usable_alpha_evaluations",
     "unresolved_alpha_evaluations",
     "grid_strategy",
+    "adaptive_midpoint_probe",
+    "alpha_hat_grid",
+    "midpoint_intervals_considered",
+    "midpoint_evaluations_added",
+    "midpoint_unresolved_barriers",
+    "midpoint_probe_limit_hit",
     "initial_alpha_grid_size",
     "final_alpha_evaluations",
     "refinement_tolerance",
@@ -76,6 +84,8 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "minimum_final_grid_spacing",
     "median_final_grid_spacing",
     "maximum_final_grid_spacing",
+    "iteration_warning_evaluations",
+    "rank_deficient_covariance_failures",
     "alpha_grid_min",
     "alpha_grid_max",
     "alpha_grid_size",
@@ -122,6 +132,10 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "ps_first_stage_f_stat",
     "ps_first_stage_condition_number",
     "ps_selection_method",
+    "ps_selection_target_y",
+    "ps_selection_target_d",
+    "ps_selection_quantile_specific",
+    "ps_post_selection_inference_adjustment",
     "ps_selection_lasso_multiplier",
     "ps_lasso_alpha_controls",
     "ps_lasso_alpha_instruments",
@@ -161,6 +175,10 @@ def empty_post_selection_diagnostics() -> dict[str, Any]:
         "ps_first_stage_f_stat": None,
         "ps_first_stage_condition_number": None,
         "ps_selection_method": None,
+        "ps_selection_target_y": None,
+        "ps_selection_target_d": None,
+        "ps_selection_quantile_specific": None,
+        "ps_post_selection_inference_adjustment": None,
         "ps_selection_lasso_multiplier": None,
         "ps_lasso_alpha_controls": None,
         "ps_lasso_alpha_instruments": None,
@@ -310,6 +328,7 @@ def build_simulation_result_row(
         "tau": design.tau,
         "rep": design.rep,
         "seed": design.seed,
+        "result_schema_version": RESULT_SCHEMA_VERSION,
         "estimator": result.estimator,
         "alpha_hat": result.alpha_hat,
         "alpha_true": result.alpha_true,
@@ -355,6 +374,12 @@ def build_simulation_result_row(
         "usable_alpha_evaluations": result.usable_alpha_evaluations,
         "unresolved_alpha_evaluations": result.unresolved_alpha_evaluations,
         "grid_strategy": result.grid_strategy,
+        "adaptive_midpoint_probe": result.adaptive_midpoint_probe,
+        "alpha_hat_grid": result.alpha_hat_grid,
+        "midpoint_intervals_considered": result.midpoint_intervals_considered,
+        "midpoint_evaluations_added": result.midpoint_evaluations_added,
+        "midpoint_unresolved_barriers": result.midpoint_unresolved_barriers,
+        "midpoint_probe_limit_hit": result.midpoint_probe_limit_hit,
         "initial_alpha_grid_size": result.initial_alpha_grid_size,
         "final_alpha_evaluations": result.final_alpha_evaluations,
         "refinement_tolerance": result.refinement_tolerance,
@@ -368,6 +393,10 @@ def build_simulation_result_row(
         "minimum_final_grid_spacing": result.minimum_final_grid_spacing,
         "median_final_grid_spacing": result.median_final_grid_spacing,
         "maximum_final_grid_spacing": result.maximum_final_grid_spacing,
+        "iteration_warning_evaluations": result.iteration_warning_evaluations,
+        "rank_deficient_covariance_failures": (
+            result.rank_deficient_covariance_failures
+        ),
         "alpha_grid_min": diagnostics["alpha_grid_min"],
         "alpha_grid_max": diagnostics["alpha_grid_max"],
         "alpha_grid_size": diagnostics["alpha_grid_size"],
@@ -466,6 +495,7 @@ def _diagnostic_value(
 
 __all__ = [
     "MAX_ERROR_MESSAGE_LENGTH",
+    "RESULT_SCHEMA_VERSION",
     "RESULT_COLUMNS",
     "build_failure_result_row",
     "build_simulation_result_row",

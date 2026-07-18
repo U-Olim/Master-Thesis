@@ -53,6 +53,10 @@ POST_SELECTION_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
     "ps_first_stage_f_stat",
     "ps_first_stage_condition_number",
     "ps_selection_method",
+    "ps_selection_target_y",
+    "ps_selection_target_d",
+    "ps_selection_quantile_specific",
+    "ps_post_selection_inference_adjustment",
     "ps_selection_lasso_multiplier",
     "ps_lasso_alpha_controls",
     "ps_lasso_alpha_instruments",
@@ -139,6 +143,12 @@ class EstimationResult:
     usable_alpha_evaluations: int | None = None
     unresolved_alpha_evaluations: int | None = None
     grid_strategy: str = "not_applicable"
+    adaptive_midpoint_probe: bool | None = None
+    alpha_hat_grid: str = "not_applicable"
+    midpoint_intervals_considered: int | None = None
+    midpoint_evaluations_added: int | None = None
+    midpoint_unresolved_barriers: int | None = None
+    midpoint_probe_limit_hit: bool | None = None
     initial_alpha_grid_size: int | None = None
     final_alpha_evaluations: int | None = None
     refinement_tolerance: float | None = None
@@ -150,6 +160,8 @@ class EstimationResult:
     minimum_final_grid_spacing: float | None = None
     median_final_grid_spacing: float | None = None
     maximum_final_grid_spacing: float | None = None
+    iteration_warning_evaluations: int | None = None
+    rank_deficient_covariance_failures: int | None = None
 
     alpha_grid_min: float | None = None
     alpha_grid_max: float | None = None
@@ -218,6 +230,10 @@ class EstimationResult:
     ps_first_stage_f_stat: float | None = None
     ps_first_stage_condition_number: float | None = None
     ps_selection_method: str | None = None
+    ps_selection_target_y: str | None = None
+    ps_selection_target_d: str | None = None
+    ps_selection_quantile_specific: bool | None = None
+    ps_post_selection_inference_adjustment: str | None = None
     ps_selection_lasso_multiplier: float | None = None
     ps_lasso_alpha_controls: float | None = None
     ps_lasso_alpha_instruments: float | None = None

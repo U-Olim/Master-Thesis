@@ -1,6 +1,6 @@
 """Post-selection control-selected IVQR estimator.
 
-This estimator first selects controls by LassoCV from the reduced-form
+This estimator first selects controls by mean LassoCV from the reduced-form
 relations Y ~ X and D ~ X, then applies the Chernozhukov-Hansen
 inverse-IVQR estimator using only the selected controls.
 
@@ -12,9 +12,10 @@ and the second-stage structural equation is evaluated as
 
     Y = D alpha_tau + X_{S_hat}' beta_tau + U_tau
 
-The estimator is feasible under approximate sparsity, but selection
-uncertainty can cause undercoverage in finite samples. It is not the
-DML-style residualized IVQR estimator.
+This is a heuristic mean-Lasso union benchmark. Selection is not
+quantile-specific, alpha-specific, cross-fitted, orthogonal, or formally
+selection-adjusted. Selection uncertainty can cause undercoverage in finite
+samples. It is not the DML-style residualized IVQR estimator.
 """
 
 from __future__ import annotations
@@ -39,6 +40,9 @@ from ivqr.ch_inverse import (
     DEFAULT_MAX_ALPHA_EVALUATIONS,
     DEFAULT_MAX_REFINEMENT_DEPTH,
     DEFAULT_REFINEMENT_TOLERANCE,
+    DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    DEFAULT_ALPHA_HAT_GRID,
+    AlphaHatGrid,
     AlphaEvaluation,
     AlphaGridEvaluation,
     GridStrategy,
@@ -47,8 +51,10 @@ from ivqr.ch_inverse import (
     as_2d_instruments,
     evaluate_alpha_ch_ivqr as _evaluate_alpha_ch_ivqr,
     evaluate_ch_alpha_grid,
+    default_grid_metadata,
     grid_metadata_kwargs,
     validate_grid_strategy,
+    validate_alpha_hat_grid,
     validate_iteration_warning_policy,
     validate_hard_failure_policy,
 )
@@ -174,7 +180,7 @@ def summarize_post_selection_diagnostics(
     lasso_alpha_d_final: float | None = None,
     lasso_cv_folds: int | None = None,
     selection_failed: bool = False,
-    selection_method: str = "lassocv_control_union",
+    selection_method: str = "mean_lasso_union",
     warning_code: str | None = None,
 ) -> dict[str, Any]:
     """Summarize diagnostics for the current post-selection implementation.
@@ -227,7 +233,7 @@ def summarize_post_selection_diagnostics(
                 n_controls / x.shape[1] if x.shape[1] > 0 else np.nan
             ),
             "ps_share_selected_instruments": share_retained_instruments,
-            "ps_instrument_selection_method": "all_instruments_retained",
+            "ps_instrument_selection_method": "retain_all",
             "ps_n_candidate_instruments": n_candidate_instruments,
             "ps_n_retained_instruments": n_retained_instruments,
             "ps_share_retained_instruments": share_retained_instruments,
@@ -236,6 +242,10 @@ def summarize_post_selection_diagnostics(
             "ps_selected_no_instruments": n_retained_instruments == 0,
             "ps_selected_empty_total": n_total == 0,
             "ps_selection_method": selection_method,
+            "ps_selection_target_y": "conditional_mean",
+            "ps_selection_target_d": "conditional_mean",
+            "ps_selection_quantile_specific": False,
+            "ps_post_selection_inference_adjustment": "none",
             "ps_selection_lasso_multiplier": _nan_or_float(selection_lasso_multiplier),
             "ps_lasso_alpha_controls": _nan_or_float(lasso_alpha_controls),
             "ps_lasso_alpha_instruments": _nan_or_float(lasso_alpha_instruments),
@@ -354,6 +364,8 @@ def _failed_result(
     cr_unresolved_alphas: str = "[]",
     grid_strategy: GridStrategy = "adaptive",
     grid_evaluation: AlphaGridEvaluation | None = None,
+    adaptive_midpoint_probe: bool = DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    alpha_hat_grid: AlphaHatGrid = DEFAULT_ALPHA_HAT_GRID,
 ) -> EstimationResult:
     if runtime_seconds < 0:
         raise ValueError("runtime_seconds must be nonnegative")
@@ -367,6 +379,15 @@ def _failed_result(
         and failed_alpha_count > alpha_grid_size
     ):
         raise ValueError("failed_alpha_count cannot exceed alpha_grid_size")
+    grid_metadata = (
+        default_grid_metadata(
+            grid_strategy=grid_strategy,
+            adaptive_midpoint_probe=adaptive_midpoint_probe,
+            alpha_hat_grid=alpha_hat_grid,
+        )
+        if grid_evaluation is None
+        else grid_metadata_kwargs(grid_evaluation)
+    )
     return EstimationResult(
         estimator="post_selection_ivqr",
         alpha_hat=None,
@@ -408,8 +429,7 @@ def _failed_result(
         ),
         usable_alpha_evaluations=usable_alpha_evaluations,
         unresolved_alpha_evaluations=unresolved_alpha_evaluations,
-        grid_strategy=grid_strategy,
-        **({} if grid_evaluation is None else grid_metadata_kwargs(grid_evaluation)),
+        **grid_metadata,
         **(
             estimator_runtime_columns(
                 estimator="post_selection_ivqr",
@@ -439,7 +459,8 @@ def _select_controls_lasso_details(
     """Select controls by union of LassoCV selections for Y~X and D~X.
 
     The selection step is not quantile-specific; tau is validated for API
-    consistency with IVQR estimators.
+    consistency with IVQR estimators. ``random_state`` is retained for API
+    compatibility but cyclic LassoCV is deterministic and does not use it.
     """
     validate_tau(tau)
     y, d, x = validate_data_arrays(y, d, x)
@@ -450,6 +471,7 @@ def _select_controls_lasso_details(
     selection_lasso_multiplier = validate_selection_lasso_multiplier(
         selection_lasso_multiplier
     )
+    _ = random_state
 
     if x.shape[1] == 0:
         return SelectionResult(
@@ -465,11 +487,11 @@ def _select_controls_lasso_details(
 
     cv_model_y = make_pipeline(
         StandardScaler(),
-        LassoCV(cv=cv, random_state=random_state, max_iter=max_iter),
+        LassoCV(cv=cv, max_iter=max_iter),
     )
     cv_model_d = make_pipeline(
         StandardScaler(),
-        LassoCV(cv=cv, random_state=random_state, max_iter=max_iter),
+        LassoCV(cv=cv, max_iter=max_iter),
     )
 
     cv_model_y.fit(x, y)
@@ -587,6 +609,8 @@ def estimate_post_selection_ivqr(
     refinement_tolerance: float = DEFAULT_REFINEMENT_TOLERANCE,
     max_refinement_depth: int = DEFAULT_MAX_REFINEMENT_DEPTH,
     max_alpha_evaluations: int = DEFAULT_MAX_ALPHA_EVALUATIONS,
+    adaptive_midpoint_probe: bool = DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    alpha_hat_grid: AlphaHatGrid = DEFAULT_ALPHA_HAT_GRID,
 ) -> EstimationResult:
     """Estimate post-selection IVQR by Lasso selection and CH inverse-IVQR.
 
@@ -594,10 +618,12 @@ def estimate_post_selection_ivqr(
     when reproducing simulations generated with the legacy warning policy.
     Hard failures are unresolved by default; ``"legacy_reject"`` retains the
     historical sentinel-statistic behavior for reproducibility.
-    Production adaptively bisects usable acceptance transitions to tolerance
-    0.025, with depth 10 and at most 201 evaluations. ``grid_strategy="fixed"``
-    retains legacy fixed-grid behavior. Adaptive alpha_hat minimizes over all
-    usable initial and refined evaluations.
+    Production uses midpoint-assisted adaptive boundary refinement to tolerance
+    0.025, depth 10, and at most 201 evaluations. This does not guarantee every
+    disconnected region is discovered. ``grid_strategy="fixed"`` retains
+    legacy fixed-grid behavior. Point estimation uses usable initial-grid
+    evaluations by default; ``alpha_hat_grid="all_evaluated"`` reproduces the
+    earlier adaptive behavior.
     """
     start = perf_counter()
     selection_sec = float("nan")
@@ -617,6 +643,7 @@ def estimate_post_selection_ivqr(
     )
     hard_failure_policy = validate_hard_failure_policy(hard_failure_policy)
     grid_strategy = validate_grid_strategy(grid_strategy)
+    alpha_hat_grid = validate_alpha_hat_grid(alpha_hat_grid)
     y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
     z_2d = as_2d_instruments(z)
     _validate_selection_config(selection_cv, selection_max_iter, x.shape[0])
@@ -667,6 +694,8 @@ def estimate_post_selection_ivqr(
                 diagnostics_sec=diagnostics_sec,
             ),
             grid_strategy=grid_strategy,
+            adaptive_midpoint_probe=adaptive_midpoint_probe,
+            alpha_hat_grid=alpha_hat_grid,
         )
 
     selected_indices = selection_details.selected_indices
@@ -718,6 +747,8 @@ def estimate_post_selection_ivqr(
                 diagnostics_sec=diagnostics_sec,
             ),
             grid_strategy=grid_strategy,
+            adaptive_midpoint_probe=adaptive_midpoint_probe,
+            alpha_hat_grid=alpha_hat_grid,
         )
 
     if alphas is None:
@@ -745,6 +776,8 @@ def estimate_post_selection_ivqr(
         refinement_tolerance=refinement_tolerance,
         max_refinement_depth=max_refinement_depth,
         max_alpha_evaluations=max_alpha_evaluations,
+        adaptive_midpoint_probe=adaptive_midpoint_probe,
+        alpha_hat_grid=alpha_hat_grid,
     )
     alpha_loop_sec = perf_counter() - alpha_loop_start
 
@@ -789,10 +822,23 @@ def estimate_post_selection_ivqr(
             ),
             grid_strategy=grid_strategy,
             grid_evaluation=grid_evaluation,
+            adaptive_midpoint_probe=adaptive_midpoint_probe,
+            alpha_hat_grid=alpha_hat_grid,
         )
 
     confidence_region_start = perf_counter()
-    point_estimate = argmin_grid_usable(alphas, inference_statistics, inference_usable)
+    if alpha_hat_grid == "initial":
+        point_indices = np.searchsorted(alphas, grid_evaluation.initial_alphas)
+        point_alphas = alphas[point_indices]
+        point_statistics = statistics[point_indices]
+        point_usable = usable[point_indices]
+    else:
+        point_alphas = alphas
+        point_statistics = statistics
+        point_usable = usable
+    point_estimate = argmin_grid_usable(
+        point_alphas, point_statistics, point_usable
+    )
     alpha_hat = point_estimate.alpha_hat
     min_statistic = point_estimate.statistic
     at_boundary = point_estimate.at_boundary

@@ -10,6 +10,12 @@ from ivqr.confidence_regions import parse_cr_components, validate_cr_geometry
 
 GRID_METADATA_COLUMNS: tuple[str, ...] = (
     "grid_strategy",
+    "adaptive_midpoint_probe",
+    "alpha_hat_grid",
+    "midpoint_intervals_considered",
+    "midpoint_evaluations_added",
+    "midpoint_unresolved_barriers",
+    "midpoint_probe_limit_hit",
     "initial_alpha_grid_size",
     "final_alpha_evaluations",
     "refinement_tolerance",
@@ -21,6 +27,8 @@ GRID_METADATA_COLUMNS: tuple[str, ...] = (
     "minimum_final_grid_spacing",
     "median_final_grid_spacing",
     "maximum_final_grid_spacing",
+    "iteration_warning_evaluations",
+    "rank_deficient_covariance_failures",
 )
 CR_GEOMETRY_COLUMNS: tuple[str, ...] = (
     "cr_components",
@@ -40,6 +48,7 @@ REQUIRED_CORE_COLUMNS: tuple[str, ...] = (
     "tau",
     "rep",
     "seed",
+    "result_schema_version",
     "estimator",
     "alpha_hat",
     "alpha_true",
@@ -71,6 +80,14 @@ def with_neutral_grid_metadata(source: pd.DataFrame) -> pd.DataFrame:
     completed = source.copy()
     defaults: dict[str, object] = {
         "grid_strategy": "not_applicable",
+        "adaptive_midpoint_probe": False,
+        "alpha_hat_grid": "not_applicable",
+        "midpoint_intervals_considered": 0,
+        "midpoint_evaluations_added": 0,
+        "midpoint_unresolved_barriers": 0,
+        "midpoint_probe_limit_hit": False,
+        "iteration_warning_evaluations": 0,
+        "rank_deficient_covariance_failures": 0,
         "refinement_limit_hit": False,
         "max_alpha_evaluations_hit": False,
         "cr_components": None,
@@ -80,8 +97,13 @@ def with_neutral_grid_metadata(source: pd.DataFrame) -> pd.DataFrame:
         "cr_is_numerically_resolved": np.nan,
         "cr_unresolved_count": np.nan,
         "cr_unresolved_alphas": None,
+        "result_schema_version": np.nan,
     }
-    for column in (*GRID_METADATA_COLUMNS, *CR_GEOMETRY_COLUMNS):
+    for column in (
+        *GRID_METADATA_COLUMNS,
+        *CR_GEOMETRY_COLUMNS,
+        "result_schema_version",
+    ):
         if column not in completed.columns:
             completed[column] = defaults.get(column, np.nan)
     return completed

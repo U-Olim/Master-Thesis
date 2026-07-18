@@ -51,6 +51,7 @@ IterationWarningPolicy = Literal["reject", "use_if_valid"]
 AlphaInferenceStatus = Literal["valid", "unresolved"]
 HardFailurePolicy = Literal["unresolved", "legacy_reject"]
 GridStrategy = Literal["fixed", "adaptive"]
+AlphaHatGrid = Literal["initial", "all_evaluated"]
 ITERATION_WARNING_POLICIES: tuple[IterationWarningPolicy, ...] = (
     "use_if_valid",
     "reject",
@@ -64,6 +65,9 @@ GRID_STRATEGIES: tuple[GridStrategy, ...] = ("fixed", "adaptive")
 DEFAULT_REFINEMENT_TOLERANCE = 0.025
 DEFAULT_MAX_REFINEMENT_DEPTH = 10
 DEFAULT_MAX_ALPHA_EVALUATIONS = 201
+DEFAULT_ADAPTIVE_MIDPOINT_PROBE = True
+DEFAULT_ALPHA_HAT_GRID: AlphaHatGrid = "initial"
+ALPHA_HAT_GRIDS: tuple[AlphaHatGrid, ...] = ("initial", "all_evaluated")
 
 
 @dataclass(frozen=True)
@@ -102,6 +106,13 @@ class AlphaGridEvaluation:
     evaluations: tuple[AlphaEvaluation, ...]
     grid_strategy: GridStrategy
     initial_alpha_grid_size: int
+    initial_alphas: np.ndarray
+    adaptive_midpoint_probe: bool
+    alpha_hat_grid: AlphaHatGrid
+    midpoint_intervals_considered: int
+    midpoint_evaluations_added: int
+    midpoint_unresolved_barriers: int
+    midpoint_probe_limit_hit: bool
     refinement_tolerance: float
     refinement_depth_reached: int
     refinement_limit_hit: bool
@@ -153,6 +164,14 @@ def validate_grid_strategy(strategy: GridStrategy | str) -> GridStrategy:
     return cast(GridStrategy, strategy)
 
 
+def validate_alpha_hat_grid(value: AlphaHatGrid | str) -> AlphaHatGrid:
+    """Validate the grid eligible for CH point estimation."""
+    if value not in ALPHA_HAT_GRIDS:
+        choices = ", ".join(ALPHA_HAT_GRIDS)
+        raise ValueError(f"alpha_hat_grid must be one of: {choices}")
+    return cast(AlphaHatGrid, value)
+
+
 def evaluate_ch_alpha_grid(
     initial_alphas: np.ndarray,
     evaluate_alpha: Callable[[float], AlphaEvaluation],
@@ -162,20 +181,28 @@ def evaluate_ch_alpha_grid(
     refinement_tolerance: float = DEFAULT_REFINEMENT_TOLERANCE,
     max_refinement_depth: int = DEFAULT_MAX_REFINEMENT_DEPTH,
     max_alpha_evaluations: int = DEFAULT_MAX_ALPHA_EVALUATIONS,
+    adaptive_midpoint_probe: bool = DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    alpha_hat_grid: AlphaHatGrid = DEFAULT_ALPHA_HAT_GRID,
 ) -> AlphaGridEvaluation:
-    """Evaluate and optionally refine valid CH acceptance transitions.
+    """Evaluate a midpoint-assisted adaptive CH boundary grid.
 
-    Adaptive refinement bisects only adjacent, usable accepted/rejected pairs.
-    An unresolved midpoint becomes a permanent barrier. Evaluations are cached
-    by their exact float value, so a candidate is fitted at most once per call.
+    Adaptive mode optionally probes each usable initial interval once, then
+    bisects valid accepted/rejected transitions widest-first. It remains a
+    boundary-resolution method and does not guarantee discovery of every
+    disconnected component. Every exact alpha value is fitted at most once.
     """
     strategy = validate_grid_strategy(grid_strategy)
+    alpha_hat_grid = validate_alpha_hat_grid(alpha_hat_grid)
+    if not isinstance(adaptive_midpoint_probe, bool):
+        raise ValueError("adaptive_midpoint_probe must be boolean")
     raw_alphas = np.asarray(initial_alphas, dtype=float)
     if raw_alphas.ndim != 1 or raw_alphas.size == 0:
         raise ValueError("initial_alphas must be a nonempty vector")
     if not np.all(np.isfinite(raw_alphas)):
         raise ValueError("initial_alphas must contain only finite values")
     alphas = np.unique(raw_alphas)
+    initial_alphas = alphas.copy()
+    initial_alphas.setflags(write=False)
     if not np.isfinite(critical_value) or critical_value < 0:
         raise ValueError("critical_value must be finite and nonnegative")
     if not np.isfinite(refinement_tolerance) or refinement_tolerance <= 0:
@@ -206,9 +233,37 @@ def evaluate_ch_alpha_grid(
     for alpha in alphas:
         cached_evaluate(float(alpha))
 
+    midpoint_intervals_considered = 0
+    midpoint_evaluations_added = 0
+    midpoint_unresolved_barriers = 0
+    midpoint_probe_limit_hit = False
+    effective_midpoint_probe = strategy == "adaptive" and adaptive_midpoint_probe
+    if effective_midpoint_probe:
+        for left, right in zip(initial_alphas[:-1], initial_alphas[1:], strict=True):
+            left_eval, right_eval = cache[float(left)], cache[float(right)]
+            if not (
+                left_eval.usable
+                and right_eval.usable
+                and np.isfinite(left_eval.statistic)
+                and np.isfinite(right_eval.statistic)
+            ):
+                continue
+            midpoint_intervals_considered += 1
+            if len(cache) >= max_alpha_evaluations:
+                midpoint_probe_limit_hit = True
+                break
+            midpoint = float(left + (right - left) / 2.0)
+            if midpoint in cache:
+                continue
+            evaluation = cached_evaluate(midpoint)
+            midpoint_evaluations_added += 1
+            if not evaluation.usable or not np.isfinite(evaluation.statistic):
+                midpoint_unresolved_barriers += 1
+
+    points_after_probe = np.array(sorted(cache), dtype=float)
     depth_by_interval = {
         (float(left), float(right)): 0
-        for left, right in zip(alphas[:-1], alphas[1:], strict=True)
+        for left, right in zip(points_after_probe[:-1], points_after_probe[1:], strict=True)
     }
     depth_reached = 0
     depth_limit_hit = False
@@ -242,26 +297,32 @@ def evaluate_ch_alpha_grid(
                 transitions.append((left_key, right_key, depth))
             if not transitions:
                 break
-            progressed = False
-            for left, right, depth in transitions:
-                if len(cache) >= max_alpha_evaluations:
-                    evaluation_limit_hit = True
-                    break
-                midpoint = float(left + (right - left) / 2.0)
-                if midpoint in cache:
-                    continue
-                evaluation = cached_evaluate(midpoint)
-                progressed = True
-                refined_intervals += 1
-                child_depth = depth + 1
-                depth_reached = max(depth_reached, child_depth)
-                depth_by_interval.pop((left, right), None)
-                depth_by_interval[(left, midpoint)] = child_depth
-                depth_by_interval[(midpoint, right)] = child_depth
-                if not evaluation.usable or not np.isfinite(evaluation.statistic):
-                    unresolved_barriers += 1
-            if evaluation_limit_hit or not progressed:
+            if len(cache) >= max_alpha_evaluations:
+                evaluation_limit_hit = True
                 break
+            # Deterministic fairness: widest transition first, then lower alpha,
+            # then shallower depth. Recompute after every midpoint evaluation.
+            left, right, depth = min(
+                transitions,
+                key=lambda interval: (
+                    -(interval[1] - interval[0]),
+                    interval[0],
+                    interval[2],
+                ),
+            )
+            midpoint = float(left + (right - left) / 2.0)
+            if midpoint in cache:
+                depth_by_interval.pop((left, right), None)
+                continue
+            evaluation = cached_evaluate(midpoint)
+            refined_intervals += 1
+            child_depth = depth + 1
+            depth_reached = max(depth_reached, child_depth)
+            depth_by_interval.pop((left, right), None)
+            depth_by_interval[(left, midpoint)] = child_depth
+            depth_by_interval[(midpoint, right)] = child_depth
+            if not evaluation.usable or not np.isfinite(evaluation.statistic):
+                unresolved_barriers += 1
 
     final_alphas = np.array(sorted(cache), dtype=float)
     final_alphas.setflags(write=False)
@@ -270,10 +331,19 @@ def evaluate_ch_alpha_grid(
         evaluations=tuple(cache[float(alpha)] for alpha in final_alphas),
         grid_strategy=strategy,
         initial_alpha_grid_size=int(alphas.size),
+        initial_alphas=initial_alphas,
+        adaptive_midpoint_probe=effective_midpoint_probe,
+        alpha_hat_grid=alpha_hat_grid,
+        midpoint_intervals_considered=midpoint_intervals_considered,
+        midpoint_evaluations_added=midpoint_evaluations_added,
+        midpoint_unresolved_barriers=midpoint_unresolved_barriers,
+        midpoint_probe_limit_hit=midpoint_probe_limit_hit,
         refinement_tolerance=float(refinement_tolerance),
         refinement_depth_reached=depth_reached,
-        refinement_limit_hit=depth_limit_hit or evaluation_limit_hit,
-        max_alpha_evaluations_hit=evaluation_limit_hit,
+        refinement_limit_hit=(
+            depth_limit_hit or evaluation_limit_hit or midpoint_probe_limit_hit
+        ),
+        max_alpha_evaluations_hit=evaluation_limit_hit or midpoint_probe_limit_hit,
         number_of_refined_intervals=refined_intervals,
         number_of_unresolved_refinement_barriers=unresolved_barriers,
     )
@@ -284,6 +354,12 @@ def grid_metadata_kwargs(grid: AlphaGridEvaluation) -> dict[str, object]:
     return {
         "grid_strategy": grid.grid_strategy,
         "initial_alpha_grid_size": grid.initial_alpha_grid_size,
+        "adaptive_midpoint_probe": grid.adaptive_midpoint_probe,
+        "alpha_hat_grid": grid.alpha_hat_grid,
+        "midpoint_intervals_considered": grid.midpoint_intervals_considered,
+        "midpoint_evaluations_added": grid.midpoint_evaluations_added,
+        "midpoint_unresolved_barriers": grid.midpoint_unresolved_barriers,
+        "midpoint_probe_limit_hit": grid.midpoint_probe_limit_hit,
         "final_alpha_evaluations": grid.final_alpha_evaluations,
         "refinement_tolerance": grid.refinement_tolerance,
         "refinement_depth_reached": grid.refinement_depth_reached,
@@ -296,6 +372,47 @@ def grid_metadata_kwargs(grid: AlphaGridEvaluation) -> dict[str, object]:
         "minimum_final_grid_spacing": minimum,
         "median_final_grid_spacing": median,
         "maximum_final_grid_spacing": maximum,
+        "iteration_warning_evaluations": sum(
+            evaluation.warning_type == "iteration_limit"
+            for evaluation in grid.evaluations
+        ),
+        "rank_deficient_covariance_failures": sum(
+            evaluation.failure_reason == "rank_deficient_instrument_covariance"
+            for evaluation in grid.evaluations
+        ),
+    }
+
+
+def default_grid_metadata(
+    *,
+    grid_strategy: GridStrategy,
+    adaptive_midpoint_probe: bool = DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    alpha_hat_grid: AlphaHatGrid = DEFAULT_ALPHA_HAT_GRID,
+) -> dict[str, object]:
+    """Return internally consistent metadata before grid evaluation exists."""
+    strategy = validate_grid_strategy(grid_strategy)
+    point_grid = validate_alpha_hat_grid(alpha_hat_grid)
+    return {
+        "grid_strategy": strategy,
+        "initial_alpha_grid_size": None,
+        "final_alpha_evaluations": None,
+        "adaptive_midpoint_probe": strategy == "adaptive" and adaptive_midpoint_probe,
+        "alpha_hat_grid": point_grid,
+        "midpoint_intervals_considered": 0,
+        "midpoint_evaluations_added": 0,
+        "midpoint_unresolved_barriers": 0,
+        "midpoint_probe_limit_hit": False,
+        "refinement_tolerance": None,
+        "refinement_depth_reached": 0,
+        "refinement_limit_hit": False,
+        "max_alpha_evaluations_hit": False,
+        "number_of_refined_intervals": 0,
+        "number_of_unresolved_refinement_barriers": 0,
+        "minimum_final_grid_spacing": None,
+        "median_final_grid_spacing": None,
+        "maximum_final_grid_spacing": None,
+        "iteration_warning_evaluations": 0,
+        "rank_deficient_covariance_failures": 0,
     }
 
 
@@ -538,12 +655,12 @@ def evaluate_alpha_ch_ivqr(
             gamma_hat=gamma_hat,
             cov_gamma=cov_gamma,
         )
-    if dim_z > 1 and covariance_rank == 0:
+    if dim_z > 1 and covariance_rank < dim_z:
         return _failed_alpha_evaluation(
             dim_z=dim_z,
             converged=converged,
             warning_type=warning_type,
-            failure_reason="zero_instrument_covariance",
+            failure_reason="rank_deficient_instrument_covariance",
             gamma_hat=gamma_hat,
             cov_gamma=cov_gamma,
             covariance_rank=covariance_rank,
@@ -646,6 +763,8 @@ def failed_ch_ivqr_result(
     cr_unresolved_alphas: str = "[]",
     grid_strategy: GridStrategy = "adaptive",
     grid_evaluation: AlphaGridEvaluation | None = None,
+    adaptive_midpoint_probe: bool = DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    alpha_hat_grid: AlphaHatGrid = DEFAULT_ALPHA_HAT_GRID,
 ) -> EstimationResult:
     """Create a standard failed result for any CH-IVQR-style estimator."""
     if not np.isfinite(runtime_seconds) or runtime_seconds < 0:
@@ -660,6 +779,15 @@ def failed_ch_ivqr_result(
         and failed_alpha_count > alpha_grid_size
     ):
         raise ValueError("failed_alpha_count must not exceed alpha_grid_size")
+    grid_metadata = (
+        default_grid_metadata(
+            grid_strategy=grid_strategy,
+            adaptive_midpoint_probe=adaptive_midpoint_probe,
+            alpha_hat_grid=alpha_hat_grid,
+        )
+        if grid_evaluation is None
+        else grid_metadata_kwargs(grid_evaluation)
+    )
     return EstimationResult(
         estimator=estimator,
         alpha_hat=None,
@@ -701,8 +829,7 @@ def failed_ch_ivqr_result(
         ),
         usable_alpha_evaluations=usable_alpha_evaluations,
         unresolved_alpha_evaluations=unresolved_alpha_evaluations,
-        grid_strategy=grid_strategy,
-        **({} if grid_evaluation is None else grid_metadata_kwargs(grid_evaluation)),
+        **grid_metadata,
         **(
             estimator_runtime_columns(estimator=estimator, total_sec=runtime_seconds)
             if runtime_diagnostics is None
@@ -729,6 +856,8 @@ def estimate_ch_ivqr_controls(
     refinement_tolerance: float = DEFAULT_REFINEMENT_TOLERANCE,
     max_refinement_depth: int = DEFAULT_MAX_REFINEMENT_DEPTH,
     max_alpha_evaluations: int = DEFAULT_MAX_ALPHA_EVALUATIONS,
+    adaptive_midpoint_probe: bool = DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    alpha_hat_grid: AlphaHatGrid = DEFAULT_ALPHA_HAT_GRID,
     selected_controls: int | None = None,
 ) -> EstimationResult:
     """Estimate alpha by CH inverse-IVQR using a supplied control matrix.
@@ -740,8 +869,10 @@ def estimate_ch_ivqr_controls(
     rejection from historical simulations. Production uses
     ``grid_strategy="adaptive"`` with a 0.025 boundary tolerance, depth limit
     10, and at most 201 alpha evaluations. ``"fixed"`` reproduces the legacy
-    initial-grid estimator. Adaptive point estimation minimizes over all usable
-    initial and refined evaluations.
+    initial-grid estimator. Midpoint probing improves detection of hidden
+    components without guaranteeing discovery of every disconnected region.
+    Point estimation uses usable initial-grid evaluations by default; set
+    ``alpha_hat_grid="all_evaluated"`` for the earlier adaptive behavior.
     """
     start = perf_counter()
     alpha_loop_sec = float("nan")
@@ -752,6 +883,7 @@ def estimate_ch_ivqr_controls(
     )
     hard_failure_policy = validate_hard_failure_policy(hard_failure_policy)
     grid_strategy = validate_grid_strategy(grid_strategy)
+    alpha_hat_grid = validate_alpha_hat_grid(alpha_hat_grid)
     critical_value_multiplier = validate_critical_value_multiplier(
         critical_value_multiplier
     )
@@ -780,6 +912,8 @@ def estimate_ch_ivqr_controls(
             failed_alpha_count=None,
             selected_controls=selected_controls,
             grid_strategy=grid_strategy,
+            adaptive_midpoint_probe=adaptive_midpoint_probe,
+            alpha_hat_grid=alpha_hat_grid,
         )
 
     if alphas is None:
@@ -807,6 +941,8 @@ def estimate_ch_ivqr_controls(
         refinement_tolerance=refinement_tolerance,
         max_refinement_depth=max_refinement_depth,
         max_alpha_evaluations=max_alpha_evaluations,
+        adaptive_midpoint_probe=adaptive_midpoint_probe,
+        alpha_hat_grid=alpha_hat_grid,
     )
     alpha_loop_sec = perf_counter() - alpha_loop_start
 
@@ -849,10 +985,23 @@ def estimate_ch_ivqr_controls(
             ),
             grid_strategy=grid_strategy,
             grid_evaluation=grid_evaluation,
+            adaptive_midpoint_probe=adaptive_midpoint_probe,
+            alpha_hat_grid=alpha_hat_grid,
         )
 
     confidence_region_start = perf_counter()
-    point_estimate = argmin_grid_usable(alphas, inference_statistics, inference_usable)
+    if alpha_hat_grid == "initial":
+        point_indices = np.searchsorted(alphas, grid_evaluation.initial_alphas)
+        point_alphas = alphas[point_indices]
+        point_statistics = statistics[point_indices]
+        point_usable = usable[point_indices]
+    else:
+        point_alphas = alphas
+        point_statistics = statistics
+        point_usable = usable
+    point_estimate = argmin_grid_usable(
+        point_alphas, point_statistics, point_usable
+    )
     alpha_hat = point_estimate.alpha_hat
     min_statistic = point_estimate.statistic
     at_boundary = point_estimate.at_boundary
@@ -931,11 +1080,15 @@ __all__ = [
     "AlphaInferenceStatus",
     "AlphaEvaluation",
     "AlphaGridEvaluation",
+    "AlphaHatGrid",
+    "ALPHA_HAT_GRIDS",
     "GridStrategy",
     "GRID_STRATEGIES",
     "DEFAULT_REFINEMENT_TOLERANCE",
     "DEFAULT_MAX_REFINEMENT_DEPTH",
     "DEFAULT_MAX_ALPHA_EVALUATIONS",
+    "DEFAULT_ADAPTIVE_MIDPOINT_PROBE",
+    "DEFAULT_ALPHA_HAT_GRID",
     "HardFailurePolicy",
     "HARD_FAILURE_POLICIES",
     "IterationWarningPolicy",
@@ -948,8 +1101,10 @@ __all__ = [
     "evaluate_ch_alpha_grid",
     "failed_ch_ivqr_result",
     "grid_metadata_kwargs",
+    "default_grid_metadata",
     "estimate_ch_ivqr_controls",
     "validate_iteration_warning_policy",
     "validate_hard_failure_policy",
     "validate_grid_strategy",
+    "validate_alpha_hat_grid",
 ]

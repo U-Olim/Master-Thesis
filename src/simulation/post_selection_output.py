@@ -21,6 +21,7 @@ REQUIRED_POST_SELECTION_COLUMNS: tuple[str, ...] = (
     "tau",
     "rep",
     "seed",
+    "result_schema_version",
     "estimator",
     "alpha_hat",
     "alpha_true",
@@ -33,6 +34,13 @@ REQUIRED_POST_SELECTION_COLUMNS: tuple[str, ...] = (
     *GRID_METADATA_COLUMNS,
     "n_selected_controls",
     "selection_lasso_multiplier",
+    "selection_method",
+    "selection_target_y",
+    "selection_target_d",
+    "selection_quantile_specific",
+    "instrument_selection_method",
+    "post_selection_inference_adjustment",
+    "n_retained_instruments",
 )
 
 POST_SELECTION_IDENTIFIER_COLUMNS: tuple[str, ...] = (
@@ -49,8 +57,22 @@ _SOURCE_COLUMNS = {
     "covered": "cr_covers_true",
     "n_selected_controls": "ps_n_selected_controls",
     "selection_lasso_multiplier": "ps_selection_lasso_multiplier",
+    "selection_method": "ps_selection_method",
+    "selection_target_y": "ps_selection_target_y",
+    "selection_target_d": "ps_selection_target_d",
+    "selection_quantile_specific": "ps_selection_quantile_specific",
+    "instrument_selection_method": "ps_instrument_selection_method",
+    "post_selection_inference_adjustment": (
+        "ps_post_selection_inference_adjustment"
+    ),
+    "n_retained_instruments": "ps_n_retained_instruments",
 }
-_BOOLEAN_COLUMNS = ("covered", "converged", "cr_disconnected")
+_BOOLEAN_COLUMNS = (
+    "covered",
+    "converged",
+    "cr_disconnected",
+    "selection_quantile_specific",
+)
 
 
 def _as_boolean(series: pd.Series, column: str) -> pd.Series:
@@ -199,6 +221,18 @@ def clean_post_selection_results_frame(
         duplicates = sorted(set(source.columns[source.columns.duplicated()].astype(str)))
         raise ValueError(f"source has duplicate columns: {duplicates}")
     source = with_neutral_grid_metadata(source)
+    legacy_defaults: dict[str, object] = {
+        "ps_selection_method": "unavailable",
+        "ps_selection_target_y": "unavailable",
+        "ps_selection_target_d": "unavailable",
+        "ps_selection_quantile_specific": np.nan,
+        "ps_instrument_selection_method": "unavailable",
+        "ps_post_selection_inference_adjustment": "unavailable",
+        "ps_n_retained_instruments": np.nan,
+    }
+    for column, default in legacy_defaults.items():
+        if column not in source:
+            source[column] = default
     _validate_selection_count_agreement(source)
 
     source_columns = {

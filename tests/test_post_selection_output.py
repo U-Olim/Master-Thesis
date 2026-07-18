@@ -73,10 +73,21 @@ def test_clean_post_selection_preserves_rows_and_values() -> None:
         "n_selected_controls": "ps_n_selected_controls",
         "selection_lasso_multiplier": "ps_selection_lasso_multiplier",
     }
+    legacy_metadata = {
+        "selection_method",
+        "selection_target_y",
+        "selection_target_d",
+        "selection_quantile_specific",
+        "instrument_selection_method",
+        "post_selection_inference_adjustment",
+        "n_retained_instruments",
+    }
     for column in REQUIRED_POST_SELECTION_COLUMNS:
         source_column = mappings.get(column, column)
         if column == "cr_disconnected":
             assert cleaned[column].isna().all()
+            continue
+        if column in legacy_metadata:
             continue
         pd.testing.assert_series_equal(
             source[source_column],

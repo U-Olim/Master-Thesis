@@ -380,6 +380,7 @@ def _synthetic_results() -> pd.DataFrame:
             "cr_lower": [1.0, 0.0],
             "cr_upper": [3.0, 4.0],
             "covered": [True, False],
+            "coverage_status": ["covered", "not_covered"],
             "cr_length": [2.0, 4.0],
             "converged": [True, True],
         }
@@ -438,6 +439,7 @@ def _validation_results(
     covered: list[bool] | None = None,
 ) -> pd.DataFrame:
     size = len(alpha_hat)
+    covered_values = covered if covered is not None else [False] * size
     return pd.DataFrame(
         {
             "estimator": ["oracle"] * size,
@@ -453,7 +455,15 @@ def _validation_results(
             "cr_lower": cr_lower if cr_lower is not None else [np.nan] * size,
             "cr_upper": cr_upper if cr_upper is not None else [np.nan] * size,
             "cr_length": cr_length if cr_length is not None else [np.nan] * size,
-            "covered": covered if covered is not None else [False] * size,
+            "covered": covered_values,
+            "coverage_status": [
+                "covered"
+                if is_covered
+                else ("not_covered" if is_converged else "unknown")
+                for is_covered, is_converged in zip(
+                    covered_values, converged, strict=True
+                )
+            ],
             "converged": converged,
         }
     )
@@ -625,6 +635,7 @@ def test_invalid_confidence_region_does_not_count_as_noncoverage() -> None:
             "cr_upper": [1.0, np.nan, 1.0],
             "cr_length": [2.0, np.nan, 2.0],
             "covered": [True, False, False],
+            "coverage_status": ["covered", "coverage_unresolved", "unknown"],
             "converged": [True, True, False],
         }
     )
@@ -633,6 +644,54 @@ def test_invalid_confidence_region_does_not_count_as_noncoverage() -> None:
     assert metrics["coverage"] == pytest.approx(1.0)
     assert metrics["average_cr_length"] == pytest.approx(2.0)
     assert metrics["median_cr_length"] == pytest.approx(2.0)
+
+
+def test_coverage_summary_separates_resolved_unresolved_and_failures() -> None:
+    results = pd.DataFrame(
+        {
+            "estimator": ["oracle"] * 4,
+            "alpha_hat": [0.0, 0.0, 0.0, np.nan],
+            "alpha_true": [0.0] * 4,
+            "cr_lower": [-1.0, 1.0, np.nan, np.nan],
+            "cr_upper": [1.0, 2.0, np.nan, np.nan],
+            "cr_length": [2.0, 1.0, np.nan, np.nan],
+            "covered": [True, False, False, False],
+            "coverage_status": [
+                "covered",
+                "not_covered",
+                "coverage_unresolved",
+                "unknown",
+            ],
+            "converged": [True, True, True, False],
+            "failed": [False, False, False, True],
+        }
+    )
+    metrics = summarize_performance(results, ["estimator"]).iloc[0]
+    assert metrics["coverage_conditional_on_resolved"] == pytest.approx(0.5)
+    assert metrics["coverage"] == pytest.approx(0.5)
+    assert metrics["n_coverage_resolved"] == 2
+    assert metrics["n_coverage_unresolved"] == 1
+    assert metrics["coverage_unresolved_rate"] == pytest.approx(0.25)
+    assert metrics["estimator_failure_rate"] == pytest.approx(0.25)
+
+
+def test_coverage_summary_with_no_resolved_rows_is_nan() -> None:
+    results = pd.DataFrame(
+        {
+            "estimator": ["oracle"],
+            "alpha_hat": [0.0],
+            "alpha_true": [0.0],
+            "cr_lower": [np.nan],
+            "cr_upper": [np.nan],
+            "cr_length": [np.nan],
+            "covered": [False],
+            "coverage_status": ["coverage_unresolved"],
+            "converged": [True],
+        }
+    )
+    metrics = summarize_performance(results, ["estimator"]).iloc[0]
+    assert np.isnan(metrics["coverage_conditional_on_resolved"])
+    assert metrics["n_coverage_resolved"] == 0
 
 
 def test_nonzero_bias_and_mae_are_distinct_metrics() -> None:
