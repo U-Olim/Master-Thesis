@@ -9,7 +9,7 @@ __pycache__/
 
 # Test/tool caches
 .pytest_cache/
-.pytest_tmp/
+.pytest_tmp*/
 .ruff_cache/
 .mypy_cache/
 .coverage

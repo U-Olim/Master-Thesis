@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from time import perf_counter
+from typing import Literal, cast
 import warnings
 
 import numpy as np
@@ -43,16 +44,79 @@ from utils.validation import (
 )
 
 
+IterationWarningPolicy = Literal["reject", "use_if_valid"]
+ITERATION_WARNING_POLICIES: tuple[IterationWarningPolicy, ...] = (
+    "use_if_valid",
+    "reject",
+)
+_COVARIANCE_TOLERANCE = 1e-10
+
+
 @dataclass(frozen=True)
 class AlphaEvaluation:
-    """Evaluation of one structural alpha candidate in inverse IVQR."""
+    """Evaluation of one structural alpha candidate in inverse IVQR.
+
+    ``converged`` records optimizer convergence, while ``usable`` records the
+    separate statistical judgment that the returned Wald statistic is valid
+    for inference.  An iteration-limit fit can therefore be usable without
+    being classified as converged.
+    """
 
     statistic: float
     gamma_hat: np.ndarray
     cov_gamma: np.ndarray
     dim_z: int
     converged: bool
+    usable: bool
+    warning_type: str | None
+    failure_reason: str | None
     message: str
+    covariance_rank: int | None = None
+    covariance_condition_number: float | None = None
+
+
+def validate_iteration_warning_policy(
+    policy: IterationWarningPolicy | str,
+) -> IterationWarningPolicy:
+    """Validate and return the QuantReg iteration-warning policy."""
+    if policy not in ITERATION_WARNING_POLICIES:
+        choices = ", ".join(ITERATION_WARNING_POLICIES)
+        raise ValueError(f"iteration_warning_policy must be one of: {choices}")
+    return cast(IterationWarningPolicy, policy)
+
+
+def _failed_alpha_evaluation(
+    *,
+    dim_z: int,
+    converged: bool,
+    warning_type: str | None,
+    failure_reason: str,
+    gamma_hat: np.ndarray | None = None,
+    cov_gamma: np.ndarray | None = None,
+    covariance_rank: int | None = None,
+    covariance_condition_number: float | None = None,
+) -> AlphaEvaluation:
+    return AlphaEvaluation(
+        statistic=np.inf,
+        gamma_hat=(
+            np.full(dim_z, np.nan)
+            if gamma_hat is None
+            else np.asarray(gamma_hat, dtype=float)
+        ),
+        cov_gamma=(
+            np.full((dim_z, dim_z), np.nan)
+            if cov_gamma is None
+            else np.atleast_2d(np.asarray(cov_gamma, dtype=float))
+        ),
+        dim_z=dim_z,
+        converged=converged,
+        usable=False,
+        warning_type=warning_type,
+        failure_reason=failure_reason,
+        message=failure_reason,
+        covariance_rank=covariance_rank,
+        covariance_condition_number=covariance_condition_number,
+    )
 
 
 def add_intercept(x: np.ndarray) -> np.ndarray:
@@ -125,15 +189,23 @@ def evaluate_alpha_ch_ivqr(
     alpha: float,
     tau: float,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
+    iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
 ) -> AlphaEvaluation:
     """Evaluate a CH inverse-IVQR statistic at one structural alpha.
 
     For a candidate alpha, run the tau-quantile regression of Y - D*alpha on
     included controls and excluded instruments. At the true alpha, the IVQR
     restriction implies that the excluded-instrument coefficient should be zero.
+
+    The production policy ``"use_if_valid"`` retains an iteration-limit fit
+    only when all inferential validity checks pass.  Pass ``"reject"`` to
+    reproduce the legacy behavior that rejects every iteration-limit fit.
     """
     if max_iter <= 0:
         raise ValueError("max_iter must be positive")
+    iteration_warning_policy = validate_iteration_warning_policy(
+        iteration_warning_policy
+    )
     validate_tau(tau)
     alpha = float(alpha)
     if not np.isfinite(alpha):
@@ -153,61 +225,179 @@ def evaluate_alpha_ch_ivqr(
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always", IterationLimitWarning)
             result = QuantReg(y_alpha, design).fit(q=tau, max_iter=max_iter)
-        if any(
-            issubclass(warning.category, IterationLimitWarning)
-            for warning in caught
-        ):
-            return AlphaEvaluation(
-                statistic=np.inf,
-                gamma_hat=np.full(dim_z, np.nan),
-                cov_gamma=np.full((dim_z, dim_z), np.nan),
+        iteration_limit_warning = any(
+            issubclass(warning.category, IterationLimitWarning) for warning in caught
+        )
+        if iteration_limit_warning and iteration_warning_policy == "reject":
+            return _failed_alpha_evaluation(
                 dim_z=dim_z,
                 converged=False,
-                message="QuantReg reached iteration limit",
+                warning_type="iteration_limit",
+                failure_reason="QuantReg reached iteration limit",
             )
-        params = np.asarray(result.params, dtype=float)
-        cov_params = np.asarray(result.cov_params(), dtype=float)
     except Exception as exc:  # noqa: BLE001 - QuantReg can fail in several ways.
-        return AlphaEvaluation(
-            statistic=np.inf,
-            gamma_hat=np.full(dim_z, np.nan),
-            cov_gamma=np.full((dim_z, dim_z), np.nan),
+        return _failed_alpha_evaluation(
             dim_z=dim_z,
             converged=False,
-            message=str(exc),
+            warning_type=None,
+            failure_reason=f"quantreg_fit_failed: {type(exc).__name__}: {exc}",
         )
 
-    if params.shape != (design.shape[1],):
-        return AlphaEvaluation(
-            statistic=np.inf,
-            gamma_hat=np.full(dim_z, np.nan),
-            cov_gamma=np.full((dim_z, dim_z), np.nan),
+    warning_type = "iteration_limit" if iteration_limit_warning else None
+    converged = not iteration_limit_warning
+    try:
+        params = np.asarray(result.params, dtype=float)
+    except Exception as exc:  # noqa: BLE001 - malformed result objects vary.
+        return _failed_alpha_evaluation(
             dim_z=dim_z,
-            converged=False,
-            message="QuantReg returned invalid coefficient shape.",
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason=f"params_unavailable: {type(exc).__name__}: {exc}",
+        )
+    if params.shape != (design.shape[1],):
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason="invalid_parameter_dimension",
+        )
+    if not np.all(np.isfinite(params)):
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason="nonfinite_parameters",
+        )
+    try:
+        cov_params = np.asarray(result.cov_params(), dtype=float)
+    except Exception as exc:  # noqa: BLE001 - covariance failures vary.
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason=f"covariance_unavailable: {type(exc).__name__}: {exc}",
         )
     if cov_params.shape != (design.shape[1], design.shape[1]):
-        return AlphaEvaluation(
-            statistic=np.inf,
-            gamma_hat=np.full(dim_z, np.nan),
-            cov_gamma=np.full((dim_z, dim_z), np.nan),
+        return _failed_alpha_evaluation(
             dim_z=dim_z,
-            converged=False,
-            message="QuantReg returned invalid covariance shape.",
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason="invalid_covariance_dimension",
+        )
+    if not np.all(np.isfinite(cov_params)):
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason="nonfinite_covariance",
         )
 
     gamma_hat = params[z_block]
     cov_gamma = cov_params[z_block, z_block]
+    if gamma_hat.shape != (dim_z,):
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason="invalid_instrument_coefficient_dimension",
+            gamma_hat=gamma_hat,
+            cov_gamma=cov_gamma,
+        )
+    if cov_gamma.shape != (dim_z, dim_z):
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason="invalid_instrument_covariance_dimension",
+            gamma_hat=gamma_hat,
+            cov_gamma=cov_gamma,
+        )
+    try:
+        covariance_rank = int(np.linalg.matrix_rank(cov_gamma))
+        covariance_condition_number = float(np.linalg.cond(cov_gamma))
+    except np.linalg.LinAlgError as exc:
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason=f"invalid_instrument_covariance: {exc}",
+            gamma_hat=gamma_hat,
+            cov_gamma=cov_gamma,
+        )
+    if dim_z > 1 and covariance_rank == 0:
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason="zero_instrument_covariance",
+            gamma_hat=gamma_hat,
+            cov_gamma=cov_gamma,
+            covariance_rank=covariance_rank,
+            covariance_condition_number=covariance_condition_number,
+        )
+    if not np.allclose(cov_gamma, cov_gamma.T, rtol=1e-8, atol=_COVARIANCE_TOLERANCE):
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason="nonsymmetric_instrument_covariance",
+            gamma_hat=gamma_hat,
+            cov_gamma=cov_gamma,
+            covariance_rank=covariance_rank,
+            covariance_condition_number=covariance_condition_number,
+        )
+    try:
+        minimum_eigenvalue = float(np.min(np.linalg.eigvalsh(cov_gamma)))
+    except np.linalg.LinAlgError as exc:
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason=f"invalid_instrument_covariance: {exc}",
+            gamma_hat=gamma_hat,
+            cov_gamma=cov_gamma,
+            covariance_rank=covariance_rank,
+            covariance_condition_number=covariance_condition_number,
+        )
+    if minimum_eigenvalue < -_COVARIANCE_TOLERANCE:
+        reason = (
+            "negative_instrument_variance"
+            if dim_z == 1
+            else "indefinite_instrument_covariance"
+        )
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason=reason,
+            gamma_hat=gamma_hat,
+            cov_gamma=cov_gamma,
+            covariance_rank=covariance_rank,
+            covariance_condition_number=covariance_condition_number,
+        )
+    if dim_z == 1 and float(cov_gamma[0, 0]) <= _COVARIANCE_TOLERANCE:
+        return _failed_alpha_evaluation(
+            dim_z=dim_z,
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason="zero_instrument_variance",
+            gamma_hat=gamma_hat,
+            cov_gamma=cov_gamma,
+            covariance_rank=covariance_rank,
+            covariance_condition_number=covariance_condition_number,
+        )
     try:
         statistic = wald_statistic(gamma_hat, cov_gamma)
     except ValueError as exc:
-        return AlphaEvaluation(
-            statistic=np.inf,
-            gamma_hat=np.asarray(gamma_hat, dtype=float),
-            cov_gamma=np.atleast_2d(np.asarray(cov_gamma, dtype=float)),
+        return _failed_alpha_evaluation(
             dim_z=dim_z,
-            converged=False,
-            message=str(exc),
+            converged=converged,
+            warning_type=warning_type,
+            failure_reason=f"invalid_wald_statistic: {exc}",
+            gamma_hat=gamma_hat,
+            cov_gamma=cov_gamma,
+            covariance_rank=covariance_rank,
+            covariance_condition_number=covariance_condition_number,
         )
 
     return AlphaEvaluation(
@@ -215,8 +405,13 @@ def evaluate_alpha_ch_ivqr(
         gamma_hat=np.asarray(gamma_hat, dtype=float),
         cov_gamma=np.atleast_2d(np.asarray(cov_gamma, dtype=float)),
         dim_z=dim_z,
-        converged=True,
-        message="ok",
+        converged=converged,
+        usable=True,
+        warning_type=warning_type,
+        failure_reason=None,
+        message="ok" if converged else "usable despite QuantReg iteration limit",
+        covariance_rank=covariance_rank,
+        covariance_condition_number=covariance_condition_number,
     )
 
 
@@ -285,13 +480,21 @@ def estimate_ch_ivqr_controls(
     confidence_level: float = 0.95,
     critical_value_multiplier: float = 1.0,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
+    iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
     selected_controls: int | None = None,
 ) -> EstimationResult:
-    """Estimate alpha by CH inverse-IVQR using a supplied control matrix."""
+    """Estimate alpha by CH inverse-IVQR using a supplied control matrix.
+
+    Valid iteration-limit fits are used in normal production operation.  Set
+    ``iteration_warning_policy="reject"`` for legacy-result reproducibility.
+    """
     start = perf_counter()
     alpha_loop_sec = float("nan")
     if max_iter <= 0:
         raise ValueError("max_iter must be positive")
+    iteration_warning_policy = validate_iteration_warning_policy(
+        iteration_warning_policy
+    )
     critical_value_multiplier = validate_critical_value_multiplier(
         critical_value_multiplier
     )
@@ -327,7 +530,7 @@ def estimate_ch_ivqr_controls(
         alphas = validate_alpha_grid(alphas)
 
     statistics = np.empty(len(alphas), dtype=float)
-    converged_flags: list[bool] = []
+    usable_flags: list[bool] = []
     alpha_loop_start = perf_counter()
     for j, alpha in enumerate(alphas):
         evaluation = evaluate_alpha_ch_ivqr(
@@ -338,12 +541,13 @@ def estimate_ch_ivqr_controls(
             alpha=float(alpha),
             tau=tau,
             max_iter=max_iter,
+            iteration_warning_policy=iteration_warning_policy,
         )
         statistics[j] = evaluation.statistic
-        converged_flags.append(evaluation.converged)
+        usable_flags.append(evaluation.usable)
     alpha_loop_sec = perf_counter() - alpha_loop_start
 
-    statistics, num_failed = sanitize_grid_statistics(statistics, converged_flags)
+    statistics, num_failed = sanitize_grid_statistics(statistics, usable_flags)
     if num_failed == len(alphas):
         runtime_seconds = perf_counter() - start
         return failed_ch_ivqr_result(
@@ -426,6 +630,8 @@ def estimate_ch_ivqr_controls(
 
 __all__ = [
     "AlphaEvaluation",
+    "IterationWarningPolicy",
+    "ITERATION_WARNING_POLICIES",
     "add_intercept",
     "as_2d_instruments",
     "ch_ivqr_design",
@@ -433,5 +639,5 @@ __all__ = [
     "evaluate_alpha_ch_ivqr",
     "failed_ch_ivqr_result",
     "estimate_ch_ivqr_controls",
+    "validate_iteration_warning_policy",
 ]
-

@@ -207,6 +207,19 @@ Post-selection with a 1.2 multiplier:
 pixi run python scenarios/run_simulation.py --mode fast --estimators post_selection --selection-lasso-multiplier 1.2 --base-seed 12345 --output results/raw/fast_post_selection_lasso120.csv --manifest results/raw/fast_post_selection_lasso120_manifest.json
 ```
 
+## QuantReg Iteration-Warning Policy
+
+The shared Chernozhukov--Hansen inverse-IVQR API uses
+`iteration_warning_policy="use_if_valid"` in normal production operation. A
+Statsmodels `IterationLimitWarning` fit is retained only when its parameters,
+covariance, excluded-instrument block, and Wald statistic pass all validity
+checks; it remains recorded as not converged.
+
+Set `iteration_warning_policy="reject"` explicitly when reproducing legacy
+Oracle or post-selection simulation results. That mode rejects every
+iteration-limit fit through the historical failed-alpha path. The DML
+estimator does not use this policy.
+
 ## Reproducibility and Separate Estimator Runs
 
 The project uses a fixed default base seed, `12345`. Each design cell has a
