@@ -35,8 +35,11 @@ from estimators.base import (
     post_selection_result_diagnostic_kwargs,
 )
 from ivqr.ch_inverse import (
+    AlphaEvaluation,
+    IterationWarningPolicy,
     as_2d_instruments,
     evaluate_alpha_ch_ivqr as _evaluate_alpha_ch_ivqr,
+    validate_iteration_warning_policy,
 )
 from ivqr.alpha_grid import (
     DEFAULT_ALPHA_MAX,
@@ -221,9 +224,7 @@ def summarize_post_selection_diagnostics(
             "ps_selected_no_instruments": n_retained_instruments == 0,
             "ps_selected_empty_total": n_total == 0,
             "ps_selection_method": selection_method,
-            "ps_selection_lasso_multiplier": _nan_or_float(
-                selection_lasso_multiplier
-            ),
+            "ps_selection_lasso_multiplier": _nan_or_float(selection_lasso_multiplier),
             "ps_lasso_alpha_controls": _nan_or_float(lasso_alpha_controls),
             "ps_lasso_alpha_instruments": _nan_or_float(lasso_alpha_instruments),
             "ps_lasso_alpha_first_stage": _nan_or_float(lasso_alpha_first_stage),
@@ -504,8 +505,13 @@ def evaluate_post_selection_alpha(
     alpha: float,
     tau: float,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
-) -> tuple[float, bool, str]:
-    """Evaluate post-selection CH-IVQR by testing gamma_Z(alpha)=0."""
+    iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
+) -> AlphaEvaluation:
+    """Evaluate post-selection CH-IVQR by testing gamma_Z(alpha)=0.
+
+    The production default uses valid iteration-warning fits; ``"reject"``
+    remains available to reproduce the legacy rejection behavior.
+    """
     y, d, z, x_selected = validate_data_arrays(y, d, x_selected, z)
     evaluation = _evaluate_alpha_ch_ivqr(
         y=y,
@@ -515,8 +521,9 @@ def evaluate_post_selection_alpha(
         alpha=alpha,
         tau=tau,
         max_iter=max_iter,
+        iteration_warning_policy=iteration_warning_policy,
     )
-    return evaluation.statistic, evaluation.converged, evaluation.message
+    return evaluation
 
 
 def estimate_post_selection_ivqr(
@@ -533,8 +540,13 @@ def estimate_post_selection_ivqr(
     selection_max_iter: int = 10000,
     selection_lasso_multiplier: float = 1.0,
     quantreg_max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
+    iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
 ) -> EstimationResult:
-    """Estimate post-selection IVQR by Lasso control selection and CH inverse-IVQR."""
+    """Estimate post-selection IVQR by Lasso selection and CH inverse-IVQR.
+
+    Valid iteration-warning fits are used by default.  Pass ``"reject"`` only
+    when reproducing simulations generated with the legacy warning policy.
+    """
     start = perf_counter()
     selection_sec = float("nan")
     diagnostics_sec = float("nan")
@@ -548,6 +560,9 @@ def estimate_post_selection_ivqr(
     )
     if quantreg_max_iter <= 0:
         raise ValueError("quantreg_max_iter must be positive")
+    iteration_warning_policy = validate_iteration_warning_policy(
+        iteration_warning_policy
+    )
     y, d, z, x = validate_data_arrays(data.y, data.d, data.x, data.z)
     z_2d = as_2d_instruments(z)
     _validate_selection_config(selection_cv, selection_max_iter, x.shape[0])
@@ -655,12 +670,12 @@ def estimate_post_selection_ivqr(
         alphas = validate_alpha_grid(alphas)
 
     statistics = np.empty(len(alphas), dtype=float)
-    converged_flags: list[bool] = []
+    usable_flags: list[bool] = []
 
     alpha_loop_start = perf_counter()
     for j, alpha in enumerate(alphas):
         try:
-            statistic, converged, message = evaluate_post_selection_alpha(
+            evaluation = evaluate_post_selection_alpha(
                 y=y,
                 d=d,
                 z=z,
@@ -668,14 +683,17 @@ def estimate_post_selection_ivqr(
                 alpha=float(alpha),
                 tau=tau,
                 max_iter=quantreg_max_iter,
+                iteration_warning_policy=iteration_warning_policy,
             )
-        except Exception as exc:  # noqa: BLE001 - failed grid points are recorded.
-            statistic, converged, message = np.inf, False, str(exc)
-        statistics[j] = statistic
-        converged_flags.append(converged)
+        except Exception:  # noqa: BLE001 - failed grid points are recorded.
+            statistics[j] = np.inf
+            usable_flags.append(False)
+        else:
+            statistics[j] = evaluation.statistic
+            usable_flags.append(evaluation.usable)
     alpha_loop_sec = perf_counter() - alpha_loop_start
 
-    statistics, num_failed = sanitize_grid_statistics(statistics, converged_flags)
+    statistics, num_failed = sanitize_grid_statistics(statistics, usable_flags)
     if num_failed == len(alphas):
         runtime_seconds = perf_counter() - start
         return _failed_result(
@@ -773,4 +791,3 @@ __all__ = [
     "evaluate_post_selection_alpha",
     "estimate_post_selection_ivqr",
 ]
-

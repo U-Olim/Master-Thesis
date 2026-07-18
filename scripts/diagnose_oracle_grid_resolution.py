@@ -21,7 +21,12 @@ import pandas as pd
 from dgp.designs import Design
 from dgp.generators import generate_data
 from dgp.true_parameters import get_oracle_control_indices, true_alpha
-from ivqr.ch_inverse import AlphaEvaluation, evaluate_alpha_ch_ivqr
+from ivqr.ch_inverse import (
+    ITERATION_WARNING_POLICIES,
+    AlphaEvaluation,
+    IterationWarningPolicy,
+    evaluate_alpha_ch_ivqr,
+)
 from ivqr.confidence_regions import (
     argmin_grid,
     critical_value_chi_square,
@@ -32,16 +37,10 @@ from simulation.config import DEFAULT_BASE_SEED, DEFAULT_QUANTREG_MAX_ITER
 from simulation.runner import make_simulation_grid
 
 
-DEFAULT_SUMMARY_OUTPUT = Path("results/diagnostics/oracle_grid_resolution_summary.csv")
-DEFAULT_REPLICATION_OUTPUT = Path(
-    "results/diagnostics/oracle_grid_resolution_replications.csv"
-)
-DEFAULT_CALIBRATION_INPUT = Path(
-    "results/diagnostics/oracle_calibration_replications.csv"
-)
+POLICY_OUTPUT_DIRECTORY = Path("results/diagnostics/iteration_warning_policy")
 PROTECTED_CALIBRATION_OUTPUTS = (
     Path("results/diagnostics/oracle_calibration_summary.csv"),
-    DEFAULT_CALIBRATION_INPUT,
+    Path("results/diagnostics/oracle_calibration_replications.csv"),
 )
 CRITICAL_VALUE = critical_value_chi_square(0.95, df=1)
 ADAPTIVE_MAX_SPACING = 0.025
@@ -148,11 +147,20 @@ def _evaluate_grid(
         [cached_evaluations[float(alpha)][0].statistic for alpha in alphas],
         dtype=float,
     )
-    converged_flags = np.array(
-        [cached_evaluations[float(alpha)][0].converged for alpha in alphas],
+    usable_flags = np.array(
+        [cached_evaluations[float(alpha)][0].usable for alpha in alphas],
         dtype=bool,
     )
-    statistics, failed_count = sanitize_grid_statistics(raw_statistics, converged_flags)
+    evaluations = [cached_evaluations[float(alpha)][0] for alpha in alphas]
+    statistics, failed_count = sanitize_grid_statistics(raw_statistics, usable_flags)
+    warning_evaluations = [
+        item for item in evaluations if item.warning_type is not None
+    ]
+    usable_warning_count = sum(item.usable for item in warning_evaluations)
+    converged_count = sum(item.converged for item in evaluations)
+    iteration_warning = any(
+        item.warning_type == "iteration_limit" for item in evaluations
+    )
     runtime = float(sum(cached_evaluations[float(alpha)][1] for alpha in alphas))
     all_failed = failed_count == len(alphas)
     if all_failed:
@@ -171,8 +179,18 @@ def _evaluate_grid(
             "number_of_connected_components": 0,
             "number_of_alpha_evaluations": len(alphas),
             "failed_alpha_evaluations": failed_count,
+            "fully_converged_evaluations": converged_count,
+            "iteration_limit_warning_evaluations": len(warning_evaluations),
+            "usable_warning_evaluations": usable_warning_count,
+            "unusable_warning_evaluations": len(warning_evaluations)
+            - usable_warning_count,
             "runtime_seconds": runtime,
             "converged": False,
+            "usable": False,
+            "warning_type": "iteration_limit" if iteration_warning else "",
+            "iteration_limit_warning": iteration_warning,
+            "finite_statistic_available": False,
+            "statistic_used_for_inference": False,
             "failure_reason": "All alpha-grid evaluations failed",
             "interpolated_true_alpha_accepted": np.nan,
             "direct_vs_interpolated_mismatch": np.nan,
@@ -217,10 +235,22 @@ def _evaluate_grid(
         "number_of_connected_components": region.n_blocks,
         "number_of_alpha_evaluations": len(alphas),
         "failed_alpha_evaluations": failed_count,
+        "fully_converged_evaluations": converged_count,
+        "iteration_limit_warning_evaluations": len(warning_evaluations),
+        "usable_warning_evaluations": usable_warning_count,
+        "unusable_warning_evaluations": len(warning_evaluations) - usable_warning_count,
         "runtime_seconds": runtime,
         # Match production behavior: partial alpha failures are sanitized, while
         # a replication fails only when every alpha evaluation fails.
         "converged": True,
+        "usable": True,
+        "warning_type": "iteration_limit" if iteration_warning else "",
+        "iteration_limit_warning": iteration_warning,
+        "finite_statistic_available": any(
+            item.warning_type == "iteration_limit" and np.isfinite(item.statistic)
+            for item in evaluations
+        ),
+        "statistic_used_for_inference": usable_warning_count > 0,
         "failure_reason": (
             ""
             if failed_count == 0
@@ -283,7 +313,8 @@ def load_direct_calibration(path: Path) -> dict[tuple[object, ...], bool | None]
             int(row.rep),
             int(row.seed),
         )
-        lookup[key] = bool(not row.rejected) if bool(row.converged) else None
+        usable = bool(getattr(row, "usable", row.converged))
+        lookup[key] = bool(not row.rejected) if usable else None
     return lookup
 
 
@@ -292,6 +323,7 @@ def run_diagnostic(
     direct_lookup: dict[tuple[object, ...], bool | None],
     *,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
+    iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
 ) -> pd.DataFrame:
     """Evaluate fixed and adaptive grids for all deterministic designs."""
     rows: list[dict[str, Any]] = []
@@ -314,6 +346,7 @@ def run_diagnostic(
                     alpha=alpha,
                     tau=design.tau,
                     max_iter=max_iter,
+                    iteration_warning_policy=iteration_warning_policy,
                 )
                 cache[alpha] = (evaluation, perf_counter() - start)
             return cache[alpha][0].statistic
@@ -359,6 +392,7 @@ def run_diagnostic(
                     "replication": design.rep,
                     "seed": design.seed,
                     "alpha_true": alpha_true,
+                    "iteration_warning_policy": iteration_warning_policy,
                     "direct_true_alpha_accepted": (
                         np.nan if direct_accepted is None else direct_accepted
                     ),
@@ -442,12 +476,38 @@ def _summarize_group(group: pd.DataFrame) -> dict[str, Any]:
         "total_failed_alpha_evaluations": int(
             successful["failed_alpha_evaluations"].sum()
         ),
+        "total_alpha_evaluations": int(group["number_of_alpha_evaluations"].sum()),
+        "fully_converged_evaluations": int(group["fully_converged_evaluations"].sum()),
+        "iteration_limit_warning_evaluations": int(
+            group["iteration_limit_warning_evaluations"].sum()
+        ),
+        "warning_evaluations_usable": int(group["usable_warning_evaluations"].sum()),
+        "hard_failures": int(
+            group["failed_alpha_evaluations"].sum()
+            - group["unusable_warning_evaluations"].sum()
+        ),
+        "unusable_warning_fits": int(group["unusable_warning_evaluations"].sum()),
+        "percentage_warnings_with_finite_usable_statistics": (
+            100.0
+            * float(group["usable_warning_evaluations"].sum())
+            / float(group["iteration_limit_warning_evaluations"].sum())
+            if group["iteration_limit_warning_evaluations"].sum()
+            else np.nan
+        ),
     }
 
 
 def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
     """Return design-cell rows plus overall rows for every grid variant."""
-    group_columns = ["dgp", "n", "p", "pi", "tau", "grid_variant"]
+    group_columns = [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "iteration_warning_policy",
+        "grid_variant",
+    ]
     rows: list[dict[str, Any]] = []
     for keys, group in replications.groupby(group_columns, sort=False):
         rows.append(
@@ -466,6 +526,9 @@ def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
                 "p": np.nan,
                 "pi": np.nan,
                 "tau": np.nan,
+                "iteration_warning_policy": str(
+                    group["iteration_warning_policy"].iloc[0]
+                ),
                 "grid_variant": grid_variant,
                 **_summarize_group(group),
             }
@@ -496,22 +559,39 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-seed", type=int, default=DEFAULT_BASE_SEED)
     parser.add_argument("--max-iter", type=int, default=DEFAULT_QUANTREG_MAX_ITER)
     parser.add_argument(
+        "--iteration-warning-policy",
+        choices=ITERATION_WARNING_POLICIES,
+        default="use_if_valid",
+        help=(
+            "QuantReg warning policy: use_if_valid is the production default; "
+            "reject reproduces legacy results"
+        ),
+    )
+    parser.add_argument(
         "--calibration-replications",
         type=Path,
-        default=DEFAULT_CALIBRATION_INPUT,
+        default=None,
     )
-    parser.add_argument("--summary-output", type=Path, default=DEFAULT_SUMMARY_OUTPUT)
-    parser.add_argument(
-        "--replication-output", type=Path, default=DEFAULT_REPLICATION_OUTPUT
-    )
+    parser.add_argument("--summary-output", type=Path, default=None)
+    parser.add_argument("--replication-output", type=Path, default=None)
     return parser
 
 
 def main() -> None:
     args = _parser().parse_args()
-    summary_output = _safe_output_path(args.summary_output)
-    replication_output = _safe_output_path(args.replication_output)
-    direct_lookup = load_direct_calibration(args.calibration_replications)
+    policy = args.iteration_warning_policy
+    summary_output = _safe_output_path(
+        args.summary_output
+        or POLICY_OUTPUT_DIRECTORY / f"oracle_grid_resolution_{policy}_summary.csv"
+    )
+    replication_output = _safe_output_path(
+        args.replication_output
+        or POLICY_OUTPUT_DIRECTORY / f"oracle_grid_resolution_{policy}_replications.csv"
+    )
+    calibration_input = args.calibration_replications or (
+        POLICY_OUTPUT_DIRECTORY / f"oracle_calibration_{policy}_replications.csv"
+    )
+    direct_lookup = load_direct_calibration(calibration_input)
     designs = make_simulation_grid(
         dgps=tuple(args.dgps),
         n_values=(args.n,),
@@ -526,9 +606,15 @@ def main() -> None:
         f"4 grid variants, base seed {args.base_seed}"
     )
     print("QuantReg covariance: robust / epa / hsheather (production default)")
-    print(f"Direct true-alpha calibration input: {args.calibration_replications}")
+    print(f"Iteration-warning policy: {policy}")
+    print(f"Direct true-alpha calibration input: {calibration_input}")
 
-    replications = run_diagnostic(designs, direct_lookup, max_iter=args.max_iter)
+    replications = run_diagnostic(
+        designs,
+        direct_lookup,
+        max_iter=args.max_iter,
+        iteration_warning_policy=policy,
+    )
     summary = summarize_replications(replications)
     replication_output.parent.mkdir(parents=True, exist_ok=True)
     summary_output.parent.mkdir(parents=True, exist_ok=True)

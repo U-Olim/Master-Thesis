@@ -1,15 +1,96 @@
 import numpy as np
 import pytest
+import inspect
+from unittest.mock import Mock
 
 from dgp import Design, generate_data, get_oracle_control_indices
 from estimators import EstimationResult
 from estimators.dml import estimate_dml_ivqr
 from estimators.oracle import estimate_oracle_ivqr
-from estimators.post_selection import estimate_post_selection_ivqr
+from estimators.post_selection import (
+    estimate_post_selection_ivqr,
+    evaluate_post_selection_alpha,
+)
+from ivqr.ch_inverse import (
+    AlphaEvaluation,
+    estimate_ch_ivqr_controls,
+    evaluate_alpha_ch_ivqr,
+)
 
 
 def _tiny_data():
     return generate_data(Design("dgp1", 80, 20, 1.0, 0.5, rep=0, seed=321))
+
+
+def test_ch_and_post_selection_public_defaults_use_valid_warning_fits() -> None:
+    functions = (
+        evaluate_alpha_ch_ivqr,
+        estimate_ch_ivqr_controls,
+        evaluate_post_selection_alpha,
+        estimate_post_selection_ivqr,
+    )
+    for function in functions:
+        parameter = inspect.signature(function).parameters[
+            "iteration_warning_policy"
+        ]
+        assert parameter.default == "use_if_valid"
+
+
+def test_oracle_propagates_iteration_warning_policy(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    expected = Mock(estimator="oracle", selected_controls=1)
+
+    def fake_estimate(*args, **kwargs):
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr("estimators.oracle.estimate_ch_ivqr_controls", fake_estimate)
+    monkeypatch.setattr("estimators.oracle.replace", lambda result, **kwargs: result)
+    data = _tiny_data()
+    result = estimate_oracle_ivqr(
+        data,
+        tau=0.5,
+        oracle_indices=np.array([0]),
+        iteration_warning_policy="use_if_valid",
+    )
+    assert captured["iteration_warning_policy"] == "use_if_valid"
+    assert result.estimator == "oracle"
+
+
+def test_post_selection_evaluator_propagates_iteration_warning_policy(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+    expected = AlphaEvaluation(
+        statistic=1.0,
+        gamma_hat=np.array([1.0]),
+        cov_gamma=np.array([[1.0]]),
+        dim_z=1,
+        converged=False,
+        usable=True,
+        warning_type="iteration_limit",
+        failure_reason=None,
+        message="ok",
+    )
+
+    def fake_evaluate(**kwargs):
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(
+        "estimators.post_selection._evaluate_alpha_ch_ivqr", fake_evaluate
+    )
+    result = evaluate_post_selection_alpha(
+        np.arange(3.0),
+        np.arange(3.0),
+        np.arange(3.0),
+        np.empty((3, 0)),
+        1.0,
+        0.5,
+        iteration_warning_policy="use_if_valid",
+    )
+    assert captured["iteration_warning_policy"] == "use_if_valid"
+    assert result is expected
 
 
 @pytest.mark.slow

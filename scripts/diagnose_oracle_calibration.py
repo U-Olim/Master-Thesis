@@ -21,15 +21,18 @@ from statsmodels.tools.sm_exceptions import IterationLimitWarning
 from dgp.designs import Design, SimData
 from dgp.generators import generate_data
 from dgp.true_parameters import get_oracle_control_indices, true_alpha
-from ivqr.ch_inverse import ch_ivqr_design, wald_statistic
+from ivqr.ch_inverse import (
+    ITERATION_WARNING_POLICIES,
+    IterationWarningPolicy,
+    ch_ivqr_design,
+    validate_iteration_warning_policy,
+    wald_statistic,
+)
 from simulation.config import DEFAULT_BASE_SEED, DEFAULT_QUANTREG_MAX_ITER
 from simulation.runner import make_simulation_grid
 
 
-DEFAULT_SUMMARY_OUTPUT = Path("results/diagnostics/oracle_calibration_summary.csv")
-DEFAULT_REPLICATION_OUTPUT = Path(
-    "results/diagnostics/oracle_calibration_replications.csv"
-)
+POLICY_OUTPUT_DIRECTORY = Path("results/diagnostics/iteration_warning_policy")
 THEORETICAL_CHI2_Q95 = float(chi2.ppf(0.95, df=1))
 
 
@@ -62,9 +65,13 @@ def evaluate_true_alpha_wald(
     p: int,
     variant: CovarianceVariant,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
+    iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
 ) -> dict[str, object]:
     """Fit the Oracle QR at true alpha and return instrument-Wald diagnostics."""
     alpha = true_alpha(tau, dgp)
+    iteration_warning_policy = validate_iteration_warning_policy(
+        iteration_warning_policy
+    )
     oracle_indices = get_oracle_control_indices(dgp, p)
     x_oracle = np.asarray(data.x, dtype=float)[:, oracle_indices]
     design, z_block = ch_ivqr_design(x_oracle, data.z)
@@ -78,6 +85,13 @@ def evaluate_true_alpha_wald(
         "kernel": variant.kernel,
         "bandwidth": variant.bandwidth,
         "converged": False,
+        "usable": False,
+        "iteration_warning_policy": iteration_warning_policy,
+        "warning_type": "",
+        "failure_reason": "",
+        "iteration_limit_warning": False,
+        "finite_statistic_available": False,
+        "statistic_used_for_inference": False,
         "failure_message": "",
         "iterations": np.nan,
         "gamma_hat": np.nan,
@@ -97,31 +111,59 @@ def evaluate_true_alpha_wald(
                 max_iter=max_iter,
             )
         base["iterations"] = int(getattr(result, "iterations", 0))
-        if any(issubclass(item.category, IterationLimitWarning) for item in caught):
-            base["failure_message"] = "QuantReg reached iteration limit"
+        iteration_limit_warning = any(
+            issubclass(item.category, IterationLimitWarning) for item in caught
+        )
+        base["iteration_limit_warning"] = iteration_limit_warning
+        if iteration_limit_warning:
+            base["warning_type"] = "iteration_limit"
+        if iteration_limit_warning and iteration_warning_policy == "reject":
+            reason = "QuantReg reached iteration limit"
+            base["failure_reason"] = reason
+            base["failure_message"] = reason
             return base
 
         params = np.asarray(result.params, dtype=float)
         covariance = np.asarray(result.cov_params(), dtype=float)
         if params.shape != (design.shape[1],):
-            raise ValueError("QuantReg returned an invalid coefficient shape")
+            raise ValueError("invalid_parameter_dimension")
+        if not np.all(np.isfinite(params)):
+            raise ValueError("nonfinite_parameters")
         if covariance.shape != (design.shape[1], design.shape[1]):
-            raise ValueError("QuantReg returned an invalid covariance shape")
+            raise ValueError("invalid_covariance_dimension")
+        if not np.all(np.isfinite(covariance)):
+            raise ValueError("nonfinite_covariance")
 
         gamma_hat = params[z_block]
         cov_gamma = covariance[z_block, z_block]
+        if gamma_hat.shape != (1,):
+            raise ValueError("invalid_instrument_coefficient_dimension")
+        if cov_gamma.shape != (1, 1):
+            raise ValueError("invalid_instrument_covariance_dimension")
+        variance = float(cov_gamma[0, 0])
+        if variance < -1e-10:
+            raise ValueError("negative_instrument_variance")
+        if variance <= 1e-10:
+            raise ValueError("zero_instrument_variance")
         statistic = wald_statistic(gamma_hat, cov_gamma)
     except Exception as exc:  # noqa: BLE001 - statsmodels failures vary by version.
-        base["failure_message"] = f"{type(exc).__name__}: {exc}"
+        reason = f"{type(exc).__name__}: {exc}"
+        base["failure_reason"] = reason
+        base["failure_message"] = reason
         return base
 
+    converged = not bool(base["iteration_limit_warning"])
     base.update(
         {
-            "converged": True,
+            "converged": converged,
+            "usable": True,
+            "failure_reason": "",
             "gamma_hat": float(gamma_hat[0]),
             "cov_gamma": float(cov_gamma[0, 0]),
             "wald": statistic,
             "rejected": bool(statistic > THEORETICAL_CHI2_Q95),
+            "finite_statistic_available": True,
+            "statistic_used_for_inference": True,
         }
     )
     return base
@@ -129,10 +171,29 @@ def evaluate_true_alpha_wald(
 
 def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
     """Aggregate replication-level Wald diagnostics by design and covariance."""
-    group_columns = ["dgp", "n", "p", "pi", "tau", "covariance_variant"]
+    replications = replications.copy()
+    defaults: dict[str, object] = {
+        "iteration_warning_policy": "reject",
+        "usable": replications["converged"],
+        "iteration_limit_warning": False,
+        "finite_statistic_available": np.isfinite(replications["wald"]),
+    }
+    for column, default in defaults.items():
+        if column not in replications:
+            replications[column] = default
+    group_columns = [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "iteration_warning_policy",
+        "covariance_variant",
+    ]
     rows: list[dict[str, object]] = []
     for keys, group in replications.groupby(group_columns, sort=False):
-        successful = group.loc[group["converged"].astype(bool)]
+        successful = group.loc[group["usable"].astype(bool)]
+        warnings_group = group.loc[group["iteration_limit_warning"].astype(bool)]
         wald = successful["wald"].astype(float)
         requested = len(group)
         successes = len(successful)
@@ -159,6 +220,34 @@ def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
                     float(wald.quantile(0.99)) if successes else np.nan
                 ),
                 "theoretical_chi2_q95": THEORETICAL_CHI2_Q95,
+                "total_alpha_evaluations": requested,
+                "fully_converged_evaluations": int(group["converged"].sum()),
+                "iteration_limit_warning_evaluations": len(warnings_group),
+                "warning_evaluations_usable": int(warnings_group["usable"].sum()),
+                "hard_failures": int(
+                    (
+                        (~group["usable"].astype(bool))
+                        & (~group["iteration_limit_warning"].astype(bool))
+                    ).sum()
+                ),
+                "unusable_warning_fits": int(
+                    (
+                        (~group["usable"].astype(bool))
+                        & group["iteration_limit_warning"].astype(bool)
+                    ).sum()
+                ),
+                "percentage_warnings_with_finite_usable_statistics": (
+                    100.0
+                    * float(
+                        (
+                            warnings_group["usable"].astype(bool)
+                            & warnings_group["finite_statistic_available"].astype(bool)
+                        ).sum()
+                    )
+                    / len(warnings_group)
+                    if len(warnings_group)
+                    else np.nan
+                ),
             }
         )
     return pd.DataFrame(rows)
@@ -168,6 +257,7 @@ def run_diagnostic(
     designs: list[Design],
     *,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
+    iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
 ) -> pd.DataFrame:
     """Generate each design once and evaluate every covariance variant."""
     rows: list[dict[str, object]] = []
@@ -181,6 +271,7 @@ def run_diagnostic(
                 p=design.p,
                 variant=variant,
                 max_iter=max_iter,
+                iteration_warning_policy=iteration_warning_policy,
             )
             rows.append(
                 {
@@ -218,17 +309,31 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--reps", type=int, default=500)
     parser.add_argument("--base-seed", type=int, default=DEFAULT_BASE_SEED)
     parser.add_argument("--max-iter", type=int, default=DEFAULT_QUANTREG_MAX_ITER)
-    parser.add_argument("--summary-output", type=Path, default=DEFAULT_SUMMARY_OUTPUT)
     parser.add_argument(
-        "--replication-output", type=Path, default=DEFAULT_REPLICATION_OUTPUT
+        "--iteration-warning-policy",
+        choices=ITERATION_WARNING_POLICIES,
+        default="use_if_valid",
+        help=(
+            "QuantReg warning policy: use_if_valid is the production default; "
+            "reject reproduces legacy results"
+        ),
     )
+    parser.add_argument("--summary-output", type=Path, default=None)
+    parser.add_argument("--replication-output", type=Path, default=None)
     return parser
 
 
 def main() -> None:
     args = _parser().parse_args()
-    summary_output = _safe_output_path(args.summary_output)
-    replication_output = _safe_output_path(args.replication_output)
+    policy = args.iteration_warning_policy
+    summary_output = _safe_output_path(
+        args.summary_output
+        or POLICY_OUTPUT_DIRECTORY / f"oracle_calibration_{policy}_summary.csv"
+    )
+    replication_output = _safe_output_path(
+        args.replication_output
+        or POLICY_OUTPUT_DIRECTORY / f"oracle_calibration_{policy}_replications.csv"
+    )
     designs = make_simulation_grid(
         dgps=tuple(args.dgps),
         n_values=(args.n,),
@@ -245,13 +350,18 @@ def main() -> None:
         f"{args.base_seed}"
     )
     print("Requested statsmodels covariance variants:")
+    print(f"Iteration-warning policy: {policy}")
     for variant in COVARIANCE_VARIANTS:
         print(
             f"  {variant.name}: vcov={variant.vcov}, kernel={variant.kernel}, "
             f"bandwidth={variant.bandwidth}"
         )
 
-    replications = run_diagnostic(designs, max_iter=args.max_iter)
+    replications = run_diagnostic(
+        designs,
+        max_iter=args.max_iter,
+        iteration_warning_policy=policy,
+    )
     summary = summarize_replications(replications)
     replication_output.parent.mkdir(parents=True, exist_ok=True)
     summary_output.parent.mkdir(parents=True, exist_ok=True)
@@ -271,7 +381,7 @@ def main() -> None:
     ]
     print("\nCalibration summary:")
     print(summary[display_columns].to_string(index=False, float_format="%.4f"))
-    failed = replications.loc[~replications["converged"].astype(bool)]
+    failed = replications.loc[~replications["usable"].astype(bool)]
     if not failed.empty:
         print("\nFailure messages:")
         print(

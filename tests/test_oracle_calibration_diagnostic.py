@@ -61,3 +61,14 @@ def test_summary_uses_successful_replications_and_scipy_critical_value() -> None
 def test_raw_results_output_is_rejected() -> None:
     with pytest.raises(ValueError, match="must not be written under results/raw"):
         diagnostic._safe_output_path(Path("results/raw/diagnostic.csv"))
+
+
+def test_fixed_seed_diagnostic_summary_is_deterministic() -> None:
+    design = diagnostic.Design("dgp1", 50, 5, 1.0, 0.5, rep=0, seed=2468)
+    first = diagnostic.summarize_replications(
+        diagnostic.run_diagnostic([design], iteration_warning_policy="use_if_valid")
+    )
+    second = diagnostic.summarize_replications(
+        diagnostic.run_diagnostic([design], iteration_warning_policy="use_if_valid")
+    )
+    pd.testing.assert_frame_equal(first, second)

@@ -33,6 +33,7 @@ _CH_COMPATIBILITY_KWARGS = {
     "confidence_level",
     "critical_value_multiplier",
     "max_iter",
+    "iteration_warning_policy",
 }
 
 
@@ -65,7 +66,11 @@ def estimate_oracle_ivqr(
     gmm_ridge: float | None = None,
     **kwargs: Any,
 ) -> EstimationResult:
-    """Estimate infeasible oracle IVQR using the true active controls only."""
+    """Estimate infeasible oracle IVQR using the true active controls only.
+
+    The shared CH evaluator uses valid iteration-warning fits by default.
+    ``iteration_warning_policy="reject"`` reproduces the legacy behavior.
+    """
     if alpha_candidates is None and "alphas" in kwargs:
         alpha_candidates = kwargs.pop("alphas")
 
@@ -135,4 +140,3 @@ def estimate_oracle_ivqr(
 
 
 __all__ = ["estimate_oracle_ivqr"]
-
