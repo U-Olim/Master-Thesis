@@ -105,7 +105,7 @@ The generic runner remains temporarily available for single-estimator
 compatibility:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_oracle.csv --manifest results/raw/fast_oracle_manifest.json
+pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/experiments/fast_oracle.csv --manifest results/experiments/fast_oracle_manifest.json
 ```
 
 Generic commands must name exactly one estimator. A generic dry run is:
@@ -121,9 +121,9 @@ production grid, seed, DGP, parallel execution, resume, manifest, and serializer
 paths as generic single-estimator execution:
 
 ```powershell
-pixi run python scenarios/run_oracle_ivqr.py --reps 10 --output results/raw/oracle_fast.csv
-pixi run python scenarios/run_post_selection_ivqr.py --reps 10 --output results/raw/post_selection_fast.csv
-pixi run python scenarios/run_dml_ivqr.py --reps 10 --output results/raw/dml_fast.csv
+pixi run python scenarios/run_oracle_ivqr.py --reps 10 --output results/experiments/oracle_fast.csv
+pixi run python scenarios/run_post_selection_ivqr.py --reps 10 --output results/experiments/post_selection_fast.csv
+pixi run python scenarios/run_dml_ivqr.py --reps 10 --output results/experiments/dml_fast.csv
 ```
 
 The former multi-estimator full mode was removed. Run Oracle, Post-selection and
@@ -137,8 +137,9 @@ Post-selection, and 43 columns for DML.
 
 ### Canonical final thesis production commands
 
-The following tasks explicitly encode the final R=500 specification and write
-to the canonical raw-result paths consumed by the analysis layer:
+The following tasks explicitly encode the historical R=500 specification for
+future reproduction runs. They write to `results/experiments/` and never
+overwrite the canonical thesis artifacts:
 
 ```powershell
 pixi run final_oracle
@@ -158,12 +159,10 @@ Inspect all three resolved configurations without running simulations:
 pixi run final_dry_run
 ```
 
-The canonical tasks express complete replication indices 0--499. Equivalent
-jobs may be split with `--rep-start` and `--rep-end`, using distinct block
-outputs and manifests before assembling the canonical files. The repository
-contains historical block-command examples, but its final provenance manifest
-does not establish whether the canonical R=500 files were executed as single
-runs or in blocks.
+These reproduction tasks express complete replication indices 0--499.
+Equivalent jobs may be split with `--rep-start` and `--rep-end`, using distinct
+block outputs and manifests. The final provenance manifest does not establish
+whether the frozen thesis artifacts were executed as single runs or in blocks.
 
 ### Historical calibration and robustness commands
 
@@ -175,25 +174,25 @@ Each block should use a separate output and manifest file.
 Oracle R500 block 0-99:
 
 ```powershell
-pixi run python scenarios/run_oracle_ivqr.py --reps 500 --rep-start 0 --rep-end 99 --alpha-min -2 --alpha-max 4 --alpha-grid-size 41 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/oracle_R500_grid41_block000_099.csv --manifest results/raw/oracle_R500_grid41_block000_099_manifest.json
+pixi run python scenarios/run_oracle_ivqr.py --reps 500 --rep-start 0 --rep-end 99 --alpha-min -2 --alpha-max 4 --alpha-grid-size 41 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/blocks/oracle_R500_grid41_block000_099.csv --manifest results/blocks/oracle_R500_grid41_block000_099_manifest.json
 ```
 
 Post-selection R500 block 0-99:
 
 ```powershell
-pixi run python scenarios/run_post_selection_ivqr.py --reps 500 --rep-start 0 --rep-end 99 --selection-lasso-multiplier 1.8 --alpha-min -2 --alpha-max 4 --alpha-grid-size 41 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/post_selection_R500_lasso180_grid41_block000_099.csv --manifest results/raw/post_selection_R500_lasso180_grid41_block000_099_manifest.json
+pixi run python scenarios/run_post_selection_ivqr.py --reps 500 --rep-start 0 --rep-end 99 --selection-lasso-multiplier 1.8 --alpha-min -2 --alpha-max 4 --alpha-grid-size 41 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/blocks/post_selection_R500_lasso180_grid41_block000_099.csv --manifest results/blocks/post_selection_R500_lasso180_grid41_block000_099_manifest.json
 ```
 
 Fast DML only:
 
 ```powershell
-pixi run python scenarios/run_dml_ivqr.py --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
+pixi run python scenarios/run_dml_ivqr.py --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/experiments/fast_dml.csv --manifest results/experiments/fast_dml_manifest.json
 ```
 
 DML chosen experimental setting:
 
 ```powershell
-pixi run python scenarios/run_dml_ivqr.py --reps 5 --dml-k-folds 3 --dml-quantile-penalty 0.07 --dml-quantile-solver highs-ipm --alpha-min -1 --alpha-max 3 --alpha-grid-size 21 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/dml_R5_penalty007_solver_highsipm.csv --manifest results/raw/dml_R5_penalty007_solver_highsipm_manifest.json
+pixi run python scenarios/run_dml_ivqr.py --reps 5 --dml-k-folds 3 --dml-quantile-penalty 0.07 --dml-quantile-solver highs-ipm --alpha-min -1 --alpha-max 3 --alpha-grid-size 21 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/experiments/dml_R5_penalty007_solver_highsipm.csv --manifest results/experiments/dml_R5_penalty007_solver_highsipm_manifest.json
 ```
 
 For parallel DML batches, cap numerical-library threads to avoid process/thread
@@ -209,7 +208,7 @@ $env:NUMEXPR_NUM_THREADS = "1"
 Baseline post-selection:
 
 ```powershell
-pixi run python scenarios/run_post_selection_ivqr.py --base-seed 12345 --output results/raw/fast_post_selection.csv --manifest results/raw/fast_post_selection_manifest.json
+pixi run python scenarios/run_post_selection_ivqr.py --base-seed 12345 --output results/experiments/fast_post_selection.csv --manifest results/experiments/fast_post_selection_manifest.json
 ```
 
 ## Post-selection Lasso Multiplier
@@ -226,7 +225,7 @@ large values can under-select controls and introduce omitted-control bias.
 Post-selection with a 1.2 multiplier:
 
 ```powershell
-pixi run python scenarios/run_post_selection_ivqr.py --selection-lasso-multiplier 1.2 --base-seed 12345 --output results/raw/fast_post_selection_lasso120.csv --manifest results/raw/fast_post_selection_lasso120_manifest.json
+pixi run python scenarios/run_post_selection_ivqr.py --selection-lasso-multiplier 1.2 --base-seed 12345 --output results/experiments/fast_post_selection_lasso120.csv --manifest results/experiments/fast_post_selection_lasso120_manifest.json
 ```
 
 ## QuantReg Iteration-Warning Policy
@@ -330,7 +329,7 @@ base seed. These runs generate identical data for matching design cells.
 Oracle only:
 
 ```powershell
-pixi run python scenarios/run_oracle_ivqr.py --base-seed 12345 --output results/raw/fast_oracle.csv --manifest results/raw/fast_oracle_manifest.json
+pixi run python scenarios/run_oracle_ivqr.py --base-seed 12345 --output results/experiments/fast_oracle.csv --manifest results/experiments/fast_oracle_manifest.json
 ```
 
 Oracle-only simulation CSVs intentionally contain exactly these 26 fields, in
@@ -351,22 +350,27 @@ this schema. Post-selection and DML CSV schemas are unchanged.
 DML only:
 
 ```powershell
-pixi run python scenarios/run_dml_ivqr.py --base-seed 12345 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
+pixi run python scenarios/run_dml_ivqr.py --base-seed 12345 --output results/experiments/fast_dml.csv --manifest results/experiments/fast_dml_manifest.json
 ```
 
 Post-selection only:
 
 ```powershell
-pixi run python scenarios/run_post_selection_ivqr.py --base-seed 12345 --output results/raw/fast_post_selection.csv --manifest results/raw/fast_post_selection_manifest.json
+pixi run python scenarios/run_post_selection_ivqr.py --base-seed 12345 --output results/experiments/fast_post_selection.csv --manifest results/experiments/fast_post_selection_manifest.json
 ```
 
 ## Output Folders
 
-- `results/raw`: raw estimator-level CSV files and run manifests
+- `results/raw`: immutable, validated thesis artifacts and their provenance manifest
+- `results/blocks`: temporary replication-block outputs
+- `results/experiments`: new simulation and reproduction outputs
 - `results/tables`: final thesis tables in CSV and LaTeX formats
 - `results/figures`: final thesis figures in PDF and PNG formats
 
-Simulation outputs are ignored by git except for `.gitkeep` placeholders.
+The files under `results/raw/` are frozen thesis artifacts. New simulations
+should be written to `results/blocks/`, `results/experiments/`, or another
+explicit output path. Simulation outputs are ignored by git except for
+`.gitkeep` placeholders.
 
 ## Release Packaging
 
@@ -388,27 +392,45 @@ This command loads and validates the oracle, post-selection, and DML result
 files, then writes the final tables to `results/tables/` and figures to
 `results/figures/`. It does not run simulations or alter the raw files.
 
-These three CSVs are the canonical final R=500 inputs. The tracked
-`results/raw/manifest.json` records their row and column counts, exact byte
-sizes and SHA-256 hashes, and LF-normalized SHA-256 hashes. Exact hashes verify
-byte-for-byte equality; canonical hashes allow equivalent LF and CRLF CSV
-representations while substantive content changes still fail verification.
-Final-run provenance stores the shared grid, seed, and critical-value settings
-once under `common`, with estimator-specific tuning and canonical Pixi task
-names under `estimators`. The post-selection Lasso multiplier is cross-checked
-against its raw result column. The DML fold, penalty, solver, and ridge settings
-are documented provenance because those values are not columns in the final DML
-raw schema and therefore cannot be verified directly from that CSV.
-`pixi run results` verifies the manifest schema, file identities, dimensions,
-row totals, and hashes before analysis. Run `pixi run raw_manifest` only when
-the canonical raw files intentionally change.
+The canonical final R=500 inputs are exactly:
+
+- `results/raw/oracle_ivqr.csv`
+- `results/raw/post_selection_ivqr.csv`
+- `results/raw/dml_ivqr.csv`
+
+Analysis reads these immutable files in place; it never copies, projects, or
+rewrites them on disk. The tracked `results/raw/manifest.json` records exact
+paths, ordered columns, dimensions, replication coverage, natural-key checks,
+byte sizes, and SHA-256 hashes. It also states that `pre-refactor-r500` is the
+known validation reference, not a claim about the unknown creating commit.
+`pixi run results` verifies this metadata before analysis. The raw-manifest task
+is historical-maintenance tooling and must only be run when intentionally
+recording the existing canonical artifacts.
 
 The overview tables summarize broad performance patterns. The canonical
 `performance_by_design_cell.csv` and `performance_by_design_cell.tex` tables
 preserve results by DGP, sample size, dimensionality, instrument strength,
 quantile, and estimator.
 
-## Final Raw Result Schema
+## Historical and Current Result Schemas
+
+The validated historical thesis artifacts retain the schemas with which the
+R=500 study was completed:
+
+- Oracle: 43 columns
+- Post-selection: 52 columns
+- DML: 15 columns
+
+Current serializers for future simulations emit different estimator-specific
+contracts:
+
+- Oracle: 26 columns
+- Post-selection: 52 columns
+- DML: 43 columns
+
+Serializer evolution does not invalidate or trigger rewriting of historical
+artifacts. Analysis validates only the historical fields required for the
+requested tables and figures, and harmonizes compatible fields in memory.
 
 All three completed R=500 result files contain:
 

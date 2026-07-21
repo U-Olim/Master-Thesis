@@ -4,31 +4,40 @@ from collections.abc import Mapping
 import hashlib
 import json
 from pathlib import Path
-import warnings
 
 import numpy as np
 import pandas as pd
 
-from simulation.dml_output import validate_component_columns
+from simulation.dml_output import REQUIRED_DML_COLUMNS, validate_component_columns
 from simulation.oracle_output import (
     ORACLE_OUTPUT_COLUMNS,
     clean_oracle_results_frame,
 )
+from simulation.post_selection_output import REQUIRED_POST_SELECTION_COLUMNS
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CANONICAL_ORACLE_RESULTS = Path("results/raw/oracle_ivqr.csv")
+CANONICAL_POST_SELECTION_RESULTS = Path("results/raw/post_selection_ivqr.csv")
+CANONICAL_DML_RESULTS = Path("results/raw/dml_ivqr.csv")
 RAW_RESULT_FILES = {
-    "oracle": PROJECT_ROOT / "results" / "raw" / "oracle_ivqr" / "oracle_ivqr.csv",
-    "post_selection": (
-        PROJECT_ROOT
-        / "results"
-        / "raw"
-        / "post_selection_ivqr"
-        / "post_selection_ivqr.csv"
-    ),
-    "dml": PROJECT_ROOT / "results" / "raw" / "dml_ivqr" / "dml_ivqr.csv",
+    "oracle": PROJECT_ROOT / CANONICAL_ORACLE_RESULTS,
+    "post_selection": PROJECT_ROOT / CANONICAL_POST_SELECTION_RESULTS,
+    "dml": PROJECT_ROOT / CANONICAL_DML_RESULTS,
 }
 RAW_MANIFEST_PATH = PROJECT_ROOT / "results" / "raw" / "manifest.json"
+RAW_MANIFEST_SCHEMA_VERSION = 4
+HISTORICAL_ARTIFACT_COLUMN_COUNTS = {
+    "oracle": 43,
+    "post_selection": 52,
+    "dml": 15,
+}
+CURRENT_OUTPUT_COLUMN_COUNTS = {
+    "oracle": len(ORACLE_OUTPUT_COLUMNS),
+    "post_selection": len(REQUIRED_POST_SELECTION_COLUMNS),
+    "dml": len(REQUIRED_DML_COLUMNS),
+}
+NATURAL_KEY_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep"]
 RAW_ESTIMATOR_LABELS = {
     "oracle": "oracle",
     "post_selection": "post_selection_ivqr",
@@ -48,6 +57,11 @@ CORE_COLUMNS = [
     "covered",
     "converged",
 ]
+HISTORICAL_ANALYSIS_REQUIRED_COLUMNS = {
+    "oracle": tuple(CORE_COLUMNS),
+    "post_selection": (*CORE_COLUMNS, "n_selected_controls", "selection_lasso_multiplier"),
+    "dml": tuple(CORE_COLUMNS),
+}
 SELECTION_COLUMNS = ["n_selected_controls", "selection_lasso_multiplier"]
 CR_REPORTING_COLUMNS = [
     "result_schema_version",
@@ -118,7 +132,7 @@ def verify_raw_manifest(
     manifest_path: str | Path = RAW_MANIFEST_PATH,
     raw_result_files: Mapping[str, Path] | None = None,
 ) -> None:
-    """Verify canonical raw files against their tracked provenance manifest."""
+    """Verify historical artifacts against the versioned provenance manifest."""
     manifest = Path(manifest_path)
     if not manifest.is_file():
         raise FileNotFoundError(f"Raw-result manifest does not exist: {manifest}")
@@ -126,64 +140,30 @@ def verify_raw_manifest(
         payload = json.loads(manifest.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
         raise ValueError(f"Cannot read raw-result manifest {manifest}: {exc}") from exc
-    if not isinstance(payload, dict) or not isinstance(payload.get("files"), list):
+    if not isinstance(payload, dict) or not isinstance(payload.get("files"), Mapping):
         raise ValueError(f"Raw-result manifest has an invalid structure: {manifest}")
-    supported_schema_version = 3
-    if payload.get("schema_version") != supported_schema_version:
+    if payload.get("manifest_schema_version") != RAW_MANIFEST_SCHEMA_VERSION:
         raise ValueError(
             "Raw-result manifest schema mismatch: "
-            f"observed {payload.get('schema_version')}, supported version is "
-            f"{supported_schema_version}"
+            f"observed {payload.get('manifest_schema_version')}, supported version is "
+            f"{RAW_MANIFEST_SCHEMA_VERSION}"
         )
-    final_run_metadata = payload.get("final_run_metadata")
-    if not isinstance(final_run_metadata, Mapping):
-        raise ValueError("Raw-result manifest final_run_metadata must be an object")
-    if not isinstance(final_run_metadata.get("common"), Mapping):
-        raise ValueError("Raw-result manifest final_run_metadata.common must be an object")
-    estimator_metadata = final_run_metadata.get("estimators")
-    if not isinstance(estimator_metadata, Mapping):
-        raise ValueError(
-            "Raw-result manifest final_run_metadata.estimators must be an object"
-        )
-    canonical_estimators = set(RAW_RESULT_FILES)
-    metadata_estimators = set(estimator_metadata)
-    missing_metadata = canonical_estimators - metadata_estimators
-    if missing_metadata:
-        raise ValueError(
-            "Raw-result manifest final_run_metadata.estimators is missing keys: "
-            f"{sorted(missing_metadata)}"
-        )
-    unexpected_metadata = metadata_estimators - canonical_estimators
-    if unexpected_metadata:
-        raise ValueError(
-            "Raw-result manifest final_run_metadata.estimators has unexpected keys: "
-            f"{sorted(unexpected_metadata)}"
-        )
-    for estimator, settings in estimator_metadata.items():
-        if not isinstance(settings, Mapping):
-            raise ValueError(
-                "Raw-result manifest estimator metadata must be an object: "
-                f"{estimator}"
-            )
+    if payload.get("artifact_set") != "validated_r500_thesis_results":
+        raise ValueError("Raw-result manifest has an unexpected artifact_set")
+    policy = payload.get("artifact_policy")
+    if not isinstance(policy, Mapping) or policy.get("immutable") is not True:
+        raise ValueError("Raw-result manifest artifact_policy must mark files immutable")
 
     expected_files = RAW_RESULT_FILES if raw_result_files is None else raw_result_files
+    manifest_files = payload["files"]
     manifest_file_count = payload.get("number_of_files")
-    if manifest_file_count != len(payload["files"]):
+    if manifest_file_count != len(manifest_files):
         raise ValueError(
-            "Raw-result manifest number_of_files mismatch with files list: "
-            f"recorded {manifest_file_count}, observed {len(payload['files'])} entries"
+            "Raw-result manifest number_of_files mismatch with files mapping: "
+            f"recorded {manifest_file_count}, observed {len(manifest_files)} entries"
         )
-    entries: dict[str, dict[str, object]] = {}
-    for item in payload["files"]:
-        if not isinstance(item, dict) or not isinstance(item.get("estimator"), str):
-            raise ValueError(f"Raw-result manifest has an invalid file entry: {item!r}")
-        estimator = item["estimator"]
-        if estimator in entries:
-            raise ValueError(f"Raw-result manifest repeats estimator: {estimator}")
-        entries[estimator] = item
-
     expected_estimators = set(expected_files)
-    observed_estimators = set(entries)
+    observed_estimators = set(manifest_files)
     missing_estimators = expected_estimators - observed_estimators
     if missing_estimators:
         raise ValueError(
@@ -203,11 +183,25 @@ def verify_raw_manifest(
         )
 
     manifest_rows: list[int] = []
-    for estimator, entry in entries.items():
-        rows = entry.get("rows")
+    for estimator, entry in manifest_files.items():
+        if not isinstance(entry, Mapping) or entry.get("estimator") != estimator:
+            raise ValueError(f"Raw-result manifest has an invalid entry for {estimator}")
+        if entry.get("artifact_role") != "validated_r500_thesis_result":
+            raise ValueError(f"Raw-result artifact_role is invalid for {estimator}")
+        expected_current_columns = CURRENT_OUTPUT_COLUMN_COUNTS.get(estimator)
+        if (
+            expected_current_columns is not None
+            and entry.get("current_code_column_count") != expected_current_columns
+        ):
+            raise ValueError(
+                f"Raw-result current code column count mismatch for {estimator}: "
+                f"expected {expected_current_columns}, observed "
+                f"{entry.get('current_code_column_count')}"
+            )
+        rows = entry.get("row_count")
         if not isinstance(rows, int) or isinstance(rows, bool) or rows < 0:
             raise ValueError(
-                f"Raw-result manifest rows for {estimator} must be a nonnegative integer"
+                f"Raw-result manifest row_count for {estimator} must be a nonnegative integer"
             )
         manifest_rows.append(rows)
     manifest_total_rows = payload.get("total_rows")
@@ -224,25 +218,21 @@ def verify_raw_manifest(
 
     actual_total_rows = 0
     for estimator, source in expected_files.items():
-        entry = entries[estimator]
+        source = Path(source)
+        entry = manifest_files[estimator]
         expected_path = _manifest_file_path(source)
-        if entry.get("path") != expected_path:
+        if entry.get("canonical_path") != expected_path:
             raise ValueError(
                 f"Raw-result path mismatch for {estimator}: expected {expected_path}, "
-                f"observed {entry.get('path')}"
-            )
-        if entry.get("filename") != source.name:
-            raise ValueError(
-                f"Raw-result filename mismatch for {expected_path}: expected {source.name}, "
-                f"observed {entry.get('filename')}"
+                f"observed {entry.get('canonical_path')}"
             )
         if not source.is_file():
             raise FileNotFoundError(f"Canonical raw result does not exist: {source}")
         frame = pd.read_csv(source)
         observed_rows = len(frame)
         observed_columns = len(frame.columns)
-        expected_rows = entry.get("rows")
-        expected_columns = entry.get("columns")
+        expected_rows = entry.get("row_count")
+        expected_columns = entry.get("column_count")
         if expected_rows != observed_rows:
             raise ValueError(
                 f"Raw-result row-count mismatch for {expected_path}: "
@@ -253,11 +243,26 @@ def verify_raw_manifest(
                 f"Raw-result column-count mismatch for {expected_path}: "
                 f"expected {expected_columns}, observed {observed_columns}"
             )
+        if entry.get("column_names") != list(frame.columns):
+            raise ValueError(f"Raw-result column order mismatch for {expected_path}")
         actual_total_rows += observed_rows
 
         if estimator == "post_selection" and "selection_lasso_multiplier" in frame:
-            documented_multiplier = estimator_metadata["post_selection"].get(
-                "selection_lasso_multiplier"
+            recorded_settings = payload.get("recorded_run_settings")
+            estimator_settings = (
+                recorded_settings.get("estimators")
+                if isinstance(recorded_settings, Mapping)
+                else None
+            )
+            post_settings = (
+                estimator_settings.get("post_selection")
+                if isinstance(estimator_settings, Mapping)
+                else None
+            )
+            documented_multiplier = (
+                post_settings.get("selection_lasso_multiplier")
+                if isinstance(post_settings, Mapping)
+                else None
             )
             if (
                 not isinstance(documented_multiplier, (int, float))
@@ -284,29 +289,50 @@ def verify_raw_manifest(
                 )
 
         observed_size = source.stat().st_size
-        observed_byte_hash = sha256_file(source)
-        exact_match = (
-            entry.get("size_bytes") == observed_size
-            and entry.get("sha256_bytes") == observed_byte_hash
-        )
-        if exact_match:
-            continue
-
-        observed_canonical_hash = sha256_canonical_lf_file(source)
-        if entry.get("sha256_canonical_lf") != observed_canonical_hash:
+        if entry.get("file_size_bytes") != observed_size:
             raise ValueError(
-                f"Raw-result canonical LF SHA-256 mismatch for {expected_path}: "
-                f"expected {entry.get('sha256_canonical_lf')}, "
-                f"observed {observed_canonical_hash}; exact-byte metadata was "
-                f"size {entry.get('size_bytes')} / {entry.get('sha256_bytes')}, "
-                f"observed {observed_size} / {observed_byte_hash}"
+                f"Raw-result file-size mismatch for {expected_path}: expected "
+                f"{entry.get('file_size_bytes')}, observed {observed_size}"
             )
-        warnings.warn(
-            f"Raw-result exact bytes differ for {expected_path}, but canonical LF "
-            "content matches; accepting the newline-equivalent representation",
-            UserWarning,
-            stacklevel=2,
-        )
+        observed_hash = sha256_file(source)
+        if entry.get("sha256") != observed_hash:
+            raise ValueError(
+                f"Raw-result SHA-256 mismatch for {expected_path}: expected "
+                f"{entry.get('sha256')}, observed {observed_hash}"
+            )
+
+        natural_key = entry.get("natural_key")
+        if not isinstance(natural_key, list) or not all(
+            isinstance(column, str) for column in natural_key
+        ):
+            raise ValueError(f"Raw-result natural_key is invalid for {estimator}")
+        missing_key = set(natural_key).difference(frame.columns)
+        if missing_key:
+            raise ValueError(
+                f"Raw-result natural key columns are missing for {estimator}: "
+                f"{sorted(missing_key)}"
+            )
+        duplicates = int(frame.duplicated(natural_key).sum()) if natural_key else 0
+        if entry.get("duplicate_natural_key_count") != duplicates:
+            raise ValueError(
+                f"Raw-result duplicate-key mismatch for {estimator}: expected "
+                f"{entry.get('duplicate_natural_key_count')}, observed {duplicates}"
+            )
+
+        if "rep" in frame:
+            counts = frame.groupby("rep", dropna=False).size()
+            replication_metadata = {
+                "replication_min": int(frame["rep"].min()),
+                "replication_max": int(frame["rep"].max()),
+                "unique_replications": int(frame["rep"].nunique()),
+                "rows_per_replication": sorted(int(value) for value in counts.unique()),
+            }
+            for field, observed in replication_metadata.items():
+                if entry.get(field) != observed:
+                    raise ValueError(
+                        f"Raw-result {field} mismatch for {estimator}: expected "
+                        f"{entry.get(field)}, observed {observed}"
+                    )
 
     if manifest_total_rows != actual_total_rows:
         raise ValueError(
@@ -361,9 +387,13 @@ def _read_results(
         )
         return frame
 
-    missing = set(CORE_COLUMNS).difference(frame.columns)
+    required = set(HISTORICAL_ANALYSIS_REQUIRED_COLUMNS[estimator])
+    missing = required.difference(frame.columns)
     if missing:
-        raise ValueError(f"{source} is missing required columns: {sorted(missing)}")
+        raise ValueError(
+            f"{source} is missing required analysis columns for {estimator}: "
+            f"{sorted(missing)}"
+        )
     raw_labels = set(frame["estimator"].dropna().unique())
     expected_label = RAW_ESTIMATOR_LABELS[estimator]
     if raw_labels != {expected_label}:
@@ -391,6 +421,16 @@ def _read_results(
         if column not in frame:
             frame[column] = cr_defaults[column]
     frame = frame.loc[:, COMMON_COLUMNS]
+    complete_cr = frame[["cr_lower", "cr_upper", "cr_length"]].notna().all(axis=1)
+    if frame["cr_is_numerically_resolved"].notna().any():
+        resolved = frame["cr_is_numerically_resolved"].eq(True)
+    else:
+        resolved = frame["converged"].eq(True) & complete_cr & frame["covered"].notna()
+    frame["coverage_status"] = np.where(
+        resolved,
+        np.where(frame["covered"].eq(True), "covered", "not_covered"),
+        "coverage_unresolved",
+    )
     validate_results(
         frame,
         expected_estimator=estimator,

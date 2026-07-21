@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -6,11 +7,21 @@ import pandas as pd
 import pytest
 
 from analysis.data import (
+    CANONICAL_DML_RESULTS,
+    CANONICAL_ORACLE_RESULTS,
+    CANONICAL_POST_SELECTION_RESULTS,
     COMMON_COLUMNS,
+    CURRENT_OUTPUT_COLUMN_COUNTS,
+    HISTORICAL_ARTIFACT_COLUMN_COUNTS,
     IDENTIFIER_COLUMNS,
     PROJECT_ROOT,
+    RAW_MANIFEST_PATH,
+    RAW_MANIFEST_SCHEMA_VERSION,
+    RAW_RESULT_FILES,
     load_all_results,
-    sha256_canonical_lf_file,
+    load_dml_results,
+    load_oracle_results,
+    load_post_selection_results,
     sha256_file,
     validate_results,
     verify_raw_manifest,
@@ -36,321 +47,182 @@ def final_results() -> pd.DataFrame:
     return load_all_results()
 
 
-def _test_final_run_metadata() -> dict[str, object]:
-    return {
-        "common": {
-            "alpha_grid_min": -1.0,
-            "alpha_grid_max": 3.0,
-            "alpha_grid_size": 21,
-            "base_seed": 12345,
-            "critical_value_multiplier": 1.0,
-        },
-        "estimators": {
-            "oracle": {"pixi_task": "final_oracle"},
-            "post_selection": {
-                "pixi_task": "final_post_selection",
-                "selection_lasso_multiplier": 1.8,
-            },
-            "dml": {
-                "pixi_task": "final_dml",
-                "k_folds": 3,
-                "quantile_penalty": 0.07,
-                "quantile_solver": "highs-ipm",
-                "ridge_alpha": 1.0,
-            },
-        },
-    }
+def _artifact_frame(estimator: str = "oracle") -> pd.DataFrame:
+    label = {
+        "oracle": "oracle",
+        "post_selection": "post_selection_ivqr",
+        "dml": "dml_ivqr",
+    }[estimator]
+    return pd.DataFrame(
+        {
+            "dgp": ["dgp1"],
+            "n": [40],
+            "p": [5],
+            "pi": [0.5],
+            "tau": [0.5],
+            "rep": [0],
+            "estimator": [label],
+        }
+    )
 
 
 def _write_test_manifest(
-    manifest: Path,
-    source: Path,
-    *,
-    estimator: str = "oracle",
-    hashed_source: Path | None = None,
-    size_bytes: int | None = None,
-) -> None:
-    provenance_source = source if hashed_source is None else hashed_source
-    payload = {
-        "schema_version": 3,
+    manifest: Path, source: Path, *, estimator: str = "oracle"
+) -> dict[str, object]:
+    frame = pd.read_csv(source)
+    natural_key = ["dgp", "n", "p", "pi", "tau", "rep", "estimator"]
+    entry = {
+        "estimator": estimator,
+        "canonical_path": source.resolve().relative_to(PROJECT_ROOT).as_posix(),
+        "artifact_role": "validated_r500_thesis_result",
+        "artifact_schema_name": f"test_{estimator}",
+        "artifact_schema_version": 1,
+        "current_code_column_count": CURRENT_OUTPUT_COLUMN_COUNTS[estimator],
+        "row_count": len(frame),
+        "column_count": len(frame.columns),
+        "column_names": list(frame.columns),
+        "sha256": sha256_file(source),
+        "file_size_bytes": source.stat().st_size,
+        "replication_min": int(frame["rep"].min()),
+        "replication_max": int(frame["rep"].max()),
+        "unique_replications": int(frame["rep"].nunique()),
+        "rows_per_replication": sorted(
+            int(value) for value in frame.groupby("rep").size().unique()
+        ),
+        "natural_key": natural_key,
+        "duplicate_natural_key_count": int(frame.duplicated(natural_key).sum()),
+        "created_or_recorded_timestamp": "2026-07-21T00:00:00+00:00",
+        "source_git_reference": "pre-refactor-r500",
+    }
+    payload: dict[str, object] = {
+        "manifest_schema_version": RAW_MANIFEST_SCHEMA_VERSION,
+        "artifact_set": "validated_r500_thesis_results",
+        "artifact_policy": {"immutable": True},
         "number_of_files": 1,
-        "total_rows": 1,
-        "files": [
-            {
-                "estimator": estimator,
-                "path": source.resolve().relative_to(PROJECT_ROOT).as_posix(),
-                "filename": source.name,
-                "rows": 1,
-                "columns": 2,
-                "size_bytes": (
-                    provenance_source.stat().st_size
-                    if size_bytes is None
-                    else size_bytes
-                ),
-                "sha256_bytes": sha256_file(provenance_source),
-                "sha256_canonical_lf": sha256_canonical_lf_file(
-                    provenance_source
-                ),
+        "total_rows": len(frame),
+        "files": {estimator: entry},
+        "recorded_run_settings": {
+            "estimators": {
+                "post_selection": {"selection_lasso_multiplier": 1.8}
             }
-        ],
-        "final_run_metadata": _test_final_run_metadata(),
+        },
     }
     manifest.write_text(json.dumps(payload), encoding="utf-8")
+    return payload
+
+
+def test_canonical_path_constants_and_files() -> None:
+    assert CANONICAL_ORACLE_RESULTS == Path("results/raw/oracle_ivqr.csv")
+    assert CANONICAL_POST_SELECTION_RESULTS == Path(
+        "results/raw/post_selection_ivqr.csv"
+    )
+    assert CANONICAL_DML_RESULTS == Path("results/raw/dml_ivqr.csv")
+    assert all(path.is_file() for path in RAW_RESULT_FILES.values())
+
+
+def test_canonical_manifest_matches_actual_artifacts() -> None:
+    payload = json.loads(RAW_MANIFEST_PATH.read_text(encoding="utf-8"))
+    verify_raw_manifest()
+    for estimator, source in RAW_RESULT_FILES.items():
+        entry = payload["files"][estimator]
+        header = pd.read_csv(source, nrows=0)
+        assert entry["canonical_path"] == source.relative_to(PROJECT_ROOT).as_posix()
+        assert entry["sha256"] == sha256_file(source)
+        assert entry["row_count"] == 72_000
+        assert entry["column_count"] == len(header.columns)
+        assert entry["column_names"] == list(header.columns)
+        assert entry["replication_min"] == 0
+        assert entry["replication_max"] == 499
+        assert entry["unique_replications"] == 500
+        assert entry["rows_per_replication"] == [144]
+        assert entry["duplicate_natural_key_count"] == 0
+
+
+def test_historical_and_current_schema_counts_are_distinct() -> None:
+    assert HISTORICAL_ARTIFACT_COLUMN_COUNTS == {
+        "oracle": 43,
+        "post_selection": 52,
+        "dml": 15,
+    }
+    assert CURRENT_OUTPUT_COLUMN_COUNTS == {
+        "oracle": 26,
+        "post_selection": 52,
+        "dml": 43,
+    }
+
+
+@pytest.mark.parametrize(
+    ("estimator", "loader"),
+    [
+        ("oracle", load_oracle_results),
+        ("post_selection", load_post_selection_results),
+        ("dml", load_dml_results),
+    ],
+)
+def test_historical_schema_loads_without_rewriting(
+    estimator: str, loader: Callable[[], pd.DataFrame]
+) -> None:
+    source = RAW_RESULT_FILES[estimator]
+    before = (source.stat().st_size, source.stat().st_mtime_ns, sha256_file(source))
+    loaded = loader()
+    after = (source.stat().st_size, source.stat().st_mtime_ns, sha256_file(source))
+    assert len(loaded) == 72_000
+    assert before == after
 
 
 def test_raw_manifest_verification_accepts_valid_file(tmp_path: Path) -> None:
     source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
+    _artifact_frame().to_csv(source, index=False)
     manifest = tmp_path / "manifest.json"
     _write_test_manifest(manifest, source)
-
     verify_raw_manifest(manifest, {"oracle": source})
 
 
 def test_raw_manifest_rejects_unsupported_schema_version(tmp_path: Path) -> None:
     source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
+    _artifact_frame().to_csv(source, index=False)
     manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    payload["schema_version"] = 1
+    payload = _write_test_manifest(manifest, source)
+    payload["manifest_schema_version"] = 1
     manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match=r"observed 1, supported version is 3"):
+    with pytest.raises(ValueError, match=r"observed 1, supported version is 4"):
         verify_raw_manifest(manifest, {"oracle": source})
 
 
-def test_raw_manifest_rejects_wrong_number_of_files(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    payload["number_of_files"] = 2
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match="number_of_files mismatch with files list"):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_rejects_wrong_total_rows(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    payload["total_rows"] = 2
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match="total_rows mismatch with file entries"):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_rejects_nonobject_final_run_metadata(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    payload["final_run_metadata"] = []
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match="final_run_metadata must be an object"):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_rejects_missing_common_metadata(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    del payload["final_run_metadata"]["common"]
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match=r"final_run_metadata\.common must be an object"):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_rejects_missing_estimators_metadata(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    del payload["final_run_metadata"]["estimators"]
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(
-        ValueError, match=r"final_run_metadata\.estimators must be an object"
-    ):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_rejects_missing_canonical_metadata_key(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    del payload["final_run_metadata"]["estimators"]["dml"]
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match=r"missing keys: \['dml'\]"):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_rejects_unexpected_metadata_key(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    payload["final_run_metadata"]["estimators"]["extra"] = {}
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match=r"unexpected keys: \['extra'\]"):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_rejects_post_selection_multiplier_conflict(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "post_selection.csv"
-    source.write_bytes(b"selection_lasso_multiplier,x\n1.2,1\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source, estimator="post_selection")
-
-    with pytest.raises(
-        ValueError, match=r"raw data has 1\.2, metadata has 1\.8"
-    ):
-        verify_raw_manifest(manifest, {"post_selection": source})
-
-
-def test_raw_manifest_rejects_wrong_file_row_count(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    payload["files"][0]["rows"] = 2
-    payload["total_rows"] = 2
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(
-        ValueError, match=r"row-count mismatch.*expected 2, observed 1"
-    ):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_rejects_wrong_file_column_count(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    payload["files"][0]["columns"] = 3
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(
-        ValueError, match=r"column-count mismatch.*expected 3, observed 2"
-    ):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_rejects_duplicate_estimator_entry(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    payload["files"].append(payload["files"][0].copy())
-    payload["number_of_files"] = 2
-    payload["total_rows"] = 2
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match="repeats estimator: oracle"):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_rejects_missing_estimator_entry(tmp_path: Path) -> None:
-    oracle = tmp_path / "oracle.csv"
-    oracle.write_bytes(b"a,b\n1,2\n")
-    dml = tmp_path / "dml.csv"
-    dml.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, oracle)
-
-    with pytest.raises(ValueError, match=r"missing estimator entries: \['dml'\]"):
-        verify_raw_manifest(manifest, {"oracle": oracle, "dml": dml})
-
-
-def test_raw_manifest_rejects_unexpected_estimator_entry(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    unexpected = payload["files"][0].copy()
-    unexpected["estimator"] = "dml"
-    payload["files"].append(unexpected)
-    payload["number_of_files"] = 2
-    payload["total_rows"] = 2
-    manifest.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match=r"unexpected estimator entries: \['dml'\]"):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_accepts_lf_and_crlf_equivalent_content(tmp_path: Path) -> None:
-    lf_source = tmp_path / "lf.csv"
-    lf_source.write_bytes(b"a,b\n1,2\n")
-    crlf_source = tmp_path / "oracle.csv"
-    crlf_source.write_bytes(b"a,b\r\n1,2\r\n")
-    cr_source = tmp_path / "cr.csv"
-    cr_source.write_bytes(b"a,b\r1,2\r")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, crlf_source, hashed_source=lf_source)
-
-    assert sha256_file(lf_source) != sha256_file(crlf_source)
-    canonical_hash = sha256_canonical_lf_file(lf_source, chunk_size=4)
-    assert canonical_hash == sha256_canonical_lf_file(crlf_source, chunk_size=4)
-    assert canonical_hash == sha256_canonical_lf_file(cr_source, chunk_size=4)
-    with pytest.warns(UserWarning, match="canonical LF content matches"):
-        verify_raw_manifest(manifest, {"oracle": crlf_source})
-
-
-def test_raw_manifest_rejects_canonical_content_mutation(tmp_path: Path) -> None:
-    source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
-    manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source)
-    source.write_bytes(b"a,b\n1,9\n")
-
-    with pytest.raises(ValueError, match="canonical LF SHA-256 mismatch"):
-        verify_raw_manifest(manifest, {"oracle": source})
-
-
-def test_raw_manifest_accepts_size_mismatch_when_canonical_hash_matches(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("row_count", 2, "row-count mismatch"),
+        ("column_count", 8, "column-count mismatch"),
+        ("column_names", ["wrong"], "column order mismatch"),
+        ("sha256", "0" * 64, "SHA-256 mismatch"),
+        ("replication_max", 1, "replication_max mismatch"),
+        ("duplicate_natural_key_count", 1, "duplicate-key mismatch"),
+    ],
+)
+def test_raw_manifest_rejects_stale_artifact_metadata(
+    tmp_path: Path, field: str, value: object, message: str
 ) -> None:
     source = tmp_path / "oracle.csv"
-    source.write_bytes(b"a,b\n1,2\n")
+    _artifact_frame().to_csv(source, index=False)
     manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source, size_bytes=source.stat().st_size + 1)
-
-    with pytest.warns(UserWarning, match="canonical LF content matches"):
+    payload = _write_test_manifest(manifest, source)
+    payload["files"]["oracle"][field] = value
+    if field == "row_count":
+        payload["total_rows"] = value
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
         verify_raw_manifest(manifest, {"oracle": source})
 
 
 def test_raw_manifest_verification_rejects_missing_file(tmp_path: Path) -> None:
-    source = tmp_path / "missing.csv"
-    provenance_source = tmp_path / "reference.csv"
-    provenance_source.write_bytes(b"a,b\n1,2\n")
+    source = tmp_path / "oracle.csv"
+    _artifact_frame().to_csv(source, index=False)
     manifest = tmp_path / "manifest.json"
-    _write_test_manifest(manifest, source, hashed_source=provenance_source)
-
-    with pytest.raises(FileNotFoundError, match=r"Canonical raw result.*missing\.csv"):
+    payload = _write_test_manifest(manifest, source)
+    source.unlink()
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(FileNotFoundError, match=r"Canonical raw result.*oracle\.csv"):
         verify_raw_manifest(manifest, {"oracle": source})
 
 
