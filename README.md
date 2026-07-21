@@ -311,6 +311,21 @@ Oracle only:
 pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --base-seed 12345 --output results/raw/fast_oracle.csv --manifest results/raw/fast_oracle_manifest.json
 ```
 
+Oracle-only simulation CSVs intentionally contain exactly these 26 fields, in
+this order:
+
+```text
+dgp,n,p,pi,tau,rep,alpha_true,alpha_hat,covered,cr_length,cr_status,cr_n_blocks,cr_disconnected,cr_components,iteration_warning_evaluations,seed,cr_lower,cr_upper,converged,cr_is_numerically_resolved,cr_unresolved_count,final_alpha_evaluations,refinement_depth_reached,number_of_refined_intervals,minimum_final_grid_spacing,median_final_grid_spacing
+```
+
+The output retains exact confidence-region geometry, direct interval endpoints,
+the per-observation seed, convergence and resolution indicators, warning counts,
+and concise adaptive-grid effort and spacing diagnostics. Constant run settings
+and lower-level midpoint, limit, and refinement-barrier diagnostics remain in the
+command manifest or internal estimator diagnostics. Resume and block merging
+accept historical expanded Oracle files, validate all retained fields, and write
+this schema. Post-selection and DML CSV schemas are unchanged.
+
 DML only:
 
 ```powershell

@@ -469,6 +469,7 @@ def build_failure_result_row(
         error_type=type(exc).__name__,
         cr_components=() if is_ch_estimator else None,
         cr_n_blocks=0 if is_ch_estimator else None,
+        iteration_warning_evaluations=0 if is_ch_estimator else None,
     )
     row = build_simulation_result_row(design, result, alphas)
     row["error_message"] = str(exc)[:max_error_message_length]

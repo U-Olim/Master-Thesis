@@ -9,6 +9,8 @@ import sys
 import pandas as pd
 import pytest
 
+from simulation.oracle_output import ORACLE_OUTPUT_COLUMNS
+
 SCRIPT = Path(__file__).parents[1] / "scripts" / "merge_simulation_blocks.py"
 SPEC = importlib.util.spec_from_file_location("merge_simulation_blocks", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
@@ -47,14 +49,27 @@ def _frame(reps: range) -> pd.DataFrame:
                     "cr_status": "valid",
                     "cr_is_numerically_resolved": True,
                     "cr_unresolved_count": 0,
+                    "cr_unresolved_alphas": "[]",
+                    "final_alpha_evaluations": 31,
+                    "refinement_depth_reached": 4,
+                    "number_of_refined_intervals": 5,
+                    "minimum_final_grid_spacing": 0.01,
+                    "median_final_grid_spacing": 0.05,
                     "grid_strategy": "adaptive",
                     "adaptive_midpoint_probe": True,
                     "alpha_hat_grid": "initial",
+                    "midpoint_intervals_considered": 10,
+                    "midpoint_evaluations_added": 5,
+                    "midpoint_unresolved_barriers": 0,
                     "refinement_tolerance": 0.025,
+                    "initial_alpha_grid_size": 21,
                     "refinement_limit_hit": False,
                     "midpoint_probe_limit_hit": False,
                     "max_alpha_evaluations_hit": False,
+                    "number_of_unresolved_refinement_barriers": 0,
+                    "maximum_final_grid_spacing": 0.1,
                     "rank_deficient_covariance_failures": 0,
+                    "iteration_warning_evaluations": 0,
                 }
             )
     return pd.DataFrame(rows)
@@ -86,7 +101,10 @@ def test_successful_merge(tmp_path: Path) -> None:
     payload = _merge(tmp_path, _inputs(tmp_path))
     assert payload["final_row_count"] == 8
     assert payload["design_cells"] == 2
-    assert len(pd.read_csv(tmp_path / "merged.csv")) == 8
+    merged = pd.read_csv(tmp_path / "merged.csv")
+    assert len(merged) == 8
+    assert tuple(merged.columns) == ORACLE_OUTPUT_COLUMNS
+    assert len(merged.columns) == 26
 
 
 def test_duplicate_replication_key_is_rejected(tmp_path: Path) -> None:
@@ -108,22 +126,22 @@ def test_missing_replication_is_rejected(tmp_path: Path) -> None:
         _merge(tmp_path, inputs)
 
 
-def test_schema_mismatch_is_rejected(tmp_path: Path) -> None:
+def test_historical_schema_version_is_ignored_after_oracle_projection(tmp_path: Path) -> None:
     inputs = _inputs(tmp_path)
     frame = pd.read_csv(inputs[1])
     frame["result_schema_version"] = 3
     frame.to_csv(inputs[1], index=False)
-    with pytest.raises(MergeValidationError, match="result_schema_version mismatch"):
-        _merge(tmp_path, inputs)
+    _merge(tmp_path, inputs)
+    assert tuple(pd.read_csv(tmp_path / "merged.csv").columns) == ORACLE_OUTPUT_COLUMNS
 
 
-def test_inconsistent_columns_are_rejected(tmp_path: Path) -> None:
+def test_historical_column_order_is_ignored_after_oracle_projection(tmp_path: Path) -> None:
     inputs = _inputs(tmp_path)
     frame = pd.read_csv(inputs[1])
     frame = frame[[*frame.columns[1:], frame.columns[0]]]
     frame.to_csv(inputs[1], index=False)
-    with pytest.raises(MergeValidationError, match="column names or order differ"):
-        _merge(tmp_path, inputs)
+    _merge(tmp_path, inputs)
+    assert tuple(pd.read_csv(tmp_path / "merged.csv").columns) == ORACLE_OUTPUT_COLUMNS
 
 
 def test_wrong_estimator_is_rejected(tmp_path: Path) -> None:
@@ -135,22 +153,39 @@ def test_wrong_estimator_is_rejected(tmp_path: Path) -> None:
         _merge(tmp_path, inputs)
 
 
-def test_malformed_cr_components_are_rejected(tmp_path: Path) -> None:
+def test_malformed_retained_cr_components_are_rejected(tmp_path: Path) -> None:
     inputs = _inputs(tmp_path)
     frame = pd.read_csv(inputs[1])
     frame.loc[0, "cr_components"] = "not-json"
     frame.to_csv(inputs[1], index=False)
-    with pytest.raises(MergeValidationError, match="component validation failed"):
+    with pytest.raises(MergeValidationError, match="component"):
         _merge(tmp_path, inputs)
 
 
-def test_inconsistent_cr_n_blocks_is_rejected(tmp_path: Path) -> None:
+def test_inconsistent_retained_cr_n_blocks_is_rejected(tmp_path: Path) -> None:
     inputs = _inputs(tmp_path)
     frame = pd.read_csv(inputs[1])
     frame.loc[0, "cr_n_blocks"] = 2
     frame.to_csv(inputs[1], index=False)
     with pytest.raises(MergeValidationError, match="cr_n_blocks"):
         _merge(tmp_path, inputs)
+
+
+def test_missing_oracle_analysis_column_is_rejected(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path)
+    frame = pd.read_csv(inputs[1]).drop(columns="cr_length")
+    frame.to_csv(inputs[1], index=False)
+    with pytest.raises(MergeValidationError, match="missing required output columns.*cr_length"):
+        _merge(tmp_path, inputs)
+
+
+def test_current_and_historical_oracle_blocks_can_be_merged(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path)
+    current = pd.read_csv(inputs[1]).rename(columns={"cr_covers_true": "covered"})
+    current = current.loc[:, list(ORACLE_OUTPUT_COLUMNS)]
+    current.to_csv(inputs[1], index=False)
+    _merge(tmp_path, inputs)
+    assert tuple(pd.read_csv(tmp_path / "merged.csv").columns) == ORACLE_OUTPUT_COLUMNS
 
 
 def test_incorrect_total_row_count_is_rejected(tmp_path: Path) -> None:
@@ -164,7 +199,7 @@ def test_failed_validation_preserves_existing_output(tmp_path: Path) -> None:
     output = tmp_path / "merged.csv"
     output.write_bytes(b"existing-output\n")
     frame = pd.read_csv(inputs[1])
-    frame.loc[0, "cr_components"] = "{"
+    frame = frame.drop(columns="cr_length")
     frame.to_csv(inputs[1], index=False)
     with pytest.raises(MergeValidationError):
         _merge(tmp_path, inputs, output=output)
@@ -179,7 +214,7 @@ def test_output_is_sorted_deterministically(tmp_path: Path) -> None:
     _merge(tmp_path, inputs)
     merged = pd.read_csv(tmp_path / "merged.csv")
     expected = merged.sort_values(
-        ["dgp", "n", "p", "pi", "tau", "rep", "estimator"], kind="mergesort"
+        ["dgp", "n", "p", "pi", "tau", "rep"], kind="mergesort"
     ).reset_index(drop=True)
     pd.testing.assert_frame_equal(merged, expected)
 

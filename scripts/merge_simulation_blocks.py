@@ -18,6 +18,11 @@ import pandas as pd
 
 from analysis.data import DESIGN_COLUMNS, IDENTIFIER_COLUMNS, sha256_file
 from simulation.dml_output import validate_component_columns
+from simulation.oracle_output import (
+    ORACLE_DESIGN_KEY_COLUMNS,
+    ORACLE_OUTPUT_COLUMNS,
+    clean_oracle_results_frame,
+)
 
 
 SORT_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep", "estimator"]
@@ -112,6 +117,16 @@ def _read_and_validate_inputs(
         if frame.empty:
             raise MergeValidationError(f"input file has no data rows: {path}")
 
+        if estimator == "oracle":
+            if "estimator" in frame:
+                _validate_constant(frame, "estimator", estimator)
+            try:
+                frame = clean_oracle_results_frame(frame)
+            except (TypeError, ValueError) as exc:
+                raise MergeValidationError(
+                    f"Oracle input validation failed for {path}: {exc}"
+                ) from exc
+
         columns = list(frame.columns)
         if len(columns) != len(set(columns)):
             raise MergeValidationError(f"input has duplicate column names: {path}")
@@ -135,22 +150,27 @@ def _read_and_validate_inputs(
             if incompatible:
                 raise MergeValidationError(f"incompatible dtypes in {path}: {incompatible}")
 
-        required = set(IDENTIFIER_COLUMNS) | {
-            "result_schema_version",
-            "cr_components",
-            "cr_n_blocks",
-            "cr_disconnected",
-            "cr_lower",
-            "cr_upper",
-            "cr_length",
-        }
+        required = (
+            set(ORACLE_OUTPUT_COLUMNS)
+            if estimator == "oracle"
+            else set(IDENTIFIER_COLUMNS) | {
+                "result_schema_version",
+                "cr_components",
+                "cr_n_blocks",
+                "cr_disconnected",
+                "cr_lower",
+                "cr_upper",
+                "cr_length",
+            }
+        )
         missing = sorted(required.difference(frame.columns))
         if missing:
             raise MergeValidationError(f"required columns missing from {path}: {missing}")
-        _validate_constant(frame, "result_schema_version", expected_schema_version)
-        _validate_constant(frame, "estimator", estimator)
-        for column, expected in corrected_ch_config.items():
-            _validate_constant(frame, column, expected)
+        if estimator != "oracle":
+            _validate_constant(frame, "result_schema_version", expected_schema_version)
+            _validate_constant(frame, "estimator", estimator)
+            for column, expected in corrected_ch_config.items():
+                _validate_constant(frame, column, expected)
 
         expected_start, expected_end = _parse_block_range(path)
         observed_reps = set(pd.to_numeric(frame["rep"], errors="raise").astype(int))
@@ -230,19 +250,28 @@ def _validate_merged_frame(
 ) -> dict[str, object]:
     if list(frame.columns) != list(expected_columns):
         raise MergeValidationError("merged output columns differ from input columns")
-    for column in IDENTIFIER_COLUMNS:
+    key_columns = (
+        list(ORACLE_DESIGN_KEY_COLUMNS)
+        if estimator == "oracle"
+        else list(IDENTIFIER_COLUMNS)
+    )
+    for column in key_columns:
         if column not in frame:
             raise MergeValidationError(f"canonical key column is missing: {column}")
-    missing_key_count = int(frame[IDENTIFIER_COLUMNS].isna().any(axis=1).sum())
+    missing_key_count = int(frame[key_columns].isna().any(axis=1).sum())
     if missing_key_count:
         raise MergeValidationError(f"found {missing_key_count} rows with missing key values")
-    duplicate_count = int(frame.duplicated(IDENTIFIER_COLUMNS, keep="first").sum())
+    duplicate_count = int(frame.duplicated(key_columns, keep="first").sum())
     if duplicate_count:
         raise MergeValidationError(f"found {duplicate_count} duplicate simulation keys")
-    _validate_constant(frame, "result_schema_version", expected_schema_version)
-    _validate_constant(frame, "estimator", estimator)
+    if estimator != "oracle":
+        _validate_constant(frame, "result_schema_version", expected_schema_version)
+        _validate_constant(frame, "estimator", estimator)
 
-    design_columns = list(DESIGN_COLUMNS)
+    design_columns = (
+        ["dgp", "n", "p", "pi", "tau"]
+        if estimator == "oracle" else list(DESIGN_COLUMNS)
+    )
     design_cells = frame.groupby(design_columns, dropna=False, sort=False)
     observed_cell_count = int(design_cells.ngroups)
     if observed_cell_count != expected_design_cells:
@@ -276,12 +305,18 @@ def _validate_merged_frame(
     if bad_sizes:
         raise MergeValidationError(f"design cells have incorrect row counts: {bad_sizes[:5]}")
 
-    try:
-        validate_component_columns(frame)
-    except (TypeError, ValueError) as exc:
-        raise MergeValidationError(f"confidence-region component validation failed: {exc}") from exc
+    if estimator != "oracle":
+        try:
+            validate_component_columns(frame)
+        except (TypeError, ValueError) as exc:
+            raise MergeValidationError(
+                f"confidence-region component validation failed: {exc}"
+            ) from exc
     if require_sorted:
-        expected_order = frame.sort_values(SORT_COLUMNS, kind="mergesort").index
+        sort_columns = (
+            list(ORACLE_DESIGN_KEY_COLUMNS) if estimator == "oracle" else SORT_COLUMNS
+        )
+        expected_order = frame.sort_values(sort_columns, kind="mergesort").index
         if not expected_order.equals(pd.RangeIndex(len(frame))):
             raise MergeValidationError("merged output is not in canonical deterministic order")
     sizes = design_cells.size()
@@ -294,9 +329,13 @@ def _validate_merged_frame(
         "duplicate_count": duplicate_count,
         "missing_key_count": missing_key_count,
         "missing_replication_count": missing_replication_count,
-        "cr_component_validation": "passed",
+        "cr_component_validation": (
+            "passed"
+        ),
         "status_counts": _status_counts(frame),
-        "sort_columns": SORT_COLUMNS,
+        "sort_columns": (
+            list(ORACLE_DESIGN_KEY_COLUMNS) if estimator == "oracle" else SORT_COLUMNS
+        ),
     }
 
 
@@ -351,7 +390,10 @@ def merge_simulation_blocks(
         corrected_ch_config=config,
     )
     merged = pd.concat(frames, ignore_index=True)
-    merged = merged.sort_values(SORT_COLUMNS, kind="mergesort").reset_index(drop=True)
+    sort_columns = (
+        list(ORACLE_DESIGN_KEY_COLUMNS) if estimator == "oracle" else SORT_COLUMNS
+    )
+    merged = merged.sort_values(sort_columns, kind="mergesort").reset_index(drop=True)
     summary = _validate_merged_frame(
         merged,
         estimator=estimator,
@@ -421,7 +463,9 @@ def merge_simulation_blocks(
             "schema_and_estimator": "passed",
             "replications": "passed",
             "unique_keys": "passed",
-            "confidence_region_components": "passed",
+            "confidence_region_components": (
+                "passed"
+            ),
             "atomic_temporary_file": "passed",
         },
     }

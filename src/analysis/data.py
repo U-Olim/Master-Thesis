@@ -10,6 +10,10 @@ import numpy as np
 import pandas as pd
 
 from simulation.dml_output import validate_component_columns
+from simulation.oracle_output import (
+    ORACLE_OUTPUT_COLUMNS,
+    clean_oracle_results_frame,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -339,6 +343,24 @@ def _read_results(
     if frame.empty:
         raise ValueError(f"Result file contains no rows: {source}")
 
+    if estimator == "oracle" and set(ORACLE_OUTPUT_COLUMNS).issubset(frame.columns):
+        frame = clean_oracle_results_frame(frame)
+        frame.insert(0, "estimator", "oracle")
+        resolved = frame["cr_is_numerically_resolved"].eq(True) & frame[
+            "covered"
+        ].notna()
+        frame["coverage_status"] = np.where(
+            resolved,
+            np.where(frame["covered"].eq(True), "covered", "not_covered"),
+            "coverage_unresolved",
+        )
+        validate_results(
+            frame,
+            expected_estimator="oracle",
+            expected_replications=expected_replications,
+        )
+        return frame
+
     missing = set(CORE_COLUMNS).difference(frame.columns)
     if missing:
         raise ValueError(f"{source} is missing required columns: {sorted(missing)}")
@@ -391,11 +413,35 @@ def validate_results(
     """
     if results.empty:
         raise ValueError("Results contain no rows")
+    if expected_replications < 1:
+        raise ValueError("expected_replications must be positive")
+    current_oracle = set(ORACLE_OUTPUT_COLUMNS).issubset(results.columns) and not set(
+        CORE_COLUMNS
+    ).issubset(results.columns)
+    if current_oracle:
+        oracle = clean_oracle_results_frame(results.loc[:, ORACLE_OUTPUT_COLUMNS])
+        if "estimator" in results and results["estimator"].ne("oracle").any():
+            raise ValueError("Oracle results contain a non-Oracle estimator")
+        design_columns = ["dgp", "n", "p", "pi", "tau"]
+        rep_summary = oracle.groupby(design_columns, dropna=False)["rep"].agg(
+            ["size", "nunique", "min", "max"]
+        )
+        expected_max = expected_replications - 1
+        bad = rep_summary[
+            (rep_summary["size"] != expected_replications)
+            | (rep_summary["nunique"] != expected_replications)
+            | (rep_summary["min"] != 0)
+            | (rep_summary["max"] != expected_max)
+        ]
+        if not bad.empty:
+            raise ValueError(
+                f"{len(bad)} Oracle design cells do not contain replications "
+                f"0-{expected_max}"
+            )
+        return
     missing = set(CORE_COLUMNS).difference(results.columns)
     if missing:
         raise ValueError(f"Results are missing required columns: {sorted(missing)}")
-    if expected_replications < 1:
-        raise ValueError("expected_replications must be positive")
 
     labels = set(results["estimator"].dropna().unique())
     allowed = set(RAW_RESULT_FILES)

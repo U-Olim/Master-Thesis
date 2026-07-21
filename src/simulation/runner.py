@@ -7,7 +7,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
+import os
 from pathlib import Path
+import tempfile
 from typing import TypeVar, cast, get_args
 import warnings
 
@@ -58,7 +60,12 @@ from simulation.config import (
     DGPS,
     ESTIMATORS,
 )
-from simulation.dml_output import clean_core_results_frame, clean_dml_results_frame
+from simulation.dml_output import clean_dml_results_frame
+from simulation.oracle_output import (
+    ORACLE_DESIGN_KEY_COLUMNS,
+    ORACLE_OUTPUT_COLUMNS,
+    clean_oracle_results_frame,
+)
 from simulation.post_selection_output import clean_post_selection_results_frame
 from simulation.results import (
     MAX_ERROR_MESSAGE_LENGTH,
@@ -707,17 +714,44 @@ def run_simulation_batch(
     if estimators == ("dml",):
         results = clean_dml_results_frame(results)
     elif estimators == ("oracle",):
-        results = clean_core_results_frame(results, estimator="oracle")
+        results = clean_oracle_results_frame(results)
     elif estimators == ("post_selection",):
         results = clean_post_selection_results_frame(results)
     if output_path is not None:
         path = Path(output_path)
         if path.exists() and path.is_dir():
             raise ValueError("output_path must be a file path")
+        if append and path.exists() and path.stat().st_size > 0 and estimators == ("oracle",):
+            existing = clean_oracle_results_frame(pd.read_csv(path))
+            if tuple(pd.read_csv(path, nrows=0).columns) != ORACLE_OUTPUT_COLUMNS:
+                warnings.warn(
+                    f"Projecting historical Oracle output to the current output "
+                    f"schema before resume: {path}",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                temporary_path: Path | None = None
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        mode="w",
+                        encoding="utf-8",
+                        newline="",
+                        delete=False,
+                        dir=path.parent,
+                        prefix=f".{path.name}.",
+                        suffix=".tmp",
+                    ) as handle:
+                        temporary_path = Path(handle.name)
+                        existing.to_csv(handle, index=False)
+                    os.replace(temporary_path, path)
+                    temporary_path = None
+                finally:
+                    if temporary_path is not None:
+                        temporary_path.unlink(missing_ok=True)
         if append and path.exists() and path.stat().st_size > 0:
             existing_header = pd.read_csv(path, nrows=0)
             existing_columns = tuple(existing_header.columns)
-            if "result_schema_version" not in existing_columns:
+            if estimators != ("oracle",) and "result_schema_version" not in existing_columns:
                 raise ValueError(
                     "cannot append results with a different schema: existing file "
                     "is legacy/unversioned"
@@ -728,13 +762,14 @@ def run_simulation_batch(
                     f"existing file has {len(existing_columns)} columns, "
                     f"new rows have {len(results.columns)}"
                 )
-            existing_versions = pd.read_csv(
-                path, usecols=["result_schema_version"]
-            )["result_schema_version"].dropna().unique()
-            if (
-                len(existing_versions) != 1
-                or int(existing_versions[0]) != RESULT_SCHEMA_VERSION
-            ):
+            existing_versions = (
+                np.array([RESULT_SCHEMA_VERSION])
+                if estimators == ("oracle",)
+                else pd.read_csv(path, usecols=["result_schema_version"])[
+                    "result_schema_version"
+                ].dropna().unique()
+            )
+            if len(existing_versions) != 1 or int(existing_versions[0]) != RESULT_SCHEMA_VERSION:
                 raise ValueError(
                     "cannot append results with an incompatible result schema "
                     f"version; expected {RESULT_SCHEMA_VERSION}, observed "
@@ -767,18 +802,37 @@ def filter_completed_designs(
     path = Path(results_path)
     if not path.exists():
         return designs
-    required = list(DESIGN_KEY_COLUMNS) + ["estimator"]
-    if rerun_failed:
+    oracle_only = _validate_estimators(estimators) == ("oracle",)
+    header = tuple(pd.read_csv(path, nrows=0).columns)
+    if oracle_only:
+        required = list(ORACLE_DESIGN_KEY_COLUMNS)
+        if "estimator" in header:
+            required.append("estimator")
+    else:
+        required = list(DESIGN_KEY_COLUMNS) + ["estimator"]
+    if rerun_failed and (not oracle_only or "failed" in header):
         required.append("failed")
     existing = _completed_successes(pd.read_csv(path, usecols=required), rerun_failed)
     expected = {ESTIMATOR_OUTPUT_NAMES[name] for name in _validate_estimators(estimators)}
     completed: dict[tuple[object, ...], set[str]] = {}
     for _, row in existing.iterrows():
-        completed.setdefault(_row_design_key(row), set()).add(str(row["estimator"]))
+        if oracle_only:
+            key = tuple(row[column] for column in ORACLE_DESIGN_KEY_COLUMNS)
+            output_name = str(row["estimator"]) if "estimator" in row else "oracle"
+        else:
+            key = _row_design_key(row)
+            output_name = str(row["estimator"])
+        completed.setdefault(key, set()).add(output_name)
     return [
         design
         for design in designs
-        if not expected.issubset(completed.get(_design_key(design), set()))
+        if not expected.issubset(
+            completed.get(
+                tuple(getattr(design, column) for column in ORACLE_DESIGN_KEY_COLUMNS)
+                if oracle_only else _design_key(design),
+                set(),
+            )
+        )
     ]
 
 

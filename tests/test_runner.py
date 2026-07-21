@@ -16,6 +16,7 @@ from dgp import get_oracle_control_indices
 from dgp.designs import Design
 from ivqr.confidence_regions import parse_cr_components
 from simulation.results import RESULT_SCHEMA_VERSION
+from simulation.oracle_output import ORACLE_OUTPUT_COLUMNS
 from simulation.config import DEFAULT_BASE_SEED
 from simulation.runner import (
     SEED_RULE_TEXT,
@@ -25,7 +26,7 @@ from simulation.runner import (
     run_simulation_batch,
     validate_oracle_support,
 )
-from simulation.dml_output import REQUIRED_CORE_COLUMNS, REQUIRED_DML_COLUMNS
+from simulation.dml_output import REQUIRED_DML_COLUMNS
 from simulation.post_selection_output import REQUIRED_POST_SELECTION_COLUMNS
 
 
@@ -93,6 +94,12 @@ def test_real_ch_csv_round_trip_preserves_components_and_schema(tmp_path: Path) 
         )
         loaded = _read_results(path, label, expected_replications=1)
         row = loaded.iloc[0]
+        if estimator == "oracle":
+            assert tuple(loaded.columns) == (
+                "estimator", *ORACLE_OUTPUT_COLUMNS, "coverage_status"
+            )
+            assert row["estimator"] == "oracle"
+            continue
         components = parse_cr_components(row["cr_components"])
         assert components is not None
         assert int(row["result_schema_version"]) == RESULT_SCHEMA_VERSION
@@ -532,16 +539,7 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
-    assert written["estimator"].tolist() == ["oracle"]
-    assert _cell_int(written, "seed") == make_design_seed(
-        base_seed=DEFAULT_BASE_SEED,
-        dgp="dgp1",
-        n=50,
-        p=4,
-        pi=1.0,
-        tau=0.5,
-        rep=0,
-    )
+    assert tuple(written.columns) == ORACLE_OUTPUT_COLUMNS
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     assert payload["result_schema_version"] == RESULT_SCHEMA_VERSION
     assert {"git_commit", "git_branch", "git_dirty"}.issubset(payload)
@@ -601,9 +599,32 @@ def test_tiny_oracle_run_writes_clean_common_schema(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
-    assert tuple(written.columns) == REQUIRED_CORE_COLUMNS
-    assert written["estimator"].tolist() == ["oracle"]
+    assert tuple(written.columns) == ORACLE_OUTPUT_COLUMNS
     assert not any("runtime" in column for column in written.columns)
+
+
+@pytest.mark.slow
+def test_full_mode_oracle_run_writes_exact_output_schema(tmp_path: Path) -> None:
+    output = tmp_path / "raw" / "full_mode_oracle.csv"
+    result = _run_cli(
+        tmp_path,
+        "--mode", "full",
+        "--estimators", "oracle",
+        "--reps", "1",
+        "--dgps", "dgp1",
+        "--n-values", "40",
+        "--p-values", "3",
+        "--pi-values", "1.0",
+        "--taus", "0.5",
+        "--max-designs", "1",
+        "--n-jobs", "1",
+        "--alpha-grid-size", "3",
+        "--output", str(output),
+    )
+    assert result.returncode == 0, result.stderr
+    written = pd.read_csv(output)
+    assert tuple(written.columns) == ORACLE_OUTPUT_COLUMNS
+    assert len(written.columns) == 26
 
 
 @pytest.mark.slow
@@ -719,27 +740,35 @@ def test_dml_append_rejects_different_output_schema(tmp_path: Path) -> None:
         )
 
 
-def test_append_rejects_incompatible_result_schema_version(tmp_path: Path) -> None:
+def test_oracle_append_projects_historical_expanded_schema(tmp_path: Path) -> None:
     output = tmp_path / "incompatible_version.csv"
-    current = run_simulation_batch(
+    historical = pd.DataFrame([{
+        "dgp": "dgp1", "n": 50, "p": 4, "pi": 1.0, "tau": 0.5,
+        "rep": 0, "alpha_true": 1.0, "alpha_hat": 1.1, "covered": True,
+        "cr_length": 0.5, "cr_status": "valid", "cr_n_blocks": 1,
+        "cr_disconnected": False, "cr_components": "[[0.75,1.25]]",
+        "iteration_warning_evaluations": 0, "seed": 123,
+        "cr_lower": 0.75, "cr_upper": 1.25, "converged": True,
+        "cr_is_numerically_resolved": True, "cr_unresolved_count": 0,
+        "final_alpha_evaluations": 21, "refinement_depth_reached": 2,
+        "number_of_refined_intervals": 3, "minimum_final_grid_spacing": 0.01,
+        "median_final_grid_spacing": 0.05,
+    }])
+    historical["result_schema_version"] = RESULT_SCHEMA_VERSION - 1
+    historical["estimator"] = "oracle"
+    historical.to_csv(output, index=False)
+
+    run_simulation_batch(
         [],
         np.linspace(-1.0, 1.0, 3),
         estimators=("oracle",),
+        output_path=output,
+        append=True,
     )
-    legacy_version = pd.DataFrame(
-        [{column: np.nan for column in current.columns}], columns=current.columns
-    )
-    legacy_version.loc[0, "result_schema_version"] = RESULT_SCHEMA_VERSION - 1
-    legacy_version.to_csv(output, index=False)
-
-    with pytest.raises(ValueError, match="incompatible result schema version"):
-        run_simulation_batch(
-            [],
-            np.linspace(-1.0, 1.0, 3),
-            estimators=("oracle",),
-            output_path=output,
-            append=True,
-        )
+    rewritten = pd.read_csv(output)
+    assert tuple(rewritten.columns) == ORACLE_OUTPUT_COLUMNS
+    assert rewritten.loc[0, "alpha_hat"] == pytest.approx(1.1)
+    assert rewritten.loc[0, "cr_length"] == pytest.approx(0.5)
 
 
 @pytest.mark.slow
@@ -779,6 +808,8 @@ def test_block_run_writes_requested_replication_block(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
     assert sorted(written["rep"].unique().tolist()) == [3, 4, 5]
+    assert tuple(written.columns) == ORACLE_OUTPUT_COLUMNS
+    assert len(written.columns) == 26
 
 
 @pytest.mark.slow
@@ -814,6 +845,7 @@ def test_default_run_writes_default_replication_block(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
     assert sorted(written["rep"].unique().tolist()) == [0, 1, 2]
+    assert tuple(written.columns) == ORACLE_OUTPUT_COLUMNS
 
 
 @pytest.mark.slow
