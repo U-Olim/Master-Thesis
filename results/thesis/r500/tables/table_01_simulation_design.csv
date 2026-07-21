@@ -1,0 +1,2 @@
+dgp_values,sample_sizes,dimensionalities,instrument_strengths,quantiles,replications_per_design_cell,design_cells,rows_per_estimator,estimator_count,total_estimator_rows
+dgp1; dgp2; dgp3,500; 1000,200; 500,0.10; 0.25; 0.50; 1.00,0.25; 0.50; 0.75,500,144,72000,3,216000

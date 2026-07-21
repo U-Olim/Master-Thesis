@@ -1,0 +1,1239 @@
+{
+  "findings": [
+    {
+      "authoritative_source": "results/validation/r500_audit/structural_validation.json",
+      "availability": "available",
+      "denominator": 216000,
+      "id": "simulation_design",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "The design contains 144 cells and 500 replications per cell.",
+      "prohibited_overinterpretation": "The design proves external validity.",
+      "source_hash": "080bfb57216f7ad9e83848e5efac7fb6208ee0e37b55396cc2323edb03e2f26a",
+      "source_row_or_filter": {},
+      "topic": "design",
+      "values": {
+        "design_cells": 144,
+        "estimator_count": 3,
+        "replications_per_design_cell": 500,
+        "rows_per_estimator": 72000,
+        "total_estimator_rows": 216000
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/estimator_classification.csv",
+      "availability": "available",
+      "denominator": 71987,
+      "id": "overall_oracle",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "Oracle IVQR had conditional coverage 0.9421.",
+      "prohibited_overinterpretation": "The estimator is universally superior.",
+      "source_hash": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b",
+      "source_row_or_filter": {
+        "estimator": "oracle"
+      },
+      "topic": "overall_performance",
+      "values": {
+        "classification": "acceptable with caveats",
+        "coverage": 0.9421145485,
+        "coverage_gap": -0.00788545154,
+        "diagnostic_confidence": "high",
+        "mean_cr_length": 2.40693558,
+        "rmse": 0.835711091,
+        "wilson_lower": 0.9403848913,
+        "wilson_upper": 0.9437970211
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_audit/estimator_summary.csv",
+      "availability": "available",
+      "denominator": 71987,
+      "id": "bias_oracle",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "Oracle IVQR had mean bias -0.0067.",
+      "prohibited_overinterpretation": "The observed bias guarantees unbiasedness in other designs.",
+      "source_hash": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+      "source_row_or_filter": {
+        "estimator": "oracle"
+      },
+      "topic": "overall_bias",
+      "values": {
+        "bias": -0.006741666667
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/estimator_classification.csv",
+      "availability": "available",
+      "denominator": 71957,
+      "id": "overall_post_selection",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "Post-selection IVQR had conditional coverage 0.9247.",
+      "prohibited_overinterpretation": "The estimator is universally superior.",
+      "source_hash": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b",
+      "source_row_or_filter": {
+        "estimator": "post_selection"
+      },
+      "topic": "overall_performance",
+      "values": {
+        "classification": "concerning",
+        "coverage": 0.9246772378,
+        "coverage_gap": -0.02532276221,
+        "diagnostic_confidence": "high",
+        "mean_cr_length": 2.381302055,
+        "rmse": 0.8592278001,
+        "wilson_lower": 0.9227261708,
+        "wilson_upper": 0.9265829624
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_audit/estimator_summary.csv",
+      "availability": "available",
+      "denominator": 71957,
+      "id": "bias_post_selection",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "Post-selection IVQR had mean bias -0.0566.",
+      "prohibited_overinterpretation": "The observed bias guarantees unbiasedness in other designs.",
+      "source_hash": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+      "source_row_or_filter": {
+        "estimator": "post_selection"
+      },
+      "topic": "overall_bias",
+      "values": {
+        "bias": -0.05664444444
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/estimator_classification.csv",
+      "availability": "available",
+      "denominator": 71957,
+      "id": "overall_dml",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "DML-style IVQR had conditional coverage 0.9490.",
+      "prohibited_overinterpretation": "The estimator is universally superior.",
+      "source_hash": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b",
+      "source_row_or_filter": {
+        "estimator": "dml"
+      },
+      "topic": "overall_performance",
+      "values": {
+        "classification": "acceptable with caveats",
+        "coverage": 0.9489834207,
+        "coverage_gap": -0.001016579346,
+        "diagnostic_confidence": "limited",
+        "mean_cr_length": 2.959140588,
+        "rmse": 0.9869705597,
+        "wilson_lower": 0.9473516179,
+        "wilson_upper": 0.9505672858
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_audit/estimator_summary.csv",
+      "availability": "available",
+      "denominator": 71957,
+      "id": "bias_dml",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "DML-style IVQR had mean bias 0.0093.",
+      "prohibited_overinterpretation": "The observed bias guarantees unbiasedness in other designs.",
+      "source_hash": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+      "source_row_or_filter": {
+        "estimator": "dml"
+      },
+      "topic": "overall_bias",
+      "values": {
+        "bias": 0.0093
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/paired_estimator_summary.csv",
+      "availability": "available",
+      "denominator": 71952,
+      "id": "paired_oracle_vs_post_selection",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "Oracle IVQR had a paired coverage difference of +0.0177 relative to Post-selection IVQR.",
+      "prohibited_overinterpretation": "The paired difference identifies a causal mechanism.",
+      "source_hash": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601",
+      "source_row_or_filter": {
+        "estimator_a": "oracle",
+        "estimator_b": "post_selection"
+      },
+      "topic": "paired_comparison",
+      "values": {
+        "coverage_ci_lower": 0.01584374328,
+        "coverage_ci_upper": 0.01962434656,
+        "coverage_difference": 0.01773404492,
+        "cr_length_difference": 0.0260904984,
+        "orientation": "estimator A - estimator B",
+        "squared_error_difference": -0.03985938476
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/paired_estimator_summary.csv",
+      "availability": "available",
+      "denominator": 71944,
+      "id": "paired_oracle_vs_dml",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "Oracle IVQR had a paired coverage difference of -0.0068 relative to DML-style IVQR.",
+      "prohibited_overinterpretation": "The paired difference identifies a causal mechanism.",
+      "source_hash": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601",
+      "source_row_or_filter": {
+        "estimator_a": "oracle",
+        "estimator_b": "dml"
+      },
+      "topic": "paired_comparison",
+      "values": {
+        "coverage_ci_lower": -0.008945865229,
+        "coverage_ci_upper": -0.004592442344,
+        "coverage_difference": -0.006769153786,
+        "cr_length_difference": -0.5521575001,
+        "orientation": "estimator A - estimator B",
+        "squared_error_difference": -0.275697858
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/paired_estimator_summary.csv",
+      "availability": "available",
+      "denominator": 71915,
+      "id": "paired_post_selection_vs_dml",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "Post-selection IVQR had a paired coverage difference of -0.0243 relative to DML-style IVQR.",
+      "prohibited_overinterpretation": "The paired difference identifies a causal mechanism.",
+      "source_hash": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601",
+      "source_row_or_filter": {
+        "estimator_a": "post_selection",
+        "estimator_b": "dml"
+      },
+      "topic": "paired_comparison",
+      "values": {
+        "coverage_ci_lower": -0.02665060703,
+        "coverage_ci_upper": -0.02196233881,
+        "coverage_difference": -0.02430647292,
+        "cr_length_difference": -0.5777223452,
+        "orientation": "estimator A - estimator B",
+        "squared_error_difference": -0.2358384733
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_audit/scenario_summary.csv",
+      "availability": "available",
+      "denominator": 23998,
+      "id": "tau_pattern_oracle",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "Oracle IVQR's lowest aggregated coverage by tau occurred at 0.75.",
+      "prohibited_overinterpretation": "The design dimension caused the coverage pattern.",
+      "source_hash": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+      "source_row_or_filter": {
+        "aggregation": "tau",
+        "estimator": "oracle"
+      },
+      "topic": "performance_by_tau",
+      "values": {
+        "lowest_coverage": 0.9335777981498459,
+        "mean_cr_length": 2.4293961351242186,
+        "rmse": 0.8706040881479513,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_audit/scenario_summary.csv",
+      "availability": "available",
+      "denominator": 23978,
+      "id": "tau_pattern_post_selection",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "Post-selection IVQR's lowest aggregated coverage by tau occurred at 0.75.",
+      "prohibited_overinterpretation": "The design dimension caused the coverage pattern.",
+      "source_hash": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+      "source_row_or_filter": {
+        "aggregation": "tau",
+        "estimator": "post_selection"
+      },
+      "topic": "performance_by_tau",
+      "values": {
+        "lowest_coverage": 0.9049545416631912,
+        "mean_cr_length": 2.42364343723604,
+        "rmse": 0.9104930125668731,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_audit/scenario_summary.csv",
+      "availability": "available",
+      "denominator": 23988,
+      "id": "tau_pattern_dml",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "DML-style IVQR's lowest aggregated coverage by tau occurred at 0.5.",
+      "prohibited_overinterpretation": "The design dimension caused the coverage pattern.",
+      "source_hash": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+      "source_row_or_filter": {
+        "aggregation": "tau",
+        "estimator": "dml"
+      },
+      "topic": "performance_by_tau",
+      "values": {
+        "lowest_coverage": 0.9449307987326997,
+        "mean_cr_length": 2.8440373361947224,
+        "rmse": 0.9318136437347309,
+        "tau": 0.5
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_audit/scenario_summary.csv",
+      "availability": "available",
+      "denominator": 18000,
+      "id": "pi_pattern_oracle",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "Oracle IVQR's lowest aggregated coverage by pi occurred at 1.0.",
+      "prohibited_overinterpretation": "The design dimension caused the coverage pattern.",
+      "source_hash": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+      "source_row_or_filter": {
+        "aggregation": "pi",
+        "estimator": "oracle"
+      },
+      "topic": "performance_by_pi",
+      "values": {
+        "lowest_coverage": 0.9341666666666667,
+        "mean_cr_length": 1.113584350058333,
+        "pi": 1.0,
+        "rmse": 0.3063268541046147
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_audit/scenario_summary.csv",
+      "availability": "available",
+      "denominator": 18000,
+      "id": "pi_pattern_post_selection",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "Post-selection IVQR's lowest aggregated coverage by pi occurred at 1.0.",
+      "prohibited_overinterpretation": "The design dimension caused the coverage pattern.",
+      "source_hash": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+      "source_row_or_filter": {
+        "aggregation": "pi",
+        "estimator": "post_selection"
+      },
+      "topic": "performance_by_pi",
+      "values": {
+        "lowest_coverage": 0.9093333333333333,
+        "mean_cr_length": 1.1123355991500001,
+        "pi": 1.0,
+        "rmse": 0.3346129974004048
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_audit/scenario_summary.csv",
+      "availability": "available",
+      "denominator": 18000,
+      "id": "pi_pattern_dml",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "DML-style IVQR's lowest aggregated coverage by pi occurred at 1.0.",
+      "prohibited_overinterpretation": "The design dimension caused the coverage pattern.",
+      "source_hash": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+      "source_row_or_filter": {
+        "aggregation": "pi",
+        "estimator": "dml"
+      },
+      "topic": "performance_by_pi",
+      "values": {
+        "lowest_coverage": 0.9451666666666667,
+        "mean_cr_length": 1.8855354108972222,
+        "pi": 1.0,
+        "rmse": 0.5159455037760553
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_oracle_1",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 1 among the weakest coverage scenarios for Oracle IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "oracle",
+        "n": 500,
+        "p": 200,
+        "pi": 0.25,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.91,
+        "coverage_gap": -0.04,
+        "dgp": "dgp2",
+        "mean_cr_length": 3.369210331,
+        "n": 500,
+        "p": 200,
+        "pi": 0.25,
+        "rank": 1,
+        "rmse": 1.141853905,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_oracle_1",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8817, 0.9321].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "oracle",
+        "n": 500,
+        "p": 200,
+        "pi": 0.25,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8816900084,
+        "wilson_upper": 0.9320578044
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_oracle_2",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 2 among the weakest coverage scenarios for Oracle IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp3",
+        "estimator": "oracle",
+        "n": 500,
+        "p": 500,
+        "pi": 1.0,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.912,
+        "coverage_gap": -0.038,
+        "dgp": "dgp3",
+        "mean_cr_length": 1.149515418,
+        "n": 500,
+        "p": 500,
+        "pi": 1.0,
+        "rank": 2,
+        "rmse": 0.3223486042,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_oracle_2",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8839, 0.9338].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp3",
+        "estimator": "oracle",
+        "n": 500,
+        "p": 500,
+        "pi": 1.0,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8839229514,
+        "wilson_upper": 0.9337943629
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_oracle_3",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 3 among the weakest coverage scenarios for Oracle IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "oracle",
+        "n": 500,
+        "p": 500,
+        "pi": 0.25,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.914,
+        "coverage_gap": -0.036,
+        "dgp": "dgp2",
+        "mean_cr_length": 3.309299227,
+        "n": 500,
+        "p": 500,
+        "pi": 0.25,
+        "rank": 3,
+        "rmse": 1.173232119,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_oracle_3",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8862, 0.9355].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "oracle",
+        "n": 500,
+        "p": 500,
+        "pi": 0.25,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8861596159,
+        "wilson_upper": 0.9355271999
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_oracle_4",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 4 among the weakest coverage scenarios for Oracle IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "oracle",
+        "n": 500,
+        "p": 200,
+        "pi": 0.5,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.916,
+        "coverage_gap": -0.034,
+        "dgp": "dgp1",
+        "mean_cr_length": 2.300178147,
+        "n": 500,
+        "p": 200,
+        "pi": 0.5,
+        "rank": 4,
+        "rmse": 0.6575745087,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_oracle_4",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8884, 0.9373].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "oracle",
+        "n": 500,
+        "p": 200,
+        "pi": 0.5,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8884001169,
+        "wilson_upper": 0.9372562005
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_oracle_5",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 5 among the weakest coverage scenarios for Oracle IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "oracle",
+        "n": 1000,
+        "p": 200,
+        "pi": 1.0,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.916,
+        "coverage_gap": -0.034,
+        "dgp": "dgp1",
+        "mean_cr_length": 0.944955397,
+        "n": 1000,
+        "p": 200,
+        "pi": 1.0,
+        "rank": 5,
+        "rmse": 0.2589258752,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_oracle_5",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8884, 0.9373].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "oracle",
+        "n": 1000,
+        "p": 200,
+        "pi": 1.0,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8884001169,
+        "wilson_upper": 0.9372562005
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_post_selection_1",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 1 among the weakest coverage scenarios for Post-selection IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "post_selection",
+        "n": 500,
+        "p": 500,
+        "pi": 1.0,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.838,
+        "coverage_gap": -0.112,
+        "dgp": "dgp2",
+        "mean_cr_length": 1.478002684,
+        "n": 500,
+        "p": 500,
+        "pi": 1.0,
+        "rank": 1,
+        "rmse": 0.5162788087,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_post_selection_1",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8031, 0.8677].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "post_selection",
+        "n": 500,
+        "p": 500,
+        "pi": 1.0,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8031470479,
+        "wilson_upper": 0.8676987099
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_post_selection_2",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 2 among the weakest coverage scenarios for Post-selection IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp3",
+        "estimator": "post_selection",
+        "n": 500,
+        "p": 500,
+        "pi": 1.0,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.838,
+        "coverage_gap": -0.112,
+        "dgp": "dgp3",
+        "mean_cr_length": 1.170952482,
+        "n": 500,
+        "p": 500,
+        "pi": 1.0,
+        "rank": 2,
+        "rmse": 0.3909197153,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_post_selection_2",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8031, 0.8677].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp3",
+        "estimator": "post_selection",
+        "n": 500,
+        "p": 500,
+        "pi": 1.0,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8031470479,
+        "wilson_upper": 0.8676987099
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_post_selection_3",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 3 among the weakest coverage scenarios for Post-selection IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "post_selection",
+        "n": 500,
+        "p": 200,
+        "pi": 1.0,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.858,
+        "coverage_gap": -0.092,
+        "dgp": "dgp2",
+        "mean_cr_length": 1.452079181,
+        "n": 500,
+        "p": 200,
+        "pi": 1.0,
+        "rank": 3,
+        "rmse": 0.4518363236,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_post_selection_3",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8247, 0.8859].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "post_selection",
+        "n": 500,
+        "p": 200,
+        "pi": 1.0,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8246696707,
+        "wilson_upper": 0.8858711025
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_post_selection_4",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 4 among the weakest coverage scenarios for Post-selection IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "post_selection",
+        "n": 500,
+        "p": 500,
+        "pi": 0.25,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.868,
+        "coverage_gap": -0.082,
+        "dgp": "dgp2",
+        "mean_cr_length": 3.243698461,
+        "n": 500,
+        "p": 500,
+        "pi": 0.25,
+        "rank": 4,
+        "rmse": 1.279251101,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_post_selection_4",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8355, 0.8949].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "post_selection",
+        "n": 500,
+        "p": 500,
+        "pi": 0.25,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8355045607,
+        "wilson_upper": 0.8948837201
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_post_selection_5",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 5 among the weakest coverage scenarios for Post-selection IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "post_selection",
+        "n": 500,
+        "p": 500,
+        "pi": 0.5,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.87,
+        "coverage_gap": -0.08,
+        "dgp": "dgp2",
+        "mean_cr_length": 2.50215833,
+        "n": 500,
+        "p": 500,
+        "pi": 0.5,
+        "rank": 5,
+        "rmse": 0.8402886552,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_post_selection_5",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8377, 0.8967].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp2",
+        "estimator": "post_selection",
+        "n": 500,
+        "p": 500,
+        "pi": 0.5,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8376779927,
+        "wilson_upper": 0.8966797896
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_dml_1",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 1 among the weakest coverage scenarios for DML-style IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "dml",
+        "n": 1000,
+        "p": 500,
+        "pi": 0.5,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.918,
+        "coverage_gap": -0.032,
+        "dgp": "dgp1",
+        "mean_cr_length": 2.928560026,
+        "n": 1000,
+        "p": 500,
+        "pi": 0.5,
+        "rank": 1,
+        "rmse": 0.8394770893,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_dml_1",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8906, 0.9390].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "dml",
+        "n": 1000,
+        "p": 500,
+        "pi": 0.5,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8906445762,
+        "wilson_upper": 0.9389812427
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_dml_2",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 2 among the weakest coverage scenarios for DML-style IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "dml",
+        "n": 500,
+        "p": 200,
+        "pi": 1.0,
+        "tau": 0.25
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.926,
+        "coverage_gap": -0.024,
+        "dgp": "dgp1",
+        "mean_cr_length": 2.221789815,
+        "n": 500,
+        "p": 200,
+        "pi": 1.0,
+        "rank": 2,
+        "rmse": 0.6225996839,
+        "tau": 0.25
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_dml_2",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.8997, 0.9458].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "dml",
+        "n": 500,
+        "p": 200,
+        "pi": 1.0,
+        "tau": 0.25
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.8996646989,
+        "wilson_upper": 0.9458391261
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_dml_3",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 3 among the weakest coverage scenarios for DML-style IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "dml",
+        "n": 500,
+        "p": 200,
+        "pi": 1.0,
+        "tau": 0.5
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.928,
+        "coverage_gap": -0.022,
+        "dgp": "dgp1",
+        "mean_cr_length": 1.985402721,
+        "n": 500,
+        "p": 200,
+        "pi": 1.0,
+        "rank": 3,
+        "rmse": 0.5283937925,
+        "tau": 0.5
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_dml_3",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.9019, 0.9475].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "dml",
+        "n": 500,
+        "p": 200,
+        "pi": 1.0,
+        "tau": 0.5
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.9019310526,
+        "wilson_upper": 0.9475422739
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_dml_4",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 4 among the weakest coverage scenarios for DML-style IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "dml",
+        "n": 1000,
+        "p": 500,
+        "pi": 1.0,
+        "tau": 0.25
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.928,
+        "coverage_gap": -0.022,
+        "dgp": "dgp1",
+        "mean_cr_length": 2.025897235,
+        "n": 1000,
+        "p": 500,
+        "pi": 1.0,
+        "rank": 4,
+        "rmse": 0.5816845345,
+        "tau": 0.25
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_dml_4",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.9019, 0.9475].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "dml",
+        "n": 1000,
+        "p": 500,
+        "pi": 1.0,
+        "tau": 0.25
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.9019310526,
+        "wilson_upper": 0.9475422739
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_dml_5",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "This was rank 5 among the weakest coverage scenarios for DML-style IVQR.",
+      "prohibited_overinterpretation": "The scenario disproves asymptotic validity.",
+      "source_hash": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "dml",
+        "n": 500,
+        "p": 500,
+        "pi": 0.25,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario",
+      "values": {
+        "coverage": 0.93,
+        "coverage_gap": -0.02,
+        "dgp": "dgp1",
+        "mean_cr_length": 3.608657425,
+        "n": 500,
+        "p": 500,
+        "pi": 0.25,
+        "rank": 5,
+        "rmse": 1.218884794,
+        "tau": 0.75
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/coverage_uncertainty.csv",
+      "availability": "available",
+      "denominator": 500,
+      "id": "weak_interval_dml_5",
+      "interpretation_strength": "statistically_supported",
+      "permitted_wording": "The Wilson interval for this ranked scenario was [0.9042, 0.9492].",
+      "prohibited_overinterpretation": "The interval proves failure of the estimator in all samples.",
+      "source_hash": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+      "source_row_or_filter": {
+        "dgp": "dgp1",
+        "estimator": "dml",
+        "n": 500,
+        "p": 500,
+        "pi": 0.25,
+        "tau": 0.75
+      },
+      "topic": "weak_scenario_uncertainty",
+      "values": {
+        "wilson_lower": 0.9042022712,
+        "wilson_upper": 0.9492405568
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/warning_summary.csv",
+      "availability": "available",
+      "denominator": 72000,
+      "id": "diagnostic_oracle",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "Warnings were associated with the reported outcomes for Oracle IVQR.",
+      "prohibited_overinterpretation": "Warnings caused the observed outcomes.",
+      "source_hash": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8",
+      "source_row_or_filter": {
+        "estimator": "oracle"
+      },
+      "topic": "warning_exception",
+      "values": {
+        "coverage_with_warnings": 0.9416655092,
+        "coverage_without_warnings": 0.9431628683,
+        "empty_count": 13.0,
+        "exception_count": 13,
+        "missing_legacy_geometry": null,
+        "unresolved_count": 0.0,
+        "warning_frequency": 0.700125
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/warning_summary.csv",
+      "availability": "available",
+      "denominator": 72000,
+      "id": "diagnostic_post_selection",
+      "interpretation_strength": "descriptive",
+      "permitted_wording": "Warnings were associated with the reported outcomes for Post-selection IVQR.",
+      "prohibited_overinterpretation": "Warnings caused the observed outcomes.",
+      "source_hash": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8",
+      "source_row_or_filter": {
+        "estimator": "post_selection"
+      },
+      "topic": "warning_exception",
+      "values": {
+        "coverage_with_warnings": 0.9229305865,
+        "coverage_without_warnings": 0.9401451856,
+        "empty_count": 41.0,
+        "exception_count": 43,
+        "missing_legacy_geometry": null,
+        "unresolved_count": 2.0,
+        "warning_frequency": 0.8985694444
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/exception_rows.csv",
+      "availability": "partially unavailable",
+      "denominator": 72000,
+      "id": "diagnostic_dml",
+      "interpretation_strength": "limitation",
+      "permitted_wording": "DML warning and numerical-resolution diagnostics are unavailable.",
+      "prohibited_overinterpretation": "Warnings caused the observed outcomes.",
+      "source_hash": "e197a3cee9b76689772ef0f932936e56033db45e7fe716d28f4428a67185f030",
+      "source_row_or_filter": {
+        "estimator": "dml"
+      },
+      "topic": "warning_exception",
+      "values": {
+        "coverage_with_warnings": null,
+        "coverage_without_warnings": null,
+        "empty_count": null,
+        "exception_count": 43,
+        "missing_legacy_geometry": 43.0,
+        "unresolved_count": null,
+        "warning_frequency": null
+      }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/phase2_report.md",
+      "availability": "available",
+      "denominator": 72000,
+      "id": "historical_multiplier",
+      "interpretation_strength": "limitation",
+      "permitted_wording": "Historical Post-selection results use multiplier 1.0; no conclusion about 1.8 follows.",
+      "prohibited_overinterpretation": "Historical results use multiplier 1.8.",
+      "source_hash": "ddd4a77f38dc6cd84003f51208155e45b6d4cd2a7a4b2b7bb5445b90c483ca40",
+      "source_row_or_filter": {
+        "estimator": "post_selection",
+        "selection_multiplier_values": "1:72000"
+      },
+      "topic": "calibration",
+      "values": {
+        "future_value_not_analyzed": 1.8,
+        "historical_post_selection_multiplier": 1.0
+      }
+    }
+  ]
+}

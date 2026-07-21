@@ -1,0 +1,2564 @@
+{
+  "dml_diagnostic_availability": "Historical 15-column DML data lack warning, resolution, component, and rich geometry diagnostics.",
+  "figure_family_count": 8,
+  "future_multiplier_not_analyzed": 1.8,
+  "generation_timestamp_policy": "omitted",
+  "historical_post_selection_multiplier": 1.0,
+  "outputs": [
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/structural_validation.json",
+        "results/validation/r500_audit/scenario_summary.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "e5190eef3470201c850750b671d6e2c4745179a18f6e71daa9f6555400239f52",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "dgp_values",
+        "sample_sizes",
+        "dimensionalities",
+        "instrument_strengths",
+        "quantiles",
+        "replications_per_design_cell",
+        "design_cells",
+        "rows_per_estimator",
+        "estimator_count",
+        "total_estimator_rows"
+      ],
+      "output_family": "table_01_simulation_design",
+      "output_filename": "tables/table_01_simulation_design.csv",
+      "output_type": "csv",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "dgp",
+          "n",
+          "p",
+          "pi",
+          "tau"
+        ],
+        "results/validation/r500_audit/structural_validation.json": [
+          "structure.*.rows",
+          "structure.*.unique_replications",
+          "structure.*.design_cells"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_audit/structural_validation.json": "080bfb57216f7ad9e83848e5efac7fb6208ee0e37b55396cc2323edb03e2f26a"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/structural_validation.json",
+        "results/validation/r500_audit/scenario_summary.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "f390b5f570e2bbaf1691c42bf11bb94f1e2f9849d4188f9fdf1c32aa97558ee6",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "dgp_values",
+        "sample_sizes",
+        "dimensionalities",
+        "instrument_strengths",
+        "quantiles",
+        "replications_per_design_cell",
+        "design_cells",
+        "rows_per_estimator",
+        "estimator_count",
+        "total_estimator_rows"
+      ],
+      "output_family": "table_01_simulation_design",
+      "output_filename": "tables/table_01_simulation_design.tex",
+      "output_type": "tex",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "dgp",
+          "n",
+          "p",
+          "pi",
+          "tau"
+        ],
+        "results/validation/r500_audit/structural_validation.json": [
+          "structure.*.rows",
+          "structure.*.unique_replications",
+          "structure.*.design_cells"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_audit/structural_validation.json": "080bfb57216f7ad9e83848e5efac7fb6208ee0e37b55396cc2323edb03e2f26a"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/estimator_summary.csv",
+        "results/validation/r500_phase2/estimator_classification.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "b9265bebc0202d235d3adba7963451c94e09407351099a92c15b2f8cee613b29",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "conditional_coverage",
+        "overall_wilson95_lower",
+        "overall_wilson95_upper",
+        "coverage_denominator",
+        "coverage_gap",
+        "bias",
+        "rmse",
+        "mean_cr_length",
+        "empty_valid_rate",
+        "unresolved_rate",
+        "iteration_warning_rate",
+        "classification",
+        "diagnostic_confidence"
+      ],
+      "output_family": "table_02_overall_estimator_performance",
+      "output_filename": "tables/table_02_overall_estimator_performance.csv",
+      "output_type": "csv",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/estimator_summary.csv": [
+          "conditional_coverage",
+          "coverage_denominator",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "empty_valid_rate",
+          "unresolved_rate",
+          "iteration_warning_rate"
+        ],
+        "results/validation/r500_phase2/estimator_classification.csv": [
+          "overall_wilson95_lower",
+          "overall_wilson95_upper",
+          "coverage_gap",
+          "classification",
+          "diagnostic_confidence"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/estimator_summary.csv": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+        "results/validation/r500_phase2/estimator_classification.csv": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/estimator_summary.csv",
+        "results/validation/r500_phase2/estimator_classification.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "24cc9932c49e95a33f1b6e0aa343edff2b484f544e93f0d10e61a27fc2157f3c",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "conditional_coverage",
+        "overall_wilson95_lower",
+        "overall_wilson95_upper",
+        "coverage_denominator",
+        "coverage_gap",
+        "bias",
+        "rmse",
+        "mean_cr_length",
+        "empty_valid_rate",
+        "unresolved_rate",
+        "iteration_warning_rate",
+        "classification",
+        "diagnostic_confidence"
+      ],
+      "output_family": "table_02_overall_estimator_performance",
+      "output_filename": "tables/table_02_overall_estimator_performance.tex",
+      "output_type": "tex",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/estimator_summary.csv": [
+          "conditional_coverage",
+          "coverage_denominator",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "empty_valid_rate",
+          "unresolved_rate",
+          "iteration_warning_rate"
+        ],
+        "results/validation/r500_phase2/estimator_classification.csv": [
+          "overall_wilson95_lower",
+          "overall_wilson95_upper",
+          "coverage_gap",
+          "classification",
+          "diagnostic_confidence"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/estimator_summary.csv": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+        "results/validation/r500_phase2/estimator_classification.csv": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/paired_estimator_summary.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "18d2f34886eb308b3af22d7127985d4f67918f43b80807866d4f486e6f542ec3",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator_a",
+        "estimator_b",
+        "difference_orientation",
+        "paired_coverage_difference",
+        "paired_coverage_ci95_lower",
+        "paired_coverage_ci95_upper",
+        "paired_coverage_denominator",
+        "paired_squared_error_difference",
+        "paired_squared_error_ci95_lower",
+        "paired_squared_error_ci95_upper",
+        "paired_squared_error_denominator",
+        "paired_cr_length_difference",
+        "paired_cr_length_ci95_lower",
+        "paired_cr_length_ci95_upper",
+        "paired_cr_length_denominator"
+      ],
+      "output_family": "table_03_estimator_tradeoffs",
+      "output_filename": "tables/table_03_estimator_tradeoffs.csv",
+      "output_type": "csv",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/paired_estimator_summary.csv": [
+          "estimator_a",
+          "estimator_b",
+          "metric",
+          "mean_paired_difference",
+          "paired_ci95_lower",
+          "paired_ci95_upper",
+          "valid_paired_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/paired_estimator_summary.csv": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/paired_estimator_summary.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "842a42dc83879219dd601ef9c3924975b8c633e802386ab6f4d35de85b8248bf",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator_a",
+        "estimator_b",
+        "difference_orientation",
+        "paired_coverage_difference",
+        "paired_coverage_ci95_lower",
+        "paired_coverage_ci95_upper",
+        "paired_coverage_denominator",
+        "paired_squared_error_difference",
+        "paired_squared_error_ci95_lower",
+        "paired_squared_error_ci95_upper",
+        "paired_squared_error_denominator",
+        "paired_cr_length_difference",
+        "paired_cr_length_ci95_lower",
+        "paired_cr_length_ci95_upper",
+        "paired_cr_length_denominator"
+      ],
+      "output_family": "table_03_estimator_tradeoffs",
+      "output_filename": "tables/table_03_estimator_tradeoffs.tex",
+      "output_type": "tex",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/paired_estimator_summary.csv": [
+          "estimator_a",
+          "estimator_b",
+          "metric",
+          "mean_paired_difference",
+          "paired_ci95_lower",
+          "paired_ci95_upper",
+          "valid_paired_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/paired_estimator_summary.csv": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "55fcd5a11436275c731732a93e1407805f94609d583e1646c410b9ecae65ed1e",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "tau",
+        "conditional_coverage",
+        "wilson95_lower",
+        "wilson95_upper",
+        "coverage_denominator",
+        "bias",
+        "rmse",
+        "mean_cr_length"
+      ],
+      "output_family": "table_04_performance_by_quantile",
+      "output_filename": "tables/table_04_performance_by_quantile.csv",
+      "output_type": "csv",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "tau",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "7e333fd2aaa2b9a56900a38b92917dd0ebb677b0d01c12b30c54944dd5511e82",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "tau",
+        "conditional_coverage",
+        "wilson95_lower",
+        "wilson95_upper",
+        "coverage_denominator",
+        "bias",
+        "rmse",
+        "mean_cr_length"
+      ],
+      "output_family": "table_04_performance_by_quantile",
+      "output_filename": "tables/table_04_performance_by_quantile.tex",
+      "output_type": "tex",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "tau",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "e2f5b06afda1b20d4af19384eb12cfe1a413127c8d6ad918f1dcf270ca83c60e",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "pi",
+        "conditional_coverage",
+        "wilson95_lower",
+        "wilson95_upper",
+        "coverage_denominator",
+        "bias",
+        "rmse",
+        "mean_cr_length"
+      ],
+      "output_family": "table_05_performance_by_instrument_strength",
+      "output_filename": "tables/table_05_performance_by_instrument_strength.csv",
+      "output_type": "csv",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "pi",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "60fdb228284b33e4da258a89e1a06b877d0e59b892e9322c71d3f0175bb7aec9",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "pi",
+        "conditional_coverage",
+        "wilson95_lower",
+        "wilson95_upper",
+        "coverage_denominator",
+        "bias",
+        "rmse",
+        "mean_cr_length"
+      ],
+      "output_family": "table_05_performance_by_instrument_strength",
+      "output_filename": "tables/table_05_performance_by_instrument_strength.tex",
+      "output_type": "tex",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "pi",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv",
+        "results/validation/r500_phase2/warning_scenario_summary.csv",
+        "results/validation/r500_phase2/exception_scenario_summary.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "dd4adc5e2912055ed33ebe846fb420f99c244557c0d46c4d3e9dd8618c6c4c44",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "rank",
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "conditional_coverage",
+        "wilson95_lower",
+        "wilson95_upper",
+        "coverage_denominator",
+        "coverage_gap",
+        "rmse",
+        "mean_cr_length",
+        "warning_frequency",
+        "empty_cr",
+        "unresolved_cr",
+        "ranking_basis"
+      ],
+      "output_family": "table_06_weakest_scenarios",
+      "output_filename": "tables/table_06_weakest_scenarios.csv",
+      "output_type": "csv",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "wilson95_lower",
+          "wilson95_upper"
+        ],
+        "results/validation/r500_phase2/exception_scenario_summary.csv": [
+          "exception_type",
+          "exception_count"
+        ],
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": [
+          "estimator",
+          "dgp",
+          "n",
+          "p",
+          "pi",
+          "tau",
+          "conditional_coverage",
+          "coverage_denominator",
+          "coverage_gap",
+          "rmse",
+          "mean_cr_length"
+        ],
+        "results/validation/r500_phase2/warning_scenario_summary.csv": [
+          "warning_category",
+          "warning_frequency"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+        "results/validation/r500_phase2/exception_scenario_summary.csv": "5f142e906ca4ddf13c7a9b7d6281dcded00b356a104337bbf6ef7771f3cbdc1e",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+        "results/validation/r500_phase2/warning_scenario_summary.csv": "0acd9a0cfc494ad5061148e739f74dc135a9dd8f95432b52d019527ecbb7e6aa"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv",
+        "results/validation/r500_phase2/warning_scenario_summary.csv",
+        "results/validation/r500_phase2/exception_scenario_summary.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "47e2cd5ae1289bd866d6707e5ca4684e76218875ceb2663960c4eb18faadb745",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "rank",
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "conditional_coverage",
+        "wilson95_lower",
+        "wilson95_upper",
+        "coverage_denominator",
+        "coverage_gap",
+        "rmse",
+        "mean_cr_length",
+        "warning_frequency",
+        "empty_cr",
+        "unresolved_cr",
+        "ranking_basis"
+      ],
+      "output_family": "table_06_weakest_scenarios",
+      "output_filename": "tables/table_06_weakest_scenarios.tex",
+      "output_type": "tex",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "wilson95_lower",
+          "wilson95_upper"
+        ],
+        "results/validation/r500_phase2/exception_scenario_summary.csv": [
+          "exception_type",
+          "exception_count"
+        ],
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": [
+          "estimator",
+          "dgp",
+          "n",
+          "p",
+          "pi",
+          "tau",
+          "conditional_coverage",
+          "coverage_denominator",
+          "coverage_gap",
+          "rmse",
+          "mean_cr_length"
+        ],
+        "results/validation/r500_phase2/warning_scenario_summary.csv": [
+          "warning_category",
+          "warning_frequency"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+        "results/validation/r500_phase2/exception_scenario_summary.csv": "5f142e906ca4ddf13c7a9b7d6281dcded00b356a104337bbf6ef7771f3cbdc1e",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+        "results/validation/r500_phase2/warning_scenario_summary.csv": "0acd9a0cfc494ad5061148e739f74dc135a9dd8f95432b52d019527ecbb7e6aa"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/warning_summary.csv",
+        "results/validation/r500_phase2/exception_rows.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "252d09056f8fa3e327fccabfc14d909417cffe5abf3acf521a58d6401b0a4b04",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "warning_row_frequency",
+        "warning_event_count",
+        "coverage_with_warnings",
+        "coverage_without_warnings",
+        "rmse_with_warnings",
+        "rmse_without_warnings",
+        "empty_confidence_regions",
+        "unresolved_rows",
+        "missing_legacy_geometry",
+        "validated_exception_count"
+      ],
+      "output_family": "table_07_warning_exception_diagnostics",
+      "output_filename": "tables/table_07_warning_exception_diagnostics.csv",
+      "output_type": "csv",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/exception_rows.csv": [
+          "estimator_name",
+          "exception_type"
+        ],
+        "results/validation/r500_phase2/warning_summary.csv": [
+          "warning_frequency",
+          "warning_event_count",
+          "coverage_affected_valid",
+          "coverage_without_warning_valid",
+          "rmse",
+          "rmse_without_warning"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/exception_rows.csv": "e197a3cee9b76689772ef0f932936e56033db45e7fe716d28f4428a67185f030",
+        "results/validation/r500_phase2/warning_summary.csv": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/warning_summary.csv",
+        "results/validation/r500_phase2/exception_rows.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "13c36e4170a563641b57c7489c8b75353065201a7e6b7c9d499f9fe0791ba5cf",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "warning_row_frequency",
+        "warning_event_count",
+        "coverage_with_warnings",
+        "coverage_without_warnings",
+        "rmse_with_warnings",
+        "rmse_without_warnings",
+        "empty_confidence_regions",
+        "unresolved_rows",
+        "missing_legacy_geometry",
+        "validated_exception_count"
+      ],
+      "output_family": "table_07_warning_exception_diagnostics",
+      "output_filename": "tables/table_07_warning_exception_diagnostics.tex",
+      "output_type": "tex",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/exception_rows.csv": [
+          "estimator_name",
+          "exception_type"
+        ],
+        "results/validation/r500_phase2/warning_summary.csv": [
+          "warning_frequency",
+          "warning_event_count",
+          "coverage_affected_valid",
+          "coverage_without_warning_valid",
+          "rmse",
+          "rmse_without_warning"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/exception_rows.csv": "e197a3cee9b76689772ef0f932936e56033db45e7fe716d28f4428a67185f030",
+        "results/validation/r500_phase2/warning_summary.csv": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/estimator_summary.csv",
+        "results/validation/r500_phase2/estimator_classification.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "8d25ba31dd526c9c1090dff2edfd9591c078cd7e5721259cb6edceb2c32ecc22",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "conditional_coverage",
+        "overall_wilson95_lower",
+        "overall_wilson95_upper",
+        "coverage_denominator",
+        "coverage_gap",
+        "bias",
+        "rmse",
+        "mean_cr_length",
+        "empty_valid_rate",
+        "unresolved_rate",
+        "iteration_warning_rate",
+        "classification",
+        "diagnostic_confidence"
+      ],
+      "output_family": "figure_01_overall_estimator_tradeoff",
+      "output_filename": "figures/figure_01_overall_estimator_tradeoff.pdf",
+      "output_type": "pdf",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/estimator_summary.csv": [
+          "conditional_coverage",
+          "coverage_denominator",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "empty_valid_rate",
+          "unresolved_rate",
+          "iteration_warning_rate"
+        ],
+        "results/validation/r500_phase2/estimator_classification.csv": [
+          "overall_wilson95_lower",
+          "overall_wilson95_upper",
+          "coverage_gap",
+          "classification",
+          "diagnostic_confidence"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/estimator_summary.csv": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+        "results/validation/r500_phase2/estimator_classification.csv": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/estimator_summary.csv",
+        "results/validation/r500_phase2/estimator_classification.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "8000d44dd349e6f002022bfe60a28709c9f0382f06aaccf69b8936c1879c521d",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "conditional_coverage",
+        "overall_wilson95_lower",
+        "overall_wilson95_upper",
+        "coverage_denominator",
+        "coverage_gap",
+        "bias",
+        "rmse",
+        "mean_cr_length",
+        "empty_valid_rate",
+        "unresolved_rate",
+        "iteration_warning_rate",
+        "classification",
+        "diagnostic_confidence"
+      ],
+      "output_family": "figure_01_overall_estimator_tradeoff",
+      "output_filename": "figures/figure_01_overall_estimator_tradeoff.png",
+      "output_type": "png",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/estimator_summary.csv": [
+          "conditional_coverage",
+          "coverage_denominator",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "empty_valid_rate",
+          "unresolved_rate",
+          "iteration_warning_rate"
+        ],
+        "results/validation/r500_phase2/estimator_classification.csv": [
+          "overall_wilson95_lower",
+          "overall_wilson95_upper",
+          "coverage_gap",
+          "classification",
+          "diagnostic_confidence"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/estimator_summary.csv": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+        "results/validation/r500_phase2/estimator_classification.csv": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "43dc67202fedb2739b9dc8ba217935687e7052c7ad84662b9f128e7c72e5a2ed",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "tau",
+        "conditional_coverage",
+        "wilson95_lower",
+        "wilson95_upper",
+        "coverage_denominator",
+        "bias",
+        "rmse",
+        "mean_cr_length"
+      ],
+      "output_family": "figure_02_coverage_by_quantile",
+      "output_filename": "figures/figure_02_coverage_by_quantile.pdf",
+      "output_type": "pdf",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "tau",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "170b6e8b0c0224803793d5c15327e0afed94878d6625c8f228b1375f282064d8",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "tau",
+        "conditional_coverage",
+        "wilson95_lower",
+        "wilson95_upper",
+        "coverage_denominator",
+        "bias",
+        "rmse",
+        "mean_cr_length"
+      ],
+      "output_family": "figure_02_coverage_by_quantile",
+      "output_filename": "figures/figure_02_coverage_by_quantile.png",
+      "output_type": "png",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "tau",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "f4a45b47707104def7e71ae93689c7ac364aa4084842635ecaef92a84edef94c",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "pi",
+        "conditional_coverage",
+        "wilson95_lower",
+        "wilson95_upper",
+        "coverage_denominator",
+        "bias",
+        "rmse",
+        "mean_cr_length"
+      ],
+      "output_family": "figure_03_coverage_by_instrument_strength",
+      "output_filename": "figures/figure_03_coverage_by_instrument_strength.pdf",
+      "output_type": "pdf",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "pi",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "b4b9c6449b968c989c5c5752a50ef75920fc581ebf42c80b00f5eba0c91ceda2",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "pi",
+        "conditional_coverage",
+        "wilson95_lower",
+        "wilson95_upper",
+        "coverage_denominator",
+        "bias",
+        "rmse",
+        "mean_cr_length"
+      ],
+      "output_family": "figure_03_coverage_by_instrument_strength",
+      "output_filename": "figures/figure_03_coverage_by_instrument_strength.png",
+      "output_type": "png",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "pi",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "7e3f81c2538a486119e6b39e0d04133f184ee35e708ba40075fc5c37ef44805b",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "pi",
+        "rmse"
+      ],
+      "output_family": "figure_04_rmse_by_instrument_strength",
+      "output_filename": "figures/figure_04_rmse_by_instrument_strength.pdf",
+      "output_type": "pdf",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "pi",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "449ffe2ba2da72d703d3c116d749b7d1a7b5eb95a5cb17a1231bc0beecb1c4b5",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "pi",
+        "rmse"
+      ],
+      "output_family": "figure_04_rmse_by_instrument_strength",
+      "output_filename": "figures/figure_04_rmse_by_instrument_strength.png",
+      "output_type": "png",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "pi",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "e9ef8309a91582b0a4321188671aa94656cb2c59ac50e8f8354bb1514c2e45b1",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "pi",
+        "mean_cr_length"
+      ],
+      "output_family": "figure_05_cr_length_by_instrument_strength",
+      "output_filename": "figures/figure_05_cr_length_by_instrument_strength.pdf",
+      "output_type": "pdf",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "pi",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "9d85a5a1edb4463f5f1dfb735097084c3a6b0dce6c0441aa78f898c0aacc7b1d",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "pi",
+        "mean_cr_length"
+      ],
+      "output_family": "figure_05_cr_length_by_instrument_strength",
+      "output_filename": "figures/figure_05_cr_length_by_instrument_strength.png",
+      "output_type": "png",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "estimator",
+          "pi",
+          "observations",
+          "bias",
+          "rmse",
+          "mean_cr_length",
+          "coverage_denominator",
+          "missing_estimate_rate",
+          "missing_cr_rate"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "coverage_successes",
+          "coverage_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/paired_estimator_summary.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "2f7bde277e59f6c844cf5871740779550bcf51540ca2a0a003fe6d4052315e6e",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator_a",
+        "estimator_b",
+        "difference_orientation",
+        "paired_coverage_difference",
+        "paired_coverage_ci95_lower",
+        "paired_coverage_ci95_upper",
+        "paired_coverage_denominator",
+        "paired_squared_error_difference",
+        "paired_squared_error_ci95_lower",
+        "paired_squared_error_ci95_upper",
+        "paired_squared_error_denominator",
+        "paired_cr_length_difference",
+        "paired_cr_length_ci95_lower",
+        "paired_cr_length_ci95_upper",
+        "paired_cr_length_denominator"
+      ],
+      "output_family": "figure_06_paired_estimator_differences",
+      "output_filename": "figures/figure_06_paired_estimator_differences.pdf",
+      "output_type": "pdf",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/paired_estimator_summary.csv": [
+          "estimator_a",
+          "estimator_b",
+          "metric",
+          "mean_paired_difference",
+          "paired_ci95_lower",
+          "paired_ci95_upper",
+          "valid_paired_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/paired_estimator_summary.csv": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/paired_estimator_summary.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "4093f507615ce71f59665a5138f32fde1b3f39aeb8567603d2b03120ba728cd9",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator_a",
+        "estimator_b",
+        "difference_orientation",
+        "paired_coverage_difference",
+        "paired_coverage_ci95_lower",
+        "paired_coverage_ci95_upper",
+        "paired_coverage_denominator",
+        "paired_squared_error_difference",
+        "paired_squared_error_ci95_lower",
+        "paired_squared_error_ci95_upper",
+        "paired_squared_error_denominator",
+        "paired_cr_length_difference",
+        "paired_cr_length_ci95_lower",
+        "paired_cr_length_ci95_upper",
+        "paired_cr_length_denominator"
+      ],
+      "output_family": "figure_06_paired_estimator_differences",
+      "output_filename": "figures/figure_06_paired_estimator_differences.png",
+      "output_type": "png",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/paired_estimator_summary.csv": [
+          "estimator_a",
+          "estimator_b",
+          "metric",
+          "mean_paired_difference",
+          "paired_ci95_lower",
+          "paired_ci95_upper",
+          "valid_paired_denominator"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/paired_estimator_summary.csv": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "2b3554eb151df7558294e3ba2415ac32a5a23ee0ed4e9942835d06a7084d16af",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "coverage_gap"
+      ],
+      "output_family": "figure_07_weak_scenario_structure",
+      "output_filename": "figures/figure_07_weak_scenario_structure.pdf",
+      "output_type": "pdf",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "estimator",
+          "dgp",
+          "n",
+          "p",
+          "pi",
+          "tau",
+          "coverage_gap"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/coverage_uncertainty.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "634010dcf9c78ac7155666555ee3bb2733917b37b9c173aaedc5ff7fb21a65db",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "coverage_gap"
+      ],
+      "output_family": "figure_07_weak_scenario_structure",
+      "output_filename": "figures/figure_07_weak_scenario_structure.png",
+      "output_type": "png",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "estimator",
+          "dgp",
+          "n",
+          "p",
+          "pi",
+          "tau",
+          "coverage_gap"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/warning_summary.csv",
+        "results/validation/r500_phase2/exception_rows.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "8133b4958366996d70f640745c6f24bfed23dbe32cdcc9327687929577097ca7",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "warning_row_frequency",
+        "warning_event_count",
+        "coverage_with_warnings",
+        "coverage_without_warnings",
+        "rmse_with_warnings",
+        "rmse_without_warnings",
+        "empty_confidence_regions",
+        "unresolved_rows",
+        "missing_legacy_geometry",
+        "validated_exception_count"
+      ],
+      "output_family": "figure_08_warning_exception_diagnostics",
+      "output_filename": "figures/figure_08_warning_exception_diagnostics.pdf",
+      "output_type": "pdf",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/exception_rows.csv": [
+          "estimator_name",
+          "exception_type"
+        ],
+        "results/validation/r500_phase2/warning_summary.csv": [
+          "warning_frequency",
+          "warning_event_count",
+          "coverage_affected_valid",
+          "coverage_without_warning_valid",
+          "rmse",
+          "rmse_without_warning"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/exception_rows.csv": "e197a3cee9b76689772ef0f932936e56033db45e7fe716d28f4428a67185f030",
+        "results/validation/r500_phase2/warning_summary.csv": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_phase2/warning_summary.csv",
+        "results/validation/r500_phase2/exception_rows.csv"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": "fixed by family; no secondary axes",
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "8fd9c2e79dec95179ff2ccb513430354b9e088eb14cb21bb974e9211b0aa1ddc",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "estimator",
+        "warning_row_frequency",
+        "warning_event_count",
+        "coverage_with_warnings",
+        "coverage_without_warnings",
+        "rmse_with_warnings",
+        "rmse_without_warnings",
+        "empty_confidence_regions",
+        "unresolved_rows",
+        "missing_legacy_geometry",
+        "validated_exception_count"
+      ],
+      "output_family": "figure_08_warning_exception_diagnostics",
+      "output_filename": "figures/figure_08_warning_exception_diagnostics.png",
+      "output_type": "png",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_phase2/exception_rows.csv": [
+          "estimator_name",
+          "exception_type"
+        ],
+        "results/validation/r500_phase2/warning_summary.csv": [
+          "warning_frequency",
+          "warning_event_count",
+          "coverage_affected_valid",
+          "coverage_without_warning_valid",
+          "rmse",
+          "rmse_without_warning"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_phase2/exception_rows.csv": "e197a3cee9b76689772ef0f932936e56033db45e7fe716d28f4428a67185f030",
+        "results/validation/r500_phase2/warning_summary.csv": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/structural_validation.json",
+        "results/validation/r500_audit/estimator_summary.csv",
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv",
+        "results/validation/r500_phase2/estimator_classification.csv",
+        "results/validation/r500_phase2/paired_estimator_summary.csv",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+        "results/validation/r500_phase2/warning_summary.csv",
+        "results/validation/r500_phase2/warning_scenario_summary.csv",
+        "results/validation/r500_phase2/exception_rows.csv",
+        "results/validation/r500_phase2/exception_scenario_summary.csv",
+        "results/validation/r500_phase2/phase2_report.md"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "c7db8bf390ecfe30a585ccbb9644eebbda372e51b15d201d29bfaf6bddf63e52",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [],
+      "output_family": "thesis_findings",
+      "output_filename": "thesis_findings.json",
+      "output_type": "json",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/estimator_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_audit/structural_validation.json": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/estimator_classification.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/exception_rows.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/exception_scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/paired_estimator_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/phase2_report.md": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/warning_scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/warning_summary.csv": [
+          "finding-level provenance"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/estimator_summary.csv": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_audit/structural_validation.json": "080bfb57216f7ad9e83848e5efac7fb6208ee0e37b55396cc2323edb03e2f26a",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+        "results/validation/r500_phase2/estimator_classification.csv": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b",
+        "results/validation/r500_phase2/exception_rows.csv": "e197a3cee9b76689772ef0f932936e56033db45e7fe716d28f4428a67185f030",
+        "results/validation/r500_phase2/exception_scenario_summary.csv": "5f142e906ca4ddf13c7a9b7d6281dcded00b356a104337bbf6ef7771f3cbdc1e",
+        "results/validation/r500_phase2/paired_estimator_summary.csv": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601",
+        "results/validation/r500_phase2/phase2_report.md": "ddd4a77f38dc6cd84003f51208155e45b6d4cd2a7a4b2b7bb5445b90c483ca40",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+        "results/validation/r500_phase2/warning_scenario_summary.csv": "0acd9a0cfc494ad5061148e739f74dc135a9dd8f95432b52d019527ecbb7e6aa",
+        "results/validation/r500_phase2/warning_summary.csv": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/structural_validation.json",
+        "results/validation/r500_audit/estimator_summary.csv",
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv",
+        "results/validation/r500_phase2/estimator_classification.csv",
+        "results/validation/r500_phase2/paired_estimator_summary.csv",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+        "results/validation/r500_phase2/warning_summary.csv",
+        "results/validation/r500_phase2/warning_scenario_summary.csv",
+        "results/validation/r500_phase2/exception_rows.csv",
+        "results/validation/r500_phase2/exception_scenario_summary.csv",
+        "results/validation/r500_phase2/phase2_report.md"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "78624c1375ecf0cc4f27a604979ad1dcfa9655fba1d9298271e136f316127257",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [],
+      "output_family": "empirical_results_report",
+      "output_filename": "empirical_results_report.md",
+      "output_type": "markdown",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/estimator_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_audit/structural_validation.json": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/estimator_classification.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/exception_rows.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/exception_scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/paired_estimator_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/phase2_report.md": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/warning_scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/warning_summary.csv": [
+          "finding-level provenance"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/estimator_summary.csv": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_audit/structural_validation.json": "080bfb57216f7ad9e83848e5efac7fb6208ee0e37b55396cc2323edb03e2f26a",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+        "results/validation/r500_phase2/estimator_classification.csv": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b",
+        "results/validation/r500_phase2/exception_rows.csv": "e197a3cee9b76689772ef0f932936e56033db45e7fe716d28f4428a67185f030",
+        "results/validation/r500_phase2/exception_scenario_summary.csv": "5f142e906ca4ddf13c7a9b7d6281dcded00b356a104337bbf6ef7771f3cbdc1e",
+        "results/validation/r500_phase2/paired_estimator_summary.csv": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601",
+        "results/validation/r500_phase2/phase2_report.md": "ddd4a77f38dc6cd84003f51208155e45b6d4cd2a7a4b2b7bb5445b90c483ca40",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+        "results/validation/r500_phase2/warning_scenario_summary.csv": "0acd9a0cfc494ad5061148e739f74dc135a9dd8f95432b52d019527ecbb7e6aa",
+        "results/validation/r500_phase2/warning_summary.csv": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/structural_validation.json",
+        "results/validation/r500_audit/estimator_summary.csv",
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv",
+        "results/validation/r500_phase2/estimator_classification.csv",
+        "results/validation/r500_phase2/paired_estimator_summary.csv",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+        "results/validation/r500_phase2/warning_summary.csv",
+        "results/validation/r500_phase2/warning_scenario_summary.csv",
+        "results/validation/r500_phase2/exception_rows.csv",
+        "results/validation/r500_phase2/exception_scenario_summary.csv",
+        "results/validation/r500_phase2/phase2_report.md"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "26f7c9accc3e5a1666c37093a864620e920d10ad213deb2ebcd5a7098a913bfe",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [
+        "check_id",
+        "metric",
+        "authoritative_source",
+        "expected_value",
+        "thesis_output",
+        "absolute_difference",
+        "tolerance",
+        "status"
+      ],
+      "output_family": "consistency_audit",
+      "output_filename": "consistency_checks.csv",
+      "output_type": "csv",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/estimator_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_audit/structural_validation.json": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/estimator_classification.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/exception_rows.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/exception_scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/paired_estimator_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/phase2_report.md": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/warning_scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/warning_summary.csv": [
+          "finding-level provenance"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/estimator_summary.csv": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_audit/structural_validation.json": "080bfb57216f7ad9e83848e5efac7fb6208ee0e37b55396cc2323edb03e2f26a",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+        "results/validation/r500_phase2/estimator_classification.csv": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b",
+        "results/validation/r500_phase2/exception_rows.csv": "e197a3cee9b76689772ef0f932936e56033db45e7fe716d28f4428a67185f030",
+        "results/validation/r500_phase2/exception_scenario_summary.csv": "5f142e906ca4ddf13c7a9b7d6281dcded00b356a104337bbf6ef7771f3cbdc1e",
+        "results/validation/r500_phase2/paired_estimator_summary.csv": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601",
+        "results/validation/r500_phase2/phase2_report.md": "ddd4a77f38dc6cd84003f51208155e45b6d4cd2a7a4b2b7bb5445b90c483ca40",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+        "results/validation/r500_phase2/warning_scenario_summary.csv": "0acd9a0cfc494ad5061148e739f74dc135a9dd8f95432b52d019527ecbb7e6aa",
+        "results/validation/r500_phase2/warning_summary.csv": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8"
+      }
+    },
+    {
+      "aggregation_level": "thesis presentation",
+      "authoritative_sources": [
+        "results/validation/r500_audit/structural_validation.json",
+        "results/validation/r500_audit/estimator_summary.csv",
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv",
+        "results/validation/r500_phase2/estimator_classification.csv",
+        "results/validation/r500_phase2/paired_estimator_summary.csv",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+        "results/validation/r500_phase2/warning_summary.csv",
+        "results/validation/r500_phase2/warning_scenario_summary.csv",
+        "results/validation/r500_phase2/exception_rows.csv",
+        "results/validation/r500_phase2/exception_scenario_summary.csv",
+        "results/validation/r500_phase2/phase2_report.md"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "family-specific deterministic selection recorded in source inventory",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": "e52290f0d93ebbe385b2d4d65d52d4b91b4b92752324c387f1ea12b4d19c30ff",
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
+      "missing_value_policy": {
+        "csv": "NA",
+        "figure": "Unavailable label or omitted mark",
+        "json": null,
+        "latex": "N/A"
+      },
+      "output_columns_or_figure_series": [],
+      "output_family": "consistency_audit",
+      "output_filename": "consistency_report.md",
+      "output_type": "markdown",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "source_columns": {
+        "results/validation/r500_audit/estimator_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_audit/scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_audit/structural_validation.json": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/coverage_uncertainty.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/estimator_classification.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/exception_rows.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/exception_scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/paired_estimator_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/phase2_report.md": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/warning_scenario_summary.csv": [
+          "finding-level provenance"
+        ],
+        "results/validation/r500_phase2/warning_summary.csv": [
+          "finding-level provenance"
+        ]
+      },
+      "source_sha256": {
+        "results/validation/r500_audit/estimator_summary.csv": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_audit/structural_validation.json": "080bfb57216f7ad9e83848e5efac7fb6208ee0e37b55396cc2323edb03e2f26a",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+        "results/validation/r500_phase2/estimator_classification.csv": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b",
+        "results/validation/r500_phase2/exception_rows.csv": "e197a3cee9b76689772ef0f932936e56033db45e7fe716d28f4428a67185f030",
+        "results/validation/r500_phase2/exception_scenario_summary.csv": "5f142e906ca4ddf13c7a9b7d6281dcded00b356a104337bbf6ef7771f3cbdc1e",
+        "results/validation/r500_phase2/paired_estimator_summary.csv": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601",
+        "results/validation/r500_phase2/phase2_report.md": "ddd4a77f38dc6cd84003f51208155e45b6d4cd2a7a4b2b7bb5445b90c483ca40",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+        "results/validation/r500_phase2/warning_scenario_summary.csv": "0acd9a0cfc494ad5061148e739f74dc135a9dd8f95432b52d019527ecbb7e6aa",
+        "results/validation/r500_phase2/warning_summary.csv": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8"
+      }
+    },
+    {
+      "aggregation_level": "provenance index",
+      "authoritative_sources": [
+        "results/validation/r500_audit/structural_validation.json",
+        "results/validation/r500_audit/estimator_summary.csv",
+        "results/validation/r500_audit/scenario_summary.csv",
+        "results/validation/r500_phase2/coverage_uncertainty.csv",
+        "results/validation/r500_phase2/estimator_classification.csv",
+        "results/validation/r500_phase2/paired_estimator_summary.csv",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv",
+        "results/validation/r500_phase2/warning_summary.csv",
+        "results/validation/r500_phase2/warning_scenario_summary.csv",
+        "results/validation/r500_phase2/exception_rows.csv",
+        "results/validation/r500_phase2/exception_scenario_summary.csv",
+        "results/validation/r500_phase2/phase2_report.md"
+      ],
+      "decimal_precision": 4,
+      "estimator_ordering": [
+        "oracle",
+        "post_selection",
+        "dml"
+      ],
+      "figure_dimensions": null,
+      "filters": "all generated outputs",
+      "float_formatting_rule": "%.10g",
+      "generated_output_sha256": null,
+      "generation_timestamp_policy": "omitted",
+      "latex_formatting_rule": "explicit escaping and N/A",
+      "metric_denominator": "not applicable",
+      "missing_value_policy": {
+        "json": null
+      },
+      "output_family": "manifest",
+      "output_filename": "thesis_output_manifest.json",
+      "output_type": "json",
+      "paired_difference_orientation": "estimator A - estimator B",
+      "scenario_ordering": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau"
+      ],
+      "self_hash_policy": "null because embedding a file's own SHA-256 is self-referential",
+      "source_columns": [],
+      "source_sha256": {
+        "results/validation/r500_audit/estimator_summary.csv": "cfe33284157974b792f7d55fb1ca63a2c527bcb8923b84371653f9641df5be07",
+        "results/validation/r500_audit/scenario_summary.csv": "fda31b8f55a395ab4e757bbcc527eb05161d08d64a413eb5d361fef95fd9f770",
+        "results/validation/r500_audit/structural_validation.json": "080bfb57216f7ad9e83848e5efac7fb6208ee0e37b55396cc2323edb03e2f26a",
+        "results/validation/r500_phase2/coverage_uncertainty.csv": "7a7316d2d88fd1b56b7a6bee1aea862f43dc9265c116af4262d755bab4334b57",
+        "results/validation/r500_phase2/estimator_classification.csv": "72962dd8948a9073e2ddbbc1cddd3c884b5c27f5f312e9d42323b26b666d139b",
+        "results/validation/r500_phase2/exception_rows.csv": "e197a3cee9b76689772ef0f932936e56033db45e7fe716d28f4428a67185f030",
+        "results/validation/r500_phase2/exception_scenario_summary.csv": "5f142e906ca4ddf13c7a9b7d6281dcded00b356a104337bbf6ef7771f3cbdc1e",
+        "results/validation/r500_phase2/paired_estimator_summary.csv": "ffc42d05fefb003b1ba5452ab2c97944d6f2a994594c8c5221cdceb11c54d601",
+        "results/validation/r500_phase2/phase2_report.md": "ddd4a77f38dc6cd84003f51208155e45b6d4cd2a7a4b2b7bb5445b90c483ca40",
+        "results/validation/r500_phase2/tables/worst_coverage_scenarios.csv": "76561edadadaeb5fcd732d0edafd789743bec1b84075da4ac6c3129d0f61fded",
+        "results/validation/r500_phase2/warning_scenario_summary.csv": "0acd9a0cfc494ad5061148e739f74dc135a9dd8f95432b52d019527ecbb7e6aa",
+        "results/validation/r500_phase2/warning_summary.csv": "28c8b6919a33ec6723d8851f426b7b99d1841384fdaa7b0910bb9fcc61975ad8"
+      }
+    }
+  ],
+  "schema_version": 1,
+  "table_family_count": 7
+}

@@ -1,0 +1,16 @@
+estimator,rank,dgp,n,p,pi,tau,conditional_coverage,wilson95_lower,wilson95_upper,coverage_denominator,coverage_gap,rmse,mean_cr_length,warning_frequency,empty_cr,unresolved_cr,ranking_basis
+oracle,1,dgp2,500,200,0.25,0.75,0.91,0.8816900084,0.9320578044,500,-0.04,1.141853905,3.369210331,0.888,0,0,Phase 2 ascending conditional-coverage gap
+oracle,2,dgp3,500,500,1,0.75,0.912,0.8839229514,0.9337943629,500,-0.038,0.3223486042,1.149515418,0.674,0,0,Phase 2 ascending conditional-coverage gap
+oracle,3,dgp2,500,500,0.25,0.75,0.914,0.8861596159,0.9355271999,500,-0.036,1.173232119,3.309299227,0.832,0,0,Phase 2 ascending conditional-coverage gap
+oracle,4,dgp1,500,200,0.5,0.75,0.916,0.8884001169,0.9372562005,500,-0.034,0.6575745087,2.300178147,0.72,0,0,Phase 2 ascending conditional-coverage gap
+oracle,5,dgp1,1000,200,1,0.75,0.916,0.8884001169,0.9372562005,500,-0.034,0.2589258752,0.944955397,0.646,0,0,Phase 2 ascending conditional-coverage gap
+post_selection,1,dgp2,500,500,1,0.75,0.838,0.8031470479,0.8676987099,500,-0.112,0.5162788087,1.478002684,0.968,0,0,Phase 2 ascending conditional-coverage gap
+post_selection,2,dgp3,500,500,1,0.75,0.838,0.8031470479,0.8676987099,500,-0.112,0.3909197153,1.170952482,0.878,0,0,Phase 2 ascending conditional-coverage gap
+post_selection,3,dgp2,500,200,1,0.75,0.858,0.8246696707,0.8858711025,500,-0.092,0.4518363236,1.452079181,0.988,0,0,Phase 2 ascending conditional-coverage gap
+post_selection,4,dgp2,500,500,0.25,0.75,0.868,0.8355045607,0.8948837201,500,-0.082,1.279251101,3.243698461,0.976,0,0,Phase 2 ascending conditional-coverage gap
+post_selection,5,dgp2,500,500,0.5,0.75,0.87,0.8376779927,0.8966797896,500,-0.08,0.8402886552,2.50215833,0.984,0,0,Phase 2 ascending conditional-coverage gap
+dml,1,dgp1,1000,500,0.5,0.75,0.918,0.8906445762,0.9389812427,500,-0.032,0.8394770893,2.928560026,NA,NA,NA,Phase 2 ascending conditional-coverage gap
+dml,2,dgp1,500,200,1,0.25,0.926,0.8996646989,0.9458391261,500,-0.024,0.6225996839,2.221789815,NA,NA,NA,Phase 2 ascending conditional-coverage gap
+dml,3,dgp1,500,200,1,0.5,0.928,0.9019310526,0.9475422739,500,-0.022,0.5283937925,1.985402721,NA,NA,NA,Phase 2 ascending conditional-coverage gap
+dml,4,dgp1,1000,500,1,0.25,0.928,0.9019310526,0.9475422739,500,-0.022,0.5816845345,2.025897235,NA,NA,NA,Phase 2 ascending conditional-coverage gap
+dml,5,dgp1,500,500,0.25,0.75,0.93,0.9042022712,0.9492405568,500,-0.02,1.218884794,3.608657425,NA,NA,NA,Phase 2 ascending conditional-coverage gap

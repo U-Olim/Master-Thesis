@@ -1,0 +1,4 @@
+estimator_a,estimator_b,difference_orientation,paired_coverage_difference,paired_coverage_ci95_lower,paired_coverage_ci95_upper,paired_coverage_denominator,paired_squared_error_difference,paired_squared_error_ci95_lower,paired_squared_error_ci95_upper,paired_squared_error_denominator,paired_cr_length_difference,paired_cr_length_ci95_lower,paired_cr_length_ci95_upper,paired_cr_length_denominator
+oracle,post_selection,estimator A - estimator B,0.01773404492,0.01584374328,0.01962434656,71952,-0.03985938476,-0.04827933469,-0.03143943484,72000,0.0260904984,0.02289041643,0.02929058038,71954
+oracle,dml,estimator A - estimator B,-0.006769153786,-0.008945865229,-0.004592442344,71944,-0.275697858,-0.2873404119,-0.2640553041,72000,-0.5521575001,-0.5581583386,-0.5461566616,71944
+post_selection,dml,estimator A - estimator B,-0.02430647292,-0.02665060703,-0.02196233881,71915,-0.2358384733,-0.2476188592,-0.2240580874,72000,-0.5777223452,-0.5837877231,-0.5716569672,71917

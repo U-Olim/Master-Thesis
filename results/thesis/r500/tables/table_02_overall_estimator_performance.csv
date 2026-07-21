@@ -1,0 +1,4 @@
+estimator,conditional_coverage,overall_wilson95_lower,overall_wilson95_upper,coverage_denominator,coverage_gap,bias,rmse,mean_cr_length,empty_valid_rate,unresolved_rate,iteration_warning_rate,classification,diagnostic_confidence
+oracle,0.9421145485,0.9403848913,0.9437970211,71987,-0.00788545154,-0.006741666667,0.835711091,2.40693558,0.0001805555556,0,0.700125,acceptable with caveats,high
+post_selection,0.9246772378,0.9227261708,0.9265829624,71957,-0.02532276221,-0.05664444444,0.8592278001,2.381302055,0.0005694444444,2.777777778e-05,0.8985694444,concerning,high
+dml,0.9489834207,0.9473516179,0.9505672858,71957,-0.001016579346,0.0093,0.9869705597,2.959140588,NA,NA,NA,acceptable with caveats,limited

@@ -474,6 +474,25 @@ with the orientation estimator A minus estimator B. The formal classification
 uses disclosed non-compensatory thresholds and assigns lower diagnostic
 confidence when historical fields, notably DML CR diagnostics, are absent.
 
+## R=500 Thesis Package
+
+Build the thesis-facing Phase 3 package with:
+
+```powershell
+pixi run build_r500_thesis_package
+```
+
+Phase 3 reads the committed Phase 1 structural outputs and Phase 2 scientific
+diagnostics without rewriting either validation directory. It writes seven
+table families, eight figure families, machine-readable findings, consistency
+checks, a technical report, and a complete provenance manifest under
+`results/thesis/r500/`. The manifest traces each output to validated source
+files and records deterministic formatting conventions and output hashes.
+Repeated clean builds are byte-identical. Historical Post-selection results
+retain multiplier `1.0`; no conclusion about `1.8` follows. Missing DML warning,
+resolution, component, and rich geometry diagnostics remain explicitly
+unavailable rather than being displayed as zero.
+
 ## Notes
 
 The DML estimator is a DML-style residualized IVQR implementation. It uses
