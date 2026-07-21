@@ -17,12 +17,12 @@ import numpy as np
 import pandas as pd
 
 from analysis.data import DESIGN_COLUMNS, IDENTIFIER_COLUMNS, sha256_file
-from simulation.dml_output import validate_component_columns
-from simulation.oracle_output import (
+from simulation.oracle_output import clean_oracle_results_frame
+from simulation.output_schemas import (
     ORACLE_DESIGN_KEY_COLUMNS,
     ORACLE_OUTPUT_COLUMNS,
-    clean_oracle_results_frame,
 )
+from simulation.output_validation import validate_component_columns
 
 
 SORT_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep", "estimator"]

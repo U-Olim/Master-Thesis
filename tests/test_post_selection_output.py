@@ -2,11 +2,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from simulation.dml_output import with_neutral_grid_metadata
-from simulation.post_selection_output import (
-    REQUIRED_POST_SELECTION_COLUMNS,
-    clean_post_selection_results_frame,
-)
+from simulation.output_schemas import POST_SELECTION_OUTPUT_COLUMNS
+from simulation.output_validation import with_neutral_grid_metadata
+from simulation.post_selection_output import clean_post_selection_results_frame
+
+
+REQUIRED_POST_SELECTION_COLUMNS = POST_SELECTION_OUTPUT_COLUMNS
 
 
 def _wide_frame() -> pd.DataFrame:

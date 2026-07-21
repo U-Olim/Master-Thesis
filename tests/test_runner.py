@@ -16,7 +16,11 @@ from dgp import get_oracle_control_indices
 from dgp.designs import Design
 from ivqr.confidence_regions import parse_cr_components
 from simulation.results import RESULT_SCHEMA_VERSION
-from simulation.oracle_output import ORACLE_OUTPUT_COLUMNS
+from simulation.output_schemas import (
+    DML_OUTPUT_COLUMNS,
+    ORACLE_OUTPUT_COLUMNS,
+    POST_SELECTION_OUTPUT_COLUMNS,
+)
 from simulation.config import DEFAULT_BASE_SEED
 from simulation.runner import (
     SEED_RULE_TEXT,
@@ -26,8 +30,6 @@ from simulation.runner import (
     run_simulation_batch,
     validate_oracle_support,
 )
-from simulation.dml_output import REQUIRED_DML_COLUMNS
-from simulation.post_selection_output import REQUIRED_POST_SELECTION_COLUMNS
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -687,7 +689,7 @@ def test_tiny_dml_run_writes_clean_schema_and_keeps_options_in_manifest(
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
     assert written["estimator"].tolist() == ["dml_ivqr"]
-    assert tuple(written.columns) == REQUIRED_DML_COLUMNS
+    assert tuple(written.columns) == DML_OUTPUT_COLUMNS
 
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     assert payload["parameters"]["dml_quantile_penalty"] == 0.05
@@ -732,7 +734,7 @@ def test_tiny_dml_run_excludes_diagnostics_and_runtime(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
-    assert tuple(written.columns) == REQUIRED_DML_COLUMNS
+    assert tuple(written.columns) == DML_OUTPUT_COLUMNS
     assert not any("runtime" in column for column in written.columns)
     assert "dml_quantile_solver" not in written.columns
 
@@ -904,7 +906,7 @@ def test_tiny_post_selection_run_writes_clean_schema_and_manifest_options(
     assert result.returncode == 0, result.stderr
     written = pd.read_csv(output)
     assert written["estimator"].tolist() == ["post_selection_ivqr"]
-    assert tuple(written.columns) == REQUIRED_POST_SELECTION_COLUMNS
+    assert tuple(written.columns) == POST_SELECTION_OUTPUT_COLUMNS
     assert _cell_float(written, "selection_lasso_multiplier") == 1.2
     assert "ps_lasso_alpha_y_cv" not in written.columns
     assert "runtime_seconds" not in written.columns

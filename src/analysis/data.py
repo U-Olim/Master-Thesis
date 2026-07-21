@@ -8,12 +8,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from simulation.dml_output import REQUIRED_DML_COLUMNS, validate_component_columns
-from simulation.oracle_output import (
+from simulation.oracle_output import clean_oracle_results_frame
+from simulation.output_schemas import (
+    DML_OUTPUT_COLUMNS,
     ORACLE_OUTPUT_COLUMNS,
-    clean_oracle_results_frame,
+    POST_SELECTION_OUTPUT_COLUMNS,
 )
-from simulation.post_selection_output import REQUIRED_POST_SELECTION_COLUMNS
+from simulation.output_validation import validate_component_columns
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -34,8 +35,8 @@ HISTORICAL_ARTIFACT_COLUMN_COUNTS = {
 }
 CURRENT_OUTPUT_COLUMN_COUNTS = {
     "oracle": len(ORACLE_OUTPUT_COLUMNS),
-    "post_selection": len(REQUIRED_POST_SELECTION_COLUMNS),
-    "dml": len(REQUIRED_DML_COLUMNS),
+    "post_selection": len(POST_SELECTION_OUTPUT_COLUMNS),
+    "dml": len(DML_OUTPUT_COLUMNS),
 }
 NATURAL_KEY_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep"]
 RAW_ESTIMATOR_LABELS = {

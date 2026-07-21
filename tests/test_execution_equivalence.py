@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from simulation.oracle_output import ORACLE_OUTPUT_COLUMNS
+from simulation.output_schemas import ORACLE_OUTPUT_COLUMNS
 from simulation.results import RESULT_SCHEMA_VERSION
 from simulation.runner import (
     MULTI_ESTIMATOR_REMOVAL_MESSAGE,

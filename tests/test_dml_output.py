@@ -2,11 +2,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from simulation.dml_output import (
-    REQUIRED_DML_COLUMNS,
-    clean_core_results_frame,
-    clean_dml_results_frame,
-)
+from simulation.dml_output import clean_dml_results_frame
+from simulation.output_schemas import DML_OUTPUT_COLUMNS
+from simulation.output_validation import clean_common_results_frame
+
+
+REQUIRED_DML_COLUMNS = DML_OUTPUT_COLUMNS
+clean_core_results_frame = clean_common_results_frame
 
 
 def _wide_frame() -> pd.DataFrame:

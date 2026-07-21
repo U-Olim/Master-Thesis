@@ -5,53 +5,21 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from simulation.dml_output import (
-    CR_GEOMETRY_COLUMNS,
-    GRID_METADATA_COLUMNS,
-    validate_component_columns,
+from simulation.output_schemas import (
+    POST_SELECTION_IDENTIFIER_COLUMNS,
+    POST_SELECTION_OUTPUT_COLUMNS,
+)
+from simulation.output_validation import (
+    as_boolean as _as_boolean,
+    assert_retained_identity,
+    numeric as _numeric,
+    validate_confidence_regions as _validate_confidence_regions,
+    validate_parameters as _validate_parameters,
     with_neutral_grid_metadata,
 )
 
 
-REQUIRED_POST_SELECTION_COLUMNS: tuple[str, ...] = (
-    "dgp",
-    "n",
-    "p",
-    "pi",
-    "tau",
-    "rep",
-    "seed",
-    "result_schema_version",
-    "estimator",
-    "alpha_hat",
-    "alpha_true",
-    "cr_lower",
-    "cr_upper",
-    "cr_length",
-    "covered",
-    "converged",
-    *CR_GEOMETRY_COLUMNS,
-    *GRID_METADATA_COLUMNS,
-    "n_selected_controls",
-    "selection_lasso_multiplier",
-    "selection_method",
-    "selection_target_y",
-    "selection_target_d",
-    "selection_quantile_specific",
-    "instrument_selection_method",
-    "post_selection_inference_adjustment",
-    "n_retained_instruments",
-)
-
-POST_SELECTION_IDENTIFIER_COLUMNS: tuple[str, ...] = (
-    "dgp",
-    "n",
-    "p",
-    "pi",
-    "tau",
-    "rep",
-    "estimator",
-)
+REQUIRED_POST_SELECTION_COLUMNS = POST_SELECTION_OUTPUT_COLUMNS
 
 _SOURCE_COLUMNS = {
     "covered": "cr_covers_true",
@@ -73,83 +41,6 @@ _BOOLEAN_COLUMNS = (
     "cr_disconnected",
     "selection_quantile_specific",
 )
-
-
-def _as_boolean(series: pd.Series, column: str) -> pd.Series:
-    present = series.dropna()
-    valid = present.map(lambda value: isinstance(value, (bool, np.bool_)))
-    if not valid.all():
-        value = present.loc[~valid].iloc[0]
-        raise ValueError(f"{column} contains a non-Boolean value: {value!r}")
-    return series.astype("boolean")
-
-
-def _numeric(series: pd.Series, column: str) -> pd.Series:
-    values = pd.to_numeric(series, errors="coerce")
-    invalid = series.notna() & values.isna()
-    if invalid.any():
-        value = series.loc[invalid].iloc[0]
-        raise ValueError(f"{column} contains a non-numeric value: {value!r}")
-    return values
-
-
-def _validate_integer_parameter(
-    frame: pd.DataFrame, column: str, *, minimum: int
-) -> None:
-    values = _numeric(frame[column], column)
-    if values.isna().any():
-        raise ValueError(f"{column} must not be missing")
-    if (~np.isfinite(values)).any() or (values < minimum).any():
-        raise ValueError(f"{column} must be finite and >= {minimum}")
-    if (values != np.floor(values)).any():
-        raise ValueError(f"{column} must be integer-valued")
-
-
-def _validate_parameters(frame: pd.DataFrame) -> None:
-    tau = _numeric(frame["tau"], "tau")
-    if tau.isna().any():
-        raise ValueError("tau must not be missing")
-    if (~np.isfinite(tau)).any() or ((tau <= 0) | (tau >= 1)).any():
-        raise ValueError("tau must be finite and strictly between zero and one")
-    _validate_integer_parameter(frame, "n", minimum=1)
-    _validate_integer_parameter(frame, "p", minimum=0)
-    _validate_integer_parameter(frame, "rep", minimum=0)
-    _validate_integer_parameter(frame, "seed", minimum=0)
-
-
-def _validate_confidence_regions(frame: pd.DataFrame) -> None:
-    lower = _numeric(frame["cr_lower"], "cr_lower")
-    upper = _numeric(frame["cr_upper"], "cr_upper")
-    length = _numeric(frame["cr_length"], "cr_length")
-    alpha_true = _numeric(frame["alpha_true"], "alpha_true")
-    missing = pd.concat([lower.isna(), upper.isna(), length.isna()], axis=1)
-    partial = missing.any(axis=1) & ~missing.all(axis=1)
-    if partial.any():
-        raise ValueError(
-            f"{int(partial.sum())} rows have partially missing confidence regions"
-        )
-
-    finite = np.isfinite(lower) & np.isfinite(upper) & np.isfinite(length)
-    if (length.loc[finite] < 0).any():
-        raise ValueError("cr_length must be nonnegative where finite")
-    if (upper.loc[finite] < lower.loc[finite]).any():
-        raise ValueError("cr_upper must be at least cr_lower where finite")
-
-    expected = (lower <= alpha_true) & (alpha_true <= upper)
-    actual = frame["covered"].fillna(False).astype(bool)
-    comparable = finite & np.isfinite(alpha_true) & frame["covered"].notna()
-    # Bounds describe the hull, so false coverage inside a disconnected hull is valid.
-    impossible_coverage = comparable & actual & ~expected
-    if impossible_coverage.any():
-        raise ValueError(
-            "covered=True is inconsistent with finite confidence bounds in "
-            f"{int(impossible_coverage.sum())} rows"
-        )
-
-    empty = missing.all(axis=1)
-    if (empty & actual).any():
-        raise ValueError("an empty confidence region cannot have covered=True")
-    validate_component_columns(frame)
 
 
 def _validate_selection_variables(frame: pd.DataFrame) -> None:
@@ -181,20 +72,16 @@ def _source_column(output_column: str) -> str:
 
 
 def _assert_retained_identity(source: pd.DataFrame, cleaned: pd.DataFrame) -> None:
-    for column in REQUIRED_POST_SELECTION_COLUMNS:
-        source_column = _source_column(column)
-        left = source[source_column]
-        right = cleaned[column]
-        if column in _BOOLEAN_COLUMNS:
-            left = _as_boolean(left, source_column)
-            right = _as_boolean(right, column)
-        pd.testing.assert_series_equal(
-            left.reset_index(drop=True),
-            right.reset_index(drop=True),
-            check_dtype=False,
-            check_names=False,
-            check_exact=True,
-        )
+    assert_retained_identity(
+        source,
+        cleaned,
+        REQUIRED_POST_SELECTION_COLUMNS,
+        {
+            column: _source_column(column)
+            for column in REQUIRED_POST_SELECTION_COLUMNS
+        },
+        _BOOLEAN_COLUMNS,
+    )
 
 
 def _validate_selection_count_agreement(source: pd.DataFrame) -> None:

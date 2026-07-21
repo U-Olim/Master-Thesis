@@ -1,3 +1,4 @@
+import ast
 import os
 from pathlib import Path
 import subprocess
@@ -5,6 +6,11 @@ import sys
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ESTIMATOR_OUTPUT_MODULES = {
+    "simulation.oracle_output",
+    "simulation.post_selection_output",
+    "simulation.dml_output",
+}
 
 
 def _run_python(code: str) -> subprocess.CompletedProcess[str]:
@@ -19,6 +25,18 @@ def _run_python(code: str) -> subprocess.CompletedProcess[str]:
         env=env,
         timeout=120,
     )
+
+
+def _imported_modules(relative_path: str) -> set[str]:
+    source = (PROJECT_ROOT / relative_path).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            imported.add(node.module)
+    return imported
 
 
 def test_direct_ch_inverse_import_works_in_clean_process() -> None:
@@ -52,3 +70,32 @@ def test_ch_inverse_then_public_estimator_import_has_no_cycle() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "evaluate_alpha_ch_ivqr estimate_oracle_ivqr"
+
+
+def test_shared_output_modules_do_not_import_estimator_serializers() -> None:
+    for module in (
+        "src/simulation/output_schemas.py",
+        "src/simulation/output_validation.py",
+    ):
+        assert _imported_modules(module).isdisjoint(ESTIMATOR_OUTPUT_MODULES)
+
+
+def test_oracle_and_post_selection_do_not_import_dml_output() -> None:
+    for module in (
+        "src/simulation/oracle_output.py",
+        "src/simulation/post_selection_output.py",
+    ):
+        assert "simulation.dml_output" not in _imported_modules(module)
+
+
+def test_shared_output_modules_import_cleanly_in_fresh_process() -> None:
+    result = _run_python(
+        "from simulation.output_schemas import OUTPUT_COLUMNS_BY_ESTIMATOR; "
+        "from simulation.output_validation import validate_component_columns; "
+        "print(tuple(OUTPUT_COLUMNS_BY_ESTIMATOR), "
+        "validate_component_columns.__name__)"
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == (
+        "('oracle', 'post_selection', 'dml') validate_component_columns"
+    )

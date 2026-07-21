@@ -35,10 +35,10 @@ from simulation.config import (  # noqa: E402
     DEFAULT_GRID_STRATEGY,
     DEFAULT_N_JOBS,
 )
-from simulation.dml_output import REQUIRED_DML_COLUMNS  # noqa: E402
-from simulation.oracle_output import ORACLE_OUTPUT_COLUMNS  # noqa: E402
-from simulation.post_selection_output import (  # noqa: E402
-    REQUIRED_POST_SELECTION_COLUMNS,
+from simulation.output_schemas import (  # noqa: E402
+    DML_OUTPUT_COLUMNS,
+    ORACLE_OUTPUT_COLUMNS,
+    POST_SELECTION_OUTPUT_COLUMNS,
 )
 from simulation.runner import make_simulation_grid  # noqa: E402
 
@@ -50,8 +50,8 @@ RUNNERS = {
 }
 SCHEMAS = {
     "oracle": ORACLE_OUTPUT_COLUMNS,
-    "post_selection": REQUIRED_POST_SELECTION_COLUMNS,
-    "dml": REQUIRED_DML_COLUMNS,
+    "post_selection": POST_SELECTION_OUTPUT_COLUMNS,
+    "dml": DML_OUTPUT_COLUMNS,
 }
 
 

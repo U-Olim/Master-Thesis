@@ -9,7 +9,7 @@ import sys
 import pandas as pd
 import pytest
 
-from simulation.oracle_output import ORACLE_OUTPUT_COLUMNS
+from simulation.output_schemas import ORACLE_OUTPUT_COLUMNS
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "merge_simulation_blocks.py"
 SPEC = importlib.util.spec_from_file_location("merge_simulation_blocks", SCRIPT)

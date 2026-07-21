@@ -20,3 +20,13 @@ and serialized structure use exact equality.
 | Removed full-mode behavior | Full mode previously shared one DGP draw across three estimators and emitted a 150-column union CSV | Replaced intentionally | Generic/full and internal multi-estimator execution are rejected before output; separate runners retain the same seed-to-DGP mapping |
 
 The large historical R=500 CSVs are deliberately not fixtures for this layer.
+
+## Output schema ownership
+
+Internal simulation rows remain rich 150-column diagnostic objects. Final
+Oracle, Post-selection, and DML CSVs are projected through separate serializers
+onto the immutable schemas registered in `simulation.output_schemas`.
+Historical thesis artifacts may retain older validated schemas and are handled
+by the analysis compatibility layer. Any schema change therefore requires an
+explicit compatibility path and exact regression coverage for column order,
+retained values, nulls, statuses, and serialized confidence-region components.

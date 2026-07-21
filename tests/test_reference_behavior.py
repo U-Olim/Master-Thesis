@@ -16,12 +16,14 @@ from estimators.post_selection import (
     select_controls_lasso,
 )
 from ivqr.confidence_regions import parse_cr_components
-from simulation.dml_output import REQUIRED_DML_COLUMNS, clean_dml_results_frame
-from simulation.oracle_output import ORACLE_OUTPUT_COLUMNS, clean_oracle_results_frame
-from simulation.post_selection_output import (
-    REQUIRED_POST_SELECTION_COLUMNS,
-    clean_post_selection_results_frame,
+from simulation.dml_output import clean_dml_results_frame
+from simulation.oracle_output import clean_oracle_results_frame
+from simulation.output_schemas import (
+    DML_OUTPUT_COLUMNS,
+    ORACLE_OUTPUT_COLUMNS,
+    POST_SELECTION_OUTPUT_COLUMNS,
 )
+from simulation.post_selection_output import clean_post_selection_results_frame
 from simulation.results import RESULT_COLUMNS, build_simulation_result_row
 from simulation.runner import (
     make_design_seed,
@@ -304,7 +306,7 @@ def test_current_serializers_preserve_real_internal_rows(
         (
             "post_selection_ivqr",
             clean_post_selection_results_frame,
-            REQUIRED_POST_SELECTION_COLUMNS,
+            POST_SELECTION_OUTPUT_COLUMNS,
             {
                 "covered": "cr_covers_true",
                 "n_selected_controls": "ps_n_selected_controls",
@@ -321,7 +323,7 @@ def test_current_serializers_preserve_real_internal_rows(
         (
             "dml_ivqr",
             clean_dml_results_frame,
-            REQUIRED_DML_COLUMNS,
+            DML_OUTPUT_COLUMNS,
             {"covered": "cr_covers_true"},
         ),
     )

@@ -8,39 +8,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from simulation.dml_output import validate_component_columns
-
-
-ORACLE_OUTPUT_COLUMNS: tuple[str, ...] = (
-    "dgp",
-    "n",
-    "p",
-    "pi",
-    "tau",
-    "rep",
-    "alpha_true",
-    "alpha_hat",
-    "covered",
-    "cr_length",
-    "cr_status",
-    "cr_n_blocks",
-    "cr_disconnected",
-    "cr_components",
-    "iteration_warning_evaluations",
-    "seed",
-    "cr_lower",
-    "cr_upper",
-    "converged",
-    "cr_is_numerically_resolved",
-    "cr_unresolved_count",
-    "final_alpha_evaluations",
-    "refinement_depth_reached",
-    "number_of_refined_intervals",
-    "minimum_final_grid_spacing",
-    "median_final_grid_spacing",
+from simulation.output_schemas import (
+    ORACLE_DESIGN_KEY_COLUMNS,
+    ORACLE_OUTPUT_COLUMNS,
 )
-
-ORACLE_DESIGN_KEY_COLUMNS: tuple[str, ...] = ORACLE_OUTPUT_COLUMNS[:6]
+from simulation.output_validation import validate_component_columns
 
 _SOURCE_ALIASES = {"covered": "cr_covers_true"}
 

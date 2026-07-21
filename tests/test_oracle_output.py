@@ -7,13 +7,15 @@ import pytest
 from analysis.data import load_oracle_results
 from analysis.tables import summarize_performance
 from dgp import Design
-from simulation.dml_output import REQUIRED_DML_COLUMNS
 from simulation.oracle_output import (
-    ORACLE_OUTPUT_COLUMNS,
     clean_oracle_results_frame,
     serialize_oracle_result,
 )
-from simulation.post_selection_output import REQUIRED_POST_SELECTION_COLUMNS
+from simulation.output_schemas import (
+    DML_OUTPUT_COLUMNS,
+    ORACLE_OUTPUT_COLUMNS,
+    POST_SELECTION_OUTPUT_COLUMNS,
+)
 from simulation.runner import (
     filter_completed_designs,
     make_simulation_grid,
@@ -112,12 +114,12 @@ def test_current_oracle_results_are_resumable_by_natural_key(tmp_path) -> None:
 
 
 def test_other_estimator_schema_constants_are_unchanged() -> None:
-    assert "seed" in REQUIRED_DML_COLUMNS
-    assert "result_schema_version" in REQUIRED_DML_COLUMNS
-    assert "seed" in REQUIRED_POST_SELECTION_COLUMNS
-    assert "result_schema_version" in REQUIRED_POST_SELECTION_COLUMNS
-    assert tuple(REQUIRED_DML_COLUMNS) != ORACLE_OUTPUT_COLUMNS
-    assert tuple(REQUIRED_POST_SELECTION_COLUMNS) != ORACLE_OUTPUT_COLUMNS
+    assert "seed" in DML_OUTPUT_COLUMNS
+    assert "result_schema_version" in DML_OUTPUT_COLUMNS
+    assert "seed" in POST_SELECTION_OUTPUT_COLUMNS
+    assert "result_schema_version" in POST_SELECTION_OUTPUT_COLUMNS
+    assert DML_OUTPUT_COLUMNS != ORACLE_OUTPUT_COLUMNS
+    assert POST_SELECTION_OUTPUT_COLUMNS != ORACLE_OUTPUT_COLUMNS
 
 
 def test_current_oracle_file_loads_and_supports_thesis_metrics(tmp_path) -> None:

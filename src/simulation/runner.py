@@ -61,10 +61,10 @@ from simulation.config import (
     ESTIMATORS,
 )
 from simulation.dml_output import clean_dml_results_frame
-from simulation.oracle_output import (
+from simulation.oracle_output import clean_oracle_results_frame
+from simulation.output_schemas import (
     ORACLE_DESIGN_KEY_COLUMNS,
     ORACLE_OUTPUT_COLUMNS,
-    clean_oracle_results_frame,
 )
 from simulation.post_selection_output import clean_post_selection_results_frame
 from simulation.results import (
