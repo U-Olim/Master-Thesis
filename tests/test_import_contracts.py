@@ -99,3 +99,19 @@ def test_shared_output_modules_import_cleanly_in_fresh_process() -> None:
     assert result.stdout.strip() == (
         "('oracle', 'post_selection', 'dml') validate_component_columns"
     )
+
+
+def test_public_simulation_config_imports_work_in_clean_process() -> None:
+    result = _run_python(
+        "from simulation.config import ExecutionConfig, DesignConfig, "
+        "AlphaGridConfig, CHInferenceConfig, PostSelectionConfig, DMLConfig, "
+        "OracleRunConfig, PostSelectionRunConfig, DMLRunConfig, "
+        "build_estimator_run_config; "
+        "print(ExecutionConfig.__name__, OracleRunConfig.__name__, "
+        "DMLRunConfig.__name__, build_estimator_run_config.__name__)"
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == (
+        "ExecutionConfig OracleRunConfig DMLRunConfig "
+        "build_estimator_run_config"
+    )

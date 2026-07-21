@@ -28,13 +28,18 @@ from simulation.config import (
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
     DEFAULT_REFINEMENT_TOLERANCE,
+    DEFAULT_SELECTION_LASSO_MULTIPLIER,
+    EstimatorRunConfig,
+    build_dml_run_config,
+    build_oracle_run_config,
+    build_post_selection_run_config,
 )
 
 
 EstimatorName = str
 
 
-def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
+def _add_execution_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", default=None)
     parser.add_argument("--manifest", default=None)
     parser.add_argument("--reps", type=int, default=None)
@@ -43,20 +48,26 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--base-seed", type=int, default=DEFAULT_BASE_SEED)
-    parser.add_argument("--alpha-min", type=float, default=DEFAULT_ALPHA_MIN)
-    parser.add_argument("--alpha-max", type=float, default=DEFAULT_ALPHA_MAX)
-    parser.add_argument(
-        "--alpha-grid-size", type=int, default=DEFAULT_ALPHA_GRID_SIZE
-    )
+    parser.add_argument("--max-designs", type=int, default=None)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--rerun-failed", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+
+
+def _add_design_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dgps", nargs="+", default=None)
     parser.add_argument("--n-values", nargs="+", type=int, default=None)
     parser.add_argument("--p-values", nargs="+", type=int, default=None)
     parser.add_argument("--pi-values", nargs="+", type=float, default=None)
     parser.add_argument("--taus", nargs="+", type=float, default=None)
-    parser.add_argument("--max-designs", type=int, default=None)
-    parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--rerun-failed", action="store_true")
-    parser.add_argument("--dry-run", action="store_true")
+
+
+def _add_alpha_grid_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--alpha-min", type=float, default=DEFAULT_ALPHA_MIN)
+    parser.add_argument("--alpha-max", type=float, default=DEFAULT_ALPHA_MAX)
+    parser.add_argument(
+        "--alpha-grid-size", type=int, default=DEFAULT_ALPHA_GRID_SIZE
+    )
 
 
 def _add_critical_value_argument(parser: argparse.ArgumentParser) -> None:
@@ -115,6 +126,40 @@ def _add_ch_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--show-quantreg-warnings", action="store_true")
 
 
+def _add_post_selection_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--selection-lasso-multiplier",
+        type=float,
+        default=DEFAULT_SELECTION_LASSO_MULTIPLIER,
+    )
+
+
+def _add_dml_arguments(parser: argparse.ArgumentParser) -> None:
+    _add_critical_value_argument(parser)
+    parser.add_argument("--dml-k-folds", type=int, default=DEFAULT_DML_K_FOLDS)
+    parser.add_argument(
+        "--dml-quantile-penalty",
+        type=float,
+        default=DEFAULT_DML_QUANTILE_PENALTY,
+    )
+    parser.add_argument(
+        "--dml-ridge-alpha",
+        type=float,
+        default=DEFAULT_DML_RIDGE_ALPHA,
+    )
+    parser.add_argument(
+        "--dml-quantile-solver",
+        choices=(
+            "highs-ds",
+            "highs-ipm",
+            "highs",
+            "interior-point",
+            "revised simplex",
+        ),
+        default=DEFAULT_DML_QUANTILE_SOLVER,
+    )
+
+
 def build_parser(estimator: EstimatorName, *, prog: str) -> argparse.ArgumentParser:
     """Build an estimator-specific parser without generic mode selection."""
     labels = {
@@ -128,42 +173,32 @@ def build_parser(estimator: EstimatorName, *, prog: str) -> argparse.ArgumentPar
         prog=prog,
         description=f"Run the {labels[estimator]} Monte Carlo simulation.",
     )
-    _add_common_arguments(parser)
+    _add_execution_arguments(parser)
+    _add_design_arguments(parser)
+    _add_alpha_grid_arguments(parser)
     if estimator in {"oracle", "post_selection"}:
         _add_ch_arguments(parser)
     if estimator == "post_selection":
-        parser.add_argument(
-            "--selection-lasso-multiplier",
-            type=float,
-            default=1.0,
-        )
+        _add_post_selection_arguments(parser)
     if estimator == "dml":
-        _add_critical_value_argument(parser)
-        parser.add_argument(
-            "--dml-k-folds", type=int, default=DEFAULT_DML_K_FOLDS
-        )
-        parser.add_argument(
-            "--dml-quantile-penalty",
-            type=float,
-            default=DEFAULT_DML_QUANTILE_PENALTY,
-        )
-        parser.add_argument(
-            "--dml-ridge-alpha",
-            type=float,
-            default=DEFAULT_DML_RIDGE_ALPHA,
-        )
-        parser.add_argument(
-            "--dml-quantile-solver",
-            choices=(
-                "highs-ds",
-                "highs-ipm",
-                "highs",
-                "interior-point",
-                "revised simplex",
-            ),
-            default=DEFAULT_DML_QUANTILE_SOLVER,
-        )
+        _add_dml_arguments(parser)
     return parser
+
+
+def build_run_config(
+    estimator: EstimatorName, namespace: argparse.Namespace
+) -> EstimatorRunConfig:
+    """Build the immutable config owned by a dedicated estimator."""
+    builders = {
+        "oracle": build_oracle_run_config,
+        "post_selection": build_post_selection_run_config,
+        "dml": build_dml_run_config,
+    }
+    try:
+        builder = builders[estimator]
+    except KeyError as exc:
+        raise ValueError(f"Unknown dedicated estimator: {estimator}") from exc
+    return builder(namespace)
 
 
 def run_dedicated(
@@ -174,10 +209,11 @@ def run_dedicated(
 ) -> None:
     """Validate the dedicated CLI and delegate to generic single-estimator mode."""
     arguments = list(sys.argv[1:] if argv is None else argv)
-    build_parser(estimator, prog=prog).parse_args(arguments)
+    namespace = build_parser(estimator, prog=prog).parse_args(arguments)
+    build_run_config(estimator, namespace)
     run_simulation.main(
         ["--mode", "fast", "--estimators", estimator, *arguments]
     )
 
 
-__all__ = ["build_parser", "run_dedicated"]
+__all__ = ["build_parser", "build_run_config", "run_dedicated"]

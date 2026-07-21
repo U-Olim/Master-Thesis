@@ -30,3 +30,12 @@ Historical thesis artifacts may retain older validated schemas and are handled
 by the analysis compatibility layer. Any schema change therefore requires an
 explicit compatibility path and exact regression coverage for column order,
 retained values, nulls, statuses, and serialized confidence-region components.
+
+## Configuration ownership
+
+Immutable typed configurations separate shared execution, design, and alpha-grid
+settings from estimator-owned inference settings. Oracle owns CH inference;
+Post-selection owns CH inference plus its selection multiplier; DML owns only its
+cross-fitting and nuisance settings. Dedicated parsers compose only the relevant
+argument groups. The generic single-estimator parser remains a compatibility
+layer and preserves its historical CLI, validation, manifest, and resume payload.

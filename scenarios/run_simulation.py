@@ -31,6 +31,7 @@ from simulation.config import (  # noqa: E402
     DEFAULT_DML_RIDGE_ALPHA,
     DEFAULT_N_JOBS,
     DEFAULT_QUANTREG_MAX_ITER,
+    DEFAULT_SELECTION_LASSO_MULTIPLIER,
     DEFAULT_GRID_STRATEGY,
     DEFAULT_REFINEMENT_TOLERANCE,
     DEFAULT_MAX_REFINEMENT_DEPTH,
@@ -46,6 +47,8 @@ from simulation.config import (  # noqa: E402
     P_VALUES,
     R_FAST,
     TAUS,
+    build_estimator_run_config,
+    runner_kwargs,
 )
 from simulation.runner import (  # noqa: E402
     MULTI_ESTIMATOR_REMOVAL_MESSAGE,
@@ -159,7 +162,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--selection-lasso-multiplier",
         type=float,
-        default=1.0,
+        default=DEFAULT_SELECTION_LASSO_MULTIPLIER,
         help=(
             "Multiplies the LassoCV-selected penalty used in post-selection "
             "control selection. Affects only the post_selection estimator. "
@@ -413,20 +416,26 @@ def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
     _apply_defaults(args)
     _validate_args(args)
+    run_config = build_estimator_run_config(args)
     if args.rerun_failed and not args.resume:
         print("--rerun-failed has no effect without --resume.")
 
-    alphas = np.linspace(args.alpha_min, args.alpha_max, args.alpha_grid_size)
+    alpha_grid = run_config.alpha_grid
+    execution = run_config.execution
+    design = run_config.design
+    alphas = np.linspace(
+        alpha_grid.alpha_min, alpha_grid.alpha_max, alpha_grid.alpha_grid_size
+    )
     designs = make_simulation_grid(
-        dgps=tuple(args.dgps),
-        n_values=tuple(args.n_values),
-        p_values=tuple(args.p_values),
-        pi_values=tuple(args.pi_values),
-        taus=tuple(args.taus),
-        reps=args.reps,
-        base_seed=args.base_seed,
-        rep_start=args.rep_start,
-        rep_end=args.rep_end,
+        dgps=design.dgps,
+        n_values=design.sample_sizes,
+        p_values=design.dimensions,
+        pi_values=design.instrument_strengths,
+        taus=design.quantiles,
+        reps=execution.reps,
+        base_seed=execution.base_seed,
+        rep_start=execution.rep_start,
+        rep_end=execution.rep_end,
     )
     if args.resume:
         _validate_resume_manifest(args)
@@ -442,7 +451,11 @@ def main(argv: list[str] | None = None) -> None:
                 f"Output file already exists: {args.output}. Use --resume or choose a new --output."
             )
         pending_designs = designs
-    designs_to_run = pending_designs[: args.max_designs] if args.max_designs else pending_designs
+    designs_to_run = (
+        pending_designs[: execution.max_designs]
+        if execution.max_designs
+        else pending_designs
+    )
 
     if args.dry_run:
         first_design_seed = designs_to_run[0].seed if designs_to_run else None
@@ -461,31 +474,56 @@ def main(argv: list[str] | None = None) -> None:
     start = time.perf_counter()
     completed = 0
     print(f"Running estimators: {', '.join(args.estimators)}")
-    for batch_start in range(0, len(designs_to_run), args.batch_size):
-        batch = designs_to_run[batch_start : batch_start + args.batch_size]
+    effective_runner_kwargs = runner_kwargs(run_config)
+    # The generic CLI historically forwards and validates irrelevant options too.
+    # Retain that compatibility without storing them on estimator-owned configs.
+    effective_runner_kwargs.setdefault("quantreg_max_iter", args.quantreg_max_iter)
+    effective_runner_kwargs.setdefault("dml_k_folds", args.dml_k_folds)
+    effective_runner_kwargs.setdefault(
+        "dml_quantile_penalty", args.dml_quantile_penalty
+    )
+    effective_runner_kwargs.setdefault("dml_ridge_alpha", args.dml_ridge_alpha)
+    effective_runner_kwargs.setdefault(
+        "dml_quantile_solver", args.dml_quantile_solver
+    )
+    effective_runner_kwargs.setdefault(
+        "selection_lasso_multiplier", args.selection_lasso_multiplier
+    )
+    effective_runner_kwargs.setdefault(
+        "show_quantreg_warnings", args.show_quantreg_warnings
+    )
+    effective_runner_kwargs.setdefault("grid_strategy", args.grid_strategy)
+    effective_runner_kwargs.setdefault(
+        "refinement_tolerance", args.refinement_tolerance
+    )
+    effective_runner_kwargs.setdefault(
+        "max_refinement_depth", args.max_refinement_depth
+    )
+    effective_runner_kwargs.setdefault(
+        "max_alpha_evaluations", args.max_alpha_evaluations
+    )
+    effective_runner_kwargs.setdefault(
+        "iteration_warning_policy", args.iteration_warning_policy
+    )
+    effective_runner_kwargs.setdefault(
+        "hard_failure_policy", args.hard_failure_policy
+    )
+    effective_runner_kwargs.setdefault(
+        "adaptive_midpoint_probe", args.adaptive_midpoint_probe
+    )
+    effective_runner_kwargs.setdefault("alpha_hat_grid", args.alpha_hat_grid)
+    for batch_start in range(0, len(designs_to_run), execution.batch_size):
+        batch = designs_to_run[
+            batch_start : batch_start + execution.batch_size
+        ]
         run_simulation_batch(
             batch,
             alphas,
             estimators=tuple(args.estimators),
             output_path=args.output,
             append=args.resume or completed > 0,
-            quantreg_max_iter=args.quantreg_max_iter,
-            dml_k_folds=args.dml_k_folds,
-            dml_quantile_penalty=args.dml_quantile_penalty,
-            dml_ridge_alpha=args.dml_ridge_alpha,
-            dml_quantile_solver=args.dml_quantile_solver,
-            critical_value_multiplier=args.critical_value_multiplier,
-            selection_lasso_multiplier=args.selection_lasso_multiplier,
-            n_jobs=args.n_jobs,
-            show_quantreg_warnings=args.show_quantreg_warnings,
-            grid_strategy=args.grid_strategy,
-            refinement_tolerance=args.refinement_tolerance,
-            max_refinement_depth=args.max_refinement_depth,
-            max_alpha_evaluations=args.max_alpha_evaluations,
-            iteration_warning_policy=args.iteration_warning_policy,
-            hard_failure_policy=args.hard_failure_policy,
-            adaptive_midpoint_probe=args.adaptive_midpoint_probe,
-            alpha_hat_grid=args.alpha_hat_grid,
+            n_jobs=execution.n_jobs,
+            **effective_runner_kwargs,
         )
         completed += len(batch)
         elapsed = time.perf_counter() - start
