@@ -1,0 +1,141 @@
+{
+  "base_seed": 12345,
+  "corrected_ch_configuration": {
+    "adaptive_midpoint_probe": true,
+    "alpha_hat_grid": "initial",
+    "base_seed": 12345,
+    "grid_strategy": "adaptive",
+    "hard_failure_policy": "unresolved",
+    "iteration_warning_policy": "use_if_valid",
+    "max_alpha_evaluations": 201,
+    "max_refinement_depth": 10,
+    "refinement_tolerance": 0.025
+  },
+  "cr_component_validation": "passed",
+  "design_cells": 144,
+  "duplicate_count": 0,
+  "estimator": "oracle",
+  "final_csv_sha256": "094b9b7416aac2eb9b4c5f9b2cdf0f787ee77363db79f759e807cf848d5ab45b",
+  "final_output_path": "results/corrected_ch_r500/oracle/oracle_r500.csv",
+  "final_row_count": 72000,
+  "git_branch": "experiment/oracle-calibration",
+  "git_commit": "ede3643a451e2dd392baa7c338ff9d009a2b6195",
+  "git_dirty": true,
+  "input_files": [
+    {
+      "path": "C:/Users/User/Desktop/New results/Oracle/oracle_block_000_099.csv",
+      "replication_range": [
+        0,
+        99
+      ],
+      "row_count": 14400,
+      "sha256": "8eeeccd2e78852fada309d5e43227b20391c8fcb1c8e648fa4b720dd49cc24a7"
+    },
+    {
+      "path": "C:/Users/User/Desktop/New results/Oracle/oracle_block_100_199.csv",
+      "replication_range": [
+        100,
+        199
+      ],
+      "row_count": 14400,
+      "sha256": "6060f3d9d27535a2311b6aed9b9ebe0339ad191febdfc9efcd2ca1b4b34d114a"
+    },
+    {
+      "path": "C:/Users/User/Desktop/New results/Oracle/oracle_block_200_299.csv",
+      "replication_range": [
+        200,
+        299
+      ],
+      "row_count": 14400,
+      "sha256": "d98823c5df8da69d2a323e0997261b5a3b2e022e7f6ab946a83e61e5c64a7ee5"
+    },
+    {
+      "path": "C:/Users/User/Desktop/New results/Oracle/oracle_block_300_399.csv",
+      "replication_range": [
+        300,
+        399
+      ],
+      "row_count": 14400,
+      "sha256": "9dc0cfeb34d9a7db710a1ea7b32dadeef557580d38679946c559919d70b925b4"
+    },
+    {
+      "path": "C:/Users/User/Desktop/New results/Oracle/oracle_block_400_499.csv",
+      "replication_range": [
+        400,
+        499
+      ],
+      "row_count": 14400,
+      "sha256": "3d2fde9638caaec79c21ccd24488dcde8f1b1cf63533920d280f48c4a609d227"
+    }
+  ],
+  "input_replication_ranges": {
+    "C:/Users/User/Desktop/New results/Oracle/oracle_block_000_099.csv": [
+      0,
+      99
+    ],
+    "C:/Users/User/Desktop/New results/Oracle/oracle_block_100_199.csv": [
+      100,
+      199
+    ],
+    "C:/Users/User/Desktop/New results/Oracle/oracle_block_200_299.csv": [
+      200,
+      299
+    ],
+    "C:/Users/User/Desktop/New results/Oracle/oracle_block_300_399.csv": [
+      300,
+      399
+    ],
+    "C:/Users/User/Desktop/New results/Oracle/oracle_block_400_499.csv": [
+      400,
+      499
+    ]
+  },
+  "input_row_counts": {
+    "C:/Users/User/Desktop/New results/Oracle/oracle_block_000_099.csv": 14400,
+    "C:/Users/User/Desktop/New results/Oracle/oracle_block_100_199.csv": 14400,
+    "C:/Users/User/Desktop/New results/Oracle/oracle_block_200_299.csv": 14400,
+    "C:/Users/User/Desktop/New results/Oracle/oracle_block_300_399.csv": 14400,
+    "C:/Users/User/Desktop/New results/Oracle/oracle_block_400_499.csv": 14400
+  },
+  "missing_key_count": 0,
+  "missing_replication_count": 0,
+  "replication_range": [
+    0,
+    499
+  ],
+  "replications_per_design_cell": 500,
+  "result_schema_version": 4,
+  "rows_per_design_cell": {
+    "maximum": 500,
+    "minimum": 500
+  },
+  "sort_columns": [
+    "dgp",
+    "n",
+    "p",
+    "pi",
+    "tau",
+    "rep",
+    "estimator"
+  ],
+  "status_counts": {
+    "estimator_failures": 0,
+    "maximum_evaluation_limit_hits": 0,
+    "midpoint_probe_limit_hits": 0,
+    "partially_unresolved_cr": 0,
+    "rank_deficient_covariance_failures": 0,
+    "refinement_limit_hits": 0,
+    "rows_with_rank_deficient_covariance_failures": 0,
+    "unresolved_coverage": 0,
+    "unresolved_cr": 0
+  },
+  "timestamp": "2026-07-20T21:17:36.451579+00:00",
+  "validation_summary": {
+    "atomic_temporary_file": "passed",
+    "confidence_region_components": "passed",
+    "inputs": "passed",
+    "replications": "passed",
+    "schema_and_estimator": "passed",
+    "unique_keys": "passed"
+  }
+}
