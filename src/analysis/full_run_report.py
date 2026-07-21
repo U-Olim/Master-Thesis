@@ -36,6 +36,15 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPORT_DIR = REPOSITORY_ROOT / "results" / "report_full_run"
 DEFAULT_ASSET_DIR = DEFAULT_REPORT_DIR / "report_assets"
 ESTIMATOR_ORDER = ["DML-IVQR", "Oracle IVQR", "Post-selection IVQR"]
+ESTIMATOR_DISPLAY_LABELS = {
+    "DML-IVQR": "DML-style IVQR",
+    "Oracle IVQR": "Oracle IVQR",
+    "Post-selection IVQR": "Mean-Lasso Post-selection IVQR",
+}
+ESTIMATOR_LEGEND_LABELS = {
+    **ESTIMATOR_DISPLAY_LABELS,
+    "Post-selection IVQR": "Mean-Lasso PS-IVQR",
+}
 ESTIMATOR_COLORS = {
     "DML-IVQR": "#009E73",
     "Oracle IVQR": "#0072B2",
@@ -136,6 +145,15 @@ def order_estimators(frame: pd.DataFrame) -> pd.DataFrame:
     return ordered.drop(columns="_estimator_order").reset_index(drop=True)
 
 
+def display_estimator_label(label: str, *, short: bool = False) -> str:
+    """Map validated source identifiers to scientifically precise display labels."""
+    mapping = ESTIMATOR_LEGEND_LABELS if short else ESTIMATOR_DISPLAY_LABELS
+    try:
+        return mapping[label]
+    except KeyError as exc:
+        raise ReportInputError(f"Unknown estimator label: {label}") from exc
+
+
 def format_percentage(value: object, digits: int = 2) -> str:
     """Format a probability as a percentage while preserving missingness."""
     if pd.isna(value):
@@ -194,7 +212,7 @@ def prepare_overall_display(overall: pd.DataFrame) -> pd.DataFrame:
     ordered = order_estimators(overall)
     return pd.DataFrame(
         {
-            "Estimator": ordered["estimator_label"],
+            "Estimator": ordered["estimator_label"].map(display_estimator_label),
             "Coverage": ordered["empirical_coverage"].map(format_percentage),
             "Bias": ordered["bias"].map(format_number),
             "MAE": ordered["mae"].map(format_number),
@@ -213,7 +231,7 @@ def prepare_diagnostics_display(overall: pd.DataFrame) -> pd.DataFrame:
     ordered = order_estimators(overall)
     return pd.DataFrame(
         {
-            "Estimator": ordered["estimator_label"],
+            "Estimator": ordered["estimator_label"].map(display_estimator_label),
             "Unresolved": ordered["unresolved_rate"].map(format_percentage),
             "Empty": ordered["empty_region_rate"].map(format_percentage),
             "Disconnected": ordered["disconnected_region_rate"].map(
@@ -227,6 +245,71 @@ def prepare_diagnostics_display(overall: pd.DataFrame) -> pd.DataFrame:
             ),
             "Rank failure": ordered["rank_failure_rate"].map(format_percentage),
             "Refinement limit": ordered["refinement_limit_rate"].map(
+                format_percentage
+            ),
+        }
+    )
+
+
+def compute_coverage_dispersion(cell: pd.DataFrame) -> pd.DataFrame:
+    """Summarize validated design-cell coverage without changing its denominator."""
+    validate_required_columns(
+        cell,
+        {"estimator_label", "dgp", "n", "p", "pi", "tau", "empirical_coverage"},
+        TABLE_FILES["cell"],
+    )
+    duplicate_keys = ["estimator_label", "dgp", "n", "p", "pi", "tau"]
+    if cell.duplicated(duplicate_keys).any():
+        raise ReportInputError("Validated design-cell table contains duplicate cells")
+
+    rows: list[dict[str, object]] = []
+    for label in ESTIMATOR_ORDER:
+        values = pd.to_numeric(
+            cell.loc[cell["estimator_label"].eq(label), "empirical_coverage"],
+            errors="raise",
+        ).to_numpy(dtype=float)
+        if values.size == 0:
+            raise ReportInputError(f"Design-cell table is missing estimator {label}")
+        if not np.isfinite(values).all() or ((values < 0) | (values > 1)).any():
+            raise ReportInputError(f"Invalid design-cell coverage for {label}")
+        quantiles = np.quantile(values, [0.10, 0.25, 0.50, 0.75, 0.90])
+        rows.append(
+            {
+                "estimator_label": display_estimator_label(label),
+                "design_cells": int(values.size),
+                "minimum_coverage": float(values.min()),
+                "p10_coverage": float(quantiles[0]),
+                "p25_coverage": float(quantiles[1]),
+                "median_coverage": float(quantiles[2]),
+                "p75_coverage": float(quantiles[3]),
+                "p90_coverage": float(quantiles[4]),
+                "maximum_coverage": float(values.max()),
+                "share_below_90": float(np.mean(values < 0.90)),
+                "share_below_92_5": float(np.mean(values < 0.925)),
+                "share_below_95": float(np.mean(values < 0.95)),
+                "share_at_or_above_95": float(np.mean(values >= 0.95)),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def prepare_coverage_dispersion_display(dispersion: pd.DataFrame) -> pd.DataFrame:
+    """Format the design-cell dispersion summary for the PDF report."""
+    return pd.DataFrame(
+        {
+            "Estimator": dispersion["estimator_label"],
+            "Cells": dispersion["design_cells"].astype(int),
+            "Min": dispersion["minimum_coverage"].map(format_percentage),
+            "P10": dispersion["p10_coverage"].map(format_percentage),
+            "P25": dispersion["p25_coverage"].map(format_percentage),
+            "Median": dispersion["median_coverage"].map(format_percentage),
+            "P75": dispersion["p75_coverage"].map(format_percentage),
+            "P90": dispersion["p90_coverage"].map(format_percentage),
+            "Max": dispersion["maximum_coverage"].map(format_percentage),
+            "Below 90%": dispersion["share_below_90"].map(format_percentage),
+            "Below 92.5%": dispersion["share_below_92_5"].map(format_percentage),
+            "Below 95%": dispersion["share_below_95"].map(format_percentage),
+            "At least 95%": dispersion["share_at_or_above_95"].map(
                 format_percentage
             ),
         }
@@ -338,7 +421,7 @@ def _line_figure(
                 linewidth=1.7,
                 markersize=5,
                 capsize=2.5,
-                label=label,
+                label=display_estimator_label(label, short=True),
             )
         else:
             axis.plot(
@@ -348,7 +431,7 @@ def _line_figure(
                 marker=ESTIMATOR_MARKERS[label],
                 linewidth=1.7,
                 markersize=5,
-                label=label,
+                label=display_estimator_label(label, short=True),
             )
     if coverage:
         axis.axhline(0.95, color="0.25", linestyle="--", linewidth=1.1)
@@ -378,7 +461,7 @@ def _coverage_length_tradeoff(overall: pd.DataFrame, output_path: Path) -> Path:
             capsize=3,
         )
         axis.annotate(
-            label,
+            display_estimator_label(label, short=True),
             (x_value, y_value),
             xytext=(6, 5),
             textcoords="offset points",
@@ -471,7 +554,7 @@ def _design_table(validation: Mapping[str, Any]) -> pd.DataFrame:
             (
                 "Estimators",
                 "DML-style residualized IVQR; true-support Oracle IVQR; "
-                "mean-Lasso-union Post-selection IVQR",
+                "Mean-Lasso Post-selection IVQR",
             ),
         ],
         columns=["Component", "Validated/configured value"],
@@ -485,7 +568,7 @@ def _worst_display(worst: pd.DataFrame) -> pd.DataFrame:
     ).head(10)
     return pd.DataFrame(
         {
-            "Estimator": lowest["estimator_label"],
+            "Estimator": lowest["estimator_label"].map(display_estimator_label),
             "DGP": lowest["dgp"].str.upper(),
             "n": lowest["n"].astype(int).astype(str),
             "p": lowest["p"].astype(int).astype(str),
@@ -541,7 +624,9 @@ def _long_design_cell_tex(cell: pd.DataFrame) -> str:
     ordered = order_estimators(cell)
     display = pd.DataFrame(
         {
-            "Estimator": ordered["estimator_label"],
+            "Estimator": ordered["estimator_label"].map(
+                lambda label: display_estimator_label(label, short=True)
+            ),
             "DGP": ordered["dgp"].str.upper(),
             "n": ordered["n"].astype(int),
             "p": ordered["p"].astype(int),
@@ -592,7 +677,7 @@ def _long_design_cell_tex(cell: pd.DataFrame) -> str:
 def _n_p_display(n_p: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "Estimator": n_p["estimator_label"],
+            "Estimator": n_p["estimator_label"].map(display_estimator_label),
             "n": n_p["n"].astype(int),
             "p": n_p["p"].astype(int),
             "Coverage": n_p["empirical_coverage"].map(format_percentage),
@@ -609,7 +694,7 @@ def _status_display(diagnostics: pd.DataFrame) -> pd.DataFrame:
     display = diagnostics.copy()
     return pd.DataFrame(
         {
-            "Estimator": display["estimator_label"],
+            "Estimator": display["estimator_label"].map(display_estimator_label),
             "Status": display["cr_status_standardized"],
             "Rows": display["replications"].astype(int),
             "Resolved": display["resolved_replications"].astype(int),
@@ -626,6 +711,9 @@ def _narrative_assets(tables: Mapping[str, Any], output_dir: Path) -> list[Path]
     quantile = tables["quantile"]
     strength = tables["strength"]
     worst = tables["worst"].sort_values("empirical_coverage", kind="stable")
+    dispersion = compute_coverage_dispersion(tables["cell"]).set_index(
+        "estimator_label"
+    )
     dml = overall.loc["DML-IVQR"]
     oracle = overall.loc["Oracle IVQR"]
     post = overall.loc["Post-selection IVQR"]
@@ -638,31 +726,47 @@ def _narrative_assets(tables: Mapping[str, Any], output_dir: Path) -> list[Path]
     weak_lengths = weakest.set_index("estimator_label")["mean_cr_length"]
     strong_lengths = strongest.set_index("estimator_label")["mean_cr_length"]
     worst_row = worst.iloc[0]
+    dml_dispersion = dispersion.loc[ESTIMATOR_DISPLAY_LABELS["DML-IVQR"]]
+    oracle_dispersion = dispersion.loc[ESTIMATOR_DISPLAY_LABELS["Oracle IVQR"]]
+    post_dispersion = dispersion.loc[
+        ESTIMATOR_DISPLAY_LABELS["Post-selection IVQR"]
+    ]
 
     texts = {
-        "headline_values.md": f"""The validated full run contains 500 replications in each of 144 design cells.
-DML-IVQR attains **{format_percentage(dml['empirical_coverage'])}** coverage on
+        "headline_values.md": f"""The completed full run contains 500 replications in each of 144 design cells.
+The implemented DML-style IVQR procedure attains **{format_percentage(dml['empirical_coverage'])}** coverage on
 resolved replications, compared with **{format_percentage(oracle['empirical_coverage'])}**
 for Oracle IVQR and **{format_percentage(post['empirical_coverage'])}** for
-Post-selection IVQR. DML's stronger calibration comes with a mean confidence-region
+Mean-Lasso Post-selection IVQR. The DML-style procedure's stronger calibration comes with a mean confidence-region
 length of {format_number(dml['mean_cr_length'])} and a
 {format_percentage(dml['full_grid_rate'])} full-grid rate. The central concern is
-Post-selection: its coverage falls to **{format_percentage(post_upper['empirical_coverage'])}**
+Mean-Lasso Post-selection IVQR: its coverage falls to **{format_percentage(post_upper['empirical_coverage'])}**
 at $\\tau=0.75$, and the worst reported cell covers only
 **{format_percentage(worst_row['empirical_coverage'], 1)}**.
 """,
-        "overall_findings.md": f"""DML-IVQR has the highest overall coverage
+        "overall_findings.md": f"""The implemented DML-style IVQR procedure has the highest overall coverage
 ({format_percentage(dml['empirical_coverage'])}), but also the longest mean region
 ({format_number(dml['mean_cr_length'])}). Oracle IVQR has the smallest MAE
 ({format_number(oracle['mae'])}) and RMSE ({format_number(oracle['rmse'])}), making it
-the strongest point-estimation benchmark. Post-selection produces a slightly shorter
+the strongest point-estimation benchmark. Mean-Lasso Post-selection IVQR produces a slightly shorter
 mean region than Oracle ({format_number(post['mean_cr_length'])} versus
 {format_number(oracle['mean_cr_length'])}) but covers only
 {format_percentage(post['empirical_coverage'])}. The shorter set is therefore not
 evidence of superior inference.
 """,
+        "coverage_dispersion_findings.md": f"""Overall averages conceal meaningful design-level heterogeneity.
+The implemented DML-style IVQR procedure has a lower-tail (10th-percentile) cell
+coverage of {format_percentage(dml_dispersion['p10_coverage'])}, and
+{format_percentage(dml_dispersion['share_below_90'])} of its cells fall below 90%.
+Oracle IVQR shows mild finite-sample undercoverage in its lower tail, with a
+10th percentile of {format_percentage(oracle_dispersion['p10_coverage'])}.
+Mean-Lasso Post-selection IVQR has both frequent and severe undercoverage:
+{format_percentage(post_dispersion['share_below_90'])} of cells fall below 90%,
+and its minimum is {format_percentage(post_dispersion['minimum_coverage'], 1)}.
+Average calibration must therefore be assessed alongside lower-tail cell performance.
+""",
         "quantile_findings.md": f"""The main instability is concentrated in the
-upper quantile. Post-selection coverage is
+upper quantile. Mean-Lasso Post-selection IVQR coverage is
 {format_percentage(post_upper['empirical_coverage'])} at $\\tau=0.75$, with bias
 {format_number(post_upper['bias'])}; its coverage is
 {format_percentage(quantile.loc[(quantile['estimator_label'].eq('Post-selection IVQR')) & np.isclose(quantile['tau'], 0.25), 'empirical_coverage'].iloc[0])}
@@ -672,18 +776,18 @@ quantile bias is consistent with, but does not by itself prove, a selection mech
 """,
         "strength_findings.md": f"""All estimators become more informative as the
 instrument-strength index increases. For $\\pi=0.1$, mean CR lengths are
-{format_number(weak_lengths['DML-IVQR'])} (DML),
+{format_number(weak_lengths['DML-IVQR'])} (DML-style),
 {format_number(weak_lengths['Oracle IVQR'])} (Oracle), and
-{format_number(weak_lengths['Post-selection IVQR'])} (Post-selection). At $\\pi=1$,
+{format_number(weak_lengths['Post-selection IVQR'])} (Mean-Lasso post-selection). At $\\pi=1$,
 the corresponding lengths fall to {format_number(strong_lengths['DML-IVQR'])},
 {format_number(strong_lengths['Oracle IVQR'])}, and
 {format_number(strong_lengths['Post-selection IVQR'])}. This is the expected
-informativeness response to stronger identification. Post-selection undercoverage,
+informativeness response to stronger identification. Mean-Lasso post-selection undercoverage,
 however, persists—and is most visible at $\\pi=1$—so weak identification is not its
 only plausible source.
 """,
         "worst_findings.md": f"""The lowest-coverage cell is
-{_latex_escape(str(worst_row['estimator_label']))},
+{_latex_escape(display_estimator_label(str(worst_row['estimator_label'])))},
 {str(worst_row['dgp']).upper()}, $n={int(worst_row['n'])}$,
 $p={int(worst_row['p'])}$, $\\pi={worst_row['pi']:g}$, and
 $\\tau={worst_row['tau']:g}$, with coverage
@@ -694,11 +798,11 @@ approximately [{format_percentage(worst_row['coverage_mc95_lower'], 1)},
 noise from 500 replications cannot plausibly explain that gap.
 """,
         "diagnostic_findings.md": f"""The resolved denominator excludes 43 DML rows
-({format_percentage(dml['unresolved_rate'], 3)}) and two Post-selection rows
+({format_percentage(dml['unresolved_rate'], 3)}) and two Mean-Lasso post-selection rows
 ({format_percentage(post['unresolved_rate'], 3)}); Oracle has no unresolved rows.
 DML's legacy file contains no explicit CR status, component, iteration-warning,
 rank-failure, or refinement metadata. Those entries are intentionally reported as
-**NA**, not zero. Oracle and Post-selection record zero rank failures and zero
+**NA**, not zero. Oracle and Mean-Lasso post-selection record zero rank failures and zero
 refinement-limit hits in these validated summaries.
 """,
     }
@@ -726,9 +830,15 @@ def generate_report_assets(
 
     overall_display = prepare_overall_display(tables["overall"])
     diagnostics_display = prepare_diagnostics_display(tables["overall"])
+    coverage_dispersion = compute_coverage_dispersion(tables["cell"])
+    coverage_dispersion_display = prepare_coverage_dispersion_display(
+        coverage_dispersion
+    )
     quantile_display = pd.DataFrame(
         {
-            "Estimator": tables["quantile"]["estimator_label"],
+            "Estimator": tables["quantile"]["estimator_label"].map(
+                display_estimator_label
+            ),
             "tau": tables["quantile"]["tau"].map(lambda value: f"{value:g}"),
             "Coverage": tables["quantile"]["empirical_coverage"].map(
                 format_percentage
@@ -742,7 +852,9 @@ def generate_report_assets(
     )
     strength_display = pd.DataFrame(
         {
-            "Estimator": tables["strength"]["estimator_label"],
+            "Estimator": tables["strength"]["estimator_label"].map(
+                display_estimator_label
+            ),
             "pi": tables["strength"]["pi"].map(lambda value: f"{value:g}"),
             "Coverage": tables["strength"]["empirical_coverage"].map(
                 format_percentage
@@ -758,6 +870,7 @@ def generate_report_assets(
 
     csv_displays = {
         "table_overall.csv": overall_display,
+        "table_coverage_dispersion.csv": coverage_dispersion,
         "table_by_quantile.csv": quantile_display,
         "table_by_strength.csv": strength_display,
         "table_worst_cells.csv": _worst_display(tables["worst"]),
@@ -779,6 +892,18 @@ def generate_report_assets(
                 "Coverage is conditional on resolved replications. CR denotes "
                 "confidence region. Percentages use the authoritative validated summaries."
             ),
+        ),
+        "table_coverage_dispersion.tex": _tabular_tex(
+            coverage_dispersion_display,
+            align="lrrrrrrrrrrrr",
+            caption="Distribution of resolved-replication coverage across design cells",
+            label="tbl-coverage-dispersion",
+            note=(
+                "Each estimator has 144 design cells. Quantiles and threshold shares "
+                "use empirical coverage already reported in the authoritative "
+                "design-cell summary; no row-level denominator is recomputed."
+            ),
+            font_size=r"\scriptsize",
         ),
         "table_by_quantile.tex": _tabular_tex(
             quantile_display,

@@ -18,15 +18,14 @@ from simulation.oracle_output import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RAW_RESULT_FILES = {
-    "oracle": PROJECT_ROOT / "results" / "raw" / "oracle_ivqr" / "oracle_ivqr.csv",
-    "post_selection": (
-        PROJECT_ROOT
-        / "results"
-        / "raw"
-        / "post_selection_ivqr"
-        / "post_selection_ivqr.csv"
-    ),
-    "dml": PROJECT_ROOT / "results" / "raw" / "dml_ivqr" / "dml_ivqr.csv",
+    "oracle": PROJECT_ROOT / "results" / "raw" / "oracle_ivqr.csv",
+    "post_selection": PROJECT_ROOT / "results" / "raw" / "post_selection_ivqr.csv",
+    "dml": PROJECT_ROOT / "results" / "raw" / "dml_ivqr.csv",
+}
+RESULT_FILENAMES = {
+    "oracle": "oracle_ivqr.csv",
+    "post_selection": "post_selection_ivqr.csv",
+    "dml": "dml_ivqr.csv",
 }
 RAW_MANIFEST_PATH = PROJECT_ROOT / "results" / "raw" / "manifest.json"
 RAW_ESTIMATOR_LABELS = {
@@ -82,6 +81,33 @@ def sha256_file(path: str | Path, *, chunk_size: int = 1024 * 1024) -> str:
         while chunk := handle.read(chunk_size):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def resolve_result_path(
+    estimator: str, project_root: str | Path = PROJECT_ROOT
+) -> Path:
+    """Find a result CSV, preferring the repository's current flat layout."""
+    try:
+        filename = RESULT_FILENAMES[estimator]
+    except KeyError as exc:
+        raise ValueError(f"Unknown estimator: {estimator}") from exc
+    root = Path(project_root)
+    checked = [
+        root / "results" / "raw" / filename,
+        root / "results" / "raw" / Path(filename).stem / filename,
+    ]
+    for candidate in checked:
+        if candidate.is_file():
+            return candidate
+    locations = "\n".join(f"- {candidate}" for candidate in checked)
+    raise FileNotFoundError(
+        f"{estimator} result file was not found. Checked locations:\n" + locations
+    )
+
+
+def resolve_oracle_results_path(project_root: str | Path = PROJECT_ROOT) -> Path:
+    """Find Oracle results, preferring the repository's current flat layout."""
+    return resolve_result_path("oracle", project_root)
 
 
 def sha256_canonical_lf_file(
@@ -600,29 +626,32 @@ def validate_results(
 
 
 def load_oracle_results(
-    path: str | Path = RAW_RESULT_FILES["oracle"],
+    path: str | Path | None = None,
     *,
     expected_replications: int = 500,
 ) -> pd.DataFrame:
-    return _read_results(path, "oracle", expected_replications=expected_replications)
+    source = resolve_oracle_results_path() if path is None else Path(path)
+    return _read_results(source, "oracle", expected_replications=expected_replications)
 
 
 def load_post_selection_results(
-    path: str | Path = RAW_RESULT_FILES["post_selection"],
+    path: str | Path | None = None,
     *,
     expected_replications: int = 500,
 ) -> pd.DataFrame:
+    source = resolve_result_path("post_selection") if path is None else Path(path)
     return _read_results(
-        path, "post_selection", expected_replications=expected_replications
+        source, "post_selection", expected_replications=expected_replications
     )
 
 
 def load_dml_results(
-    path: str | Path = RAW_RESULT_FILES["dml"],
+    path: str | Path | None = None,
     *,
     expected_replications: int = 500,
 ) -> pd.DataFrame:
-    return _read_results(path, "dml", expected_replications=expected_replications)
+    source = resolve_result_path("dml") if path is None else Path(path)
+    return _read_results(source, "dml", expected_replications=expected_replications)
 
 
 def load_all_results(*, expected_replications: int = 500) -> pd.DataFrame:

@@ -1,0 +1,42 @@
+title: "Finite-Sample Performance of High-Dimensional IVQR Estimators"
+subtitle: "Supervisor discussion report based on 500 Monte Carlo replications per design"
+author: "Master Thesis Project"
+date: "July 2026"
+bibliography: references.bib
+reference-section-title: References
+lang: en
+meeting-version: false
+filters:
+  - meeting-version.lua
+format:
+  pdf:
+    pdf-engine: lualatex
+    documentclass: scrartcl
+    papersize: a4
+    fontsize: 10pt
+    geometry:
+      - top=22mm
+      - bottom=23mm
+      - left=22mm
+      - right=22mm
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    colorlinks: true
+    fig-pos: H
+    tbl-pos: H
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{longtable}
+        \usepackage{array}
+        \usepackage{float}
+        \usepackage{pdflscape}
+        \usepackage{graphicx}
+        \usepackage{xcolor}
+        \usepackage[most]{tcolorbox}
+        \usepackage{microtype}
+        \definecolor{reportblue}{HTML}{0072B2}
+        \setlength{\emergencystretch}{3em}
+        \clubpenalty=10000
+        \widowpenalty=10000

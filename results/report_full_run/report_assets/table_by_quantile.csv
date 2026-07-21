@@ -1,10 +1,10 @@
 Estimator,tau,Coverage,Bias,RMSE,Mean CR length
-DML-IVQR,0.25,95.32%,0.199,1.051,3.031
-DML-IVQR,0.5,94.49%,-0.008,0.932,2.844
-DML-IVQR,0.75,94.88%,-0.162,0.974,3.002
+DML-style IVQR,0.25,95.32%,0.199,1.051,3.031
+DML-style IVQR,0.5,94.49%,-0.008,0.932,2.844
+DML-style IVQR,0.75,94.88%,-0.162,0.974,3.002
 Oracle IVQR,0.25,94.25%,0.115,0.849,2.423
 Oracle IVQR,0.5,94.99%,-0.002,0.785,2.367
 Oracle IVQR,0.75,93.35%,-0.133,0.871,2.429
-Post-selection IVQR,0.25,93.07%,0.109,0.858,2.372
-Post-selection IVQR,0.5,93.76%,-0.049,0.806,2.346
-Post-selection IVQR,0.75,90.42%,-0.230,0.910,2.421
+Mean-Lasso Post-selection IVQR,0.25,93.07%,0.109,0.858,2.372
+Mean-Lasso Post-selection IVQR,0.5,93.76%,-0.049,0.806,2.346
+Mean-Lasso Post-selection IVQR,0.75,90.42%,-0.230,0.910,2.421

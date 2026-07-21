@@ -8,8 +8,11 @@ import pandas as pd
 import pytest
 
 from analysis.full_run_report import (
+    ESTIMATOR_DISPLAY_LABELS,
     ESTIMATOR_ORDER,
     ReportInputError,
+    compute_coverage_dispersion,
+    display_estimator_label,
     format_percentage,
     generate_report_assets,
     order_estimators,
@@ -149,6 +152,17 @@ def test_estimator_order_is_deterministic() -> None:
     assert order_estimators(shuffled)["estimator_label"].tolist() == ESTIMATOR_ORDER
 
 
+def test_display_label_mapping_is_precise() -> None:
+    assert display_estimator_label("DML-IVQR") == "DML-style IVQR"
+    assert (
+        display_estimator_label("Post-selection IVQR")
+        == "Mean-Lasso Post-selection IVQR"
+    )
+    assert display_estimator_label("Post-selection IVQR", short=True) == (
+        "Mean-Lasso PS-IVQR"
+    )
+
+
 def test_percentage_formatting_preserves_missingness() -> None:
     assert format_percentage(0.948983, digits=2) == "94.90%"
     assert format_percentage(np.nan) == "NA"
@@ -157,7 +171,7 @@ def test_percentage_formatting_preserves_missingness() -> None:
 def test_dml_unavailable_diagnostics_do_not_become_zero() -> None:
     display = prepare_diagnostics_display(_metric_rows())
     dml = display.iloc[0]
-    assert dml["Estimator"] == "DML-IVQR"
+    assert dml["Estimator"] == "DML-style IVQR"
     assert dml["Empty"] == "NA"
     assert dml["Disconnected"] == "NA"
     assert dml["Iteration warning"] == "NA"
@@ -182,3 +196,64 @@ def test_small_fixture_generates_tables_and_figures_without_recomputing_coverage
     # The authoritative 0.91 is retained even though a one-row Bernoulli
     # recomputation could only produce zero or one.
     assert displayed.loc[0, "Coverage"] == "91.00%"
+    dispersion = pd.read_csv(output_dir / "table_coverage_dispersion.csv")
+    assert dispersion["estimator_label"].tolist() == list(
+        ESTIMATOR_DISPLAY_LABELS.values()
+    )
+
+
+def test_coverage_dispersion_uses_validated_cell_values_and_thresholds() -> None:
+    coverage = {
+        "DML-IVQR": [0.80, 0.90, 0.95, 1.00],
+        "Oracle IVQR": [0.85, 0.925, 0.95, 0.975],
+        "Post-selection IVQR": [0.70, 0.80, 0.90, 0.95],
+    }
+    rows: list[dict[str, object]] = []
+    for estimator, values in coverage.items():
+        for index, value in enumerate(values):
+            rows.append(
+                {
+                    "estimator_label": estimator,
+                    "dgp": f"dgp{index + 1}",
+                    "n": 500,
+                    "p": 200,
+                    "pi": 0.5,
+                    "tau": 0.5,
+                    "empirical_coverage": value,
+                }
+            )
+
+    result = compute_coverage_dispersion(pd.DataFrame(rows))
+
+    assert result["estimator_label"].tolist() == list(
+        ESTIMATOR_DISPLAY_LABELS.values()
+    )
+    dml = result.iloc[0]
+    assert dml["p10_coverage"] == pytest.approx(np.quantile(coverage["DML-IVQR"], 0.1))
+    assert dml["p25_coverage"] == pytest.approx(np.quantile(coverage["DML-IVQR"], 0.25))
+    assert dml["share_below_90"] == pytest.approx(0.25)
+    assert dml["share_below_92_5"] == pytest.approx(0.50)
+    assert dml["share_below_95"] == pytest.approx(0.50)
+    assert dml["share_at_or_above_95"] == pytest.approx(0.50)
+
+
+def test_meeting_report_uses_shared_source_and_excludes_archival_cells() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    meeting = (repository / "documents/Full_Run_Results_Meeting.qmd").read_text(
+        encoding="utf-8"
+    )
+    common = (repository / "documents/Full_Run_Results.qmd").read_text(
+        encoding="utf-8"
+    )
+    assert "{{< include Full_Run_Results.qmd >}}" in meeting
+    assert "meeting-version: true" in meeting
+    assert "table_design_cells.tex" in common
+    assert "::: {.archival-only}" in common
+    assert "table_design_cells.tex" not in meeting
+
+
+def test_report_contains_implementation_specific_dml_limitation() -> None:
+    report = (
+        Path(__file__).resolve().parents[1] / "documents/Full_Run_Results.qmd"
+    ).read_text(encoding="utf-8")
+    assert "They do not constitute\na general validity result for DML-IVQR." in report

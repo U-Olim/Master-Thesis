@@ -1,0 +1,7 @@
+---
+title: "Finite-Sample Performance of High-Dimensional IVQR Estimators"
+subtitle: "Meeting version: decision-focused Monte Carlo evidence"
+meeting-version: true
+---
+
+{{< include Full_Run_Results.qmd >}}

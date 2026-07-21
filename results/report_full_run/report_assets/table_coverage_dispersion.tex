@@ -1,0 +1,22 @@
+\begin{table}[H]
+\centering
+\caption{Distribution of resolved-replication coverage across design cells}
+\label{tbl-coverage-dispersion}
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrrrrrrr}
+\toprule
+Estimator & Cells & Min & P10 & P25 & Median & P75 & P90 & Max & Below 90\% & Below 92.5\% & Below 95\% & At least 95\% \\
+\midrule
+DML-style IVQR & 144 & 91.80\% & 93.60\% & 94.20\% & 94.80\% & 95.79\% & 96.20\% & 97.39\% & 0.00\% & 0.69\% & 52.08\% & 47.92\% \\
+Oracle IVQR & 144 & 91.00\% & 92.40\% & 93.00\% & 94.40\% & 95.25\% & 95.80\% & 97.40\% & 0.00\% & 11.81\% & 65.97\% & 34.03\% \\
+Mean-Lasso Post-selection IVQR & 144 & 83.80\% & 89.66\% & 90.80\% & 92.80\% & 94.00\% & 95.00\% & 96.60\% & 11.11\% & 43.06\% & 88.19\% & 11.81\% \\
+\bottomrule
+\end{tabular}%
+}
+\vspace{0.4em}
+
+\begin{minipage}{0.98\textwidth}
+\footnotesize \textit{Note:} Each estimator has 144 design cells. Quantiles and threshold shares use empirical coverage already reported in the authoritative design-cell summary; no row-level denominator is recomputed.
+\end{minipage}
+\end{table}

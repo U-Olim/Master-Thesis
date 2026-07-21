@@ -51,6 +51,8 @@ import_check = "python -c \"import analysis; import dgp; import estimators; impo
 lint = "ruff check src tests scenarios scripts"
 results = "python scripts/make_results.py"
 raw_manifest = "python scripts/update_raw_manifest.py"
-build_full_run_report = "python -m analysis.full_run_report && quarto render documents/Full_Run_Results.qmd --to pdf"
+build_full_run_report = { cmd = "python -m analysis.full_run_report && quarto render documents/Full_Run_Results.qmd --to pdf", env = { SOURCE_DATE_EPOCH = "1782864000" } }
+build_full_run_meeting_report = { cmd = "python -m analysis.full_run_report && quarto render documents/Full_Run_Results_Meeting.qmd --to pdf", env = { SOURCE_DATE_EPOCH = "1782864000" } }
+build_all_full_run_reports = { depends-on = ["build_full_run_report", "build_full_run_meeting_report"] }
 test = "pytest tests -m 'not slow'"
 test_slow = "pytest tests -m slow"

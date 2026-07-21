@@ -6,6 +6,7 @@
     "Post-selection IVQR"
   ],
   "generated_files": [
+    "coverage_dispersion_findings.md",
     "diagnostic_findings.md",
     "figure_bias_by_quantile.pdf",
     "figure_coverage_by_quantile.pdf",
@@ -24,6 +25,8 @@
     "table_by_quantile.tex",
     "table_by_strength.csv",
     "table_by_strength.tex",
+    "table_coverage_dispersion.csv",
+    "table_coverage_dispersion.tex",
     "table_design.tex",
     "table_design_cells.tex",
     "table_diagnostics.csv",

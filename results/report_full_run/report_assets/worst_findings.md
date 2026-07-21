@@ -1,5 +1,5 @@
 The lowest-coverage cell is
-Post-selection IVQR,
+Mean-Lasso Post-selection IVQR,
 DGP2, $n=500$,
 $p=500$, $\pi=1$, and
 $\tau=0.75$, with coverage
