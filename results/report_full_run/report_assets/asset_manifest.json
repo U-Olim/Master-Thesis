@@ -1,0 +1,39 @@
+{
+  "coverage_source": "validated summary CSVs; no replication-level recomputation",
+  "estimator_order": [
+    "DML-IVQR",
+    "Oracle IVQR",
+    "Post-selection IVQR"
+  ],
+  "generated_files": [
+    "diagnostic_findings.md",
+    "figure_bias_by_quantile.pdf",
+    "figure_coverage_by_quantile.pdf",
+    "figure_coverage_by_strength.pdf",
+    "figure_coverage_length_tradeoff.pdf",
+    "figure_cr_length_by_strength.pdf",
+    "figure_full_grid_by_strength.pdf",
+    "figure_post_selection_controls_vs_coverage.pdf",
+    "figure_rmse_by_quantile.pdf",
+    "headline_values.md",
+    "overall_findings.md",
+    "quantile_findings.md",
+    "strength_findings.md",
+    "table_by_n_p.tex",
+    "table_by_quantile.csv",
+    "table_by_quantile.tex",
+    "table_by_strength.csv",
+    "table_by_strength.tex",
+    "table_design.tex",
+    "table_design_cells.tex",
+    "table_diagnostics.csv",
+    "table_diagnostics.tex",
+    "table_overall.csv",
+    "table_overall.tex",
+    "table_status_detail.tex",
+    "table_worst_cells.csv",
+    "table_worst_cells.tex",
+    "worst_findings.md"
+  ],
+  "source_directory": "C:\\Users\\User\\Master-Thesis\\results\\report_full_run"
+}

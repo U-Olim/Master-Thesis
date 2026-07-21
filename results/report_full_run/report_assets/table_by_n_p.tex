@@ -1,0 +1,31 @@
+\begin{table}[H]
+\centering
+\caption{Performance by sample size and control dimension}
+\label{tbl-n-p}
+\footnotesize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrrr}
+\toprule
+Estimator & n & p & Coverage & Bias & RMSE & Mean CR length & Full grid & Unresolved \\
+\midrule
+DML-IVQR & 500 & 200 & 94.72\% & 0.022 & 1.034 & 3.123 & 36.95\% & 0.05\% \\
+DML-IVQR & 500 & 500 & 94.94\% & 0.022 & 1.073 & 3.238 & 39.96\% & 0.07\% \\
+DML-IVQR & 1000 & 200 & 95.00\% & -0.021 & 0.824 & 2.468 & 21.51\% & 0.03\% \\
+DML-IVQR & 1000 & 500 & 94.94\% & 0.015 & 0.998 & 3.008 & 33.94\% & 0.09\% \\
+Oracle IVQR & 500 & 200 & 94.17\% & -0.004 & 0.897 & 2.606 & 23.08\% & 0.00\% \\
+Oracle IVQR & 500 & 500 & 94.21\% & -0.009 & 0.892 & 2.597 & 22.78\% & 0.00\% \\
+Oracle IVQR & 1000 & 200 & 94.14\% & -0.005 & 0.777 & 2.209 & 15.59\% & 0.00\% \\
+Oracle IVQR & 1000 & 500 & 94.26\% & -0.009 & 0.767 & 2.215 & 16.03\% & 0.00\% \\
+Post-selection IVQR & 500 & 200 & 92.46\% & -0.049 & 0.921 & 2.577 & 21.86\% & 0.00\% \\
+Post-selection IVQR & 500 & 500 & 91.77\% & -0.092 & 0.933 & 2.572 & 21.36\% & 0.00\% \\
+Post-selection IVQR & 1000 & 200 & 92.86\% & -0.036 & 0.783 & 2.182 & 14.77\% & 0.01\% \\
+Post-selection IVQR & 1000 & 500 & 92.58\% & -0.049 & 0.788 & 2.189 & 14.88\% & 0.01\% \\
+\bottomrule
+\end{tabular}%
+}
+\vspace{0.4em}
+
+\begin{minipage}{0.98\textwidth}
+\footnotesize \textit{Note:} Coverage uses resolved replications only.
+\end{minipage}
+\end{table}

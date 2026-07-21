@@ -51,5 +51,6 @@ import_check = "python -c \"import analysis; import dgp; import estimators; impo
 lint = "ruff check src tests scenarios scripts"
 results = "python scripts/make_results.py"
 raw_manifest = "python scripts/update_raw_manifest.py"
+build_full_run_report = "python -m analysis.full_run_report && quarto render documents/Full_Run_Results.qmd --to pdf"
 test = "pytest tests -m 'not slow'"
 test_slow = "pytest tests -m slow"

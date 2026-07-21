@@ -1,0 +1,4 @@
+Estimator,Coverage,Bias,MAE,RMSE,Estimate SD,Mean CR length,Median CR length,Full grid,Unresolved
+DML-IVQR,94.90%,0.009,0.760,0.987,1.045,2.959,3.188,33.09%,0.06%
+Oracle IVQR,94.19%,-0.007,0.602,0.836,0.930,2.407,2.235,19.37%,0.00%
+Post-selection IVQR,92.42%,-0.057,0.624,0.859,0.928,2.380,2.199,18.22%,0.00%

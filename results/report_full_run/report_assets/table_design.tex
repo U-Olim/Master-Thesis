@@ -1,0 +1,33 @@
+\begin{table}[H]
+\centering
+\caption{Validated Monte Carlo design}
+\label{tbl-design}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{p{0.28\textwidth}p{0.66\textwidth}}
+\toprule
+Component & Validated/configured value \\
+\midrule
+DGPs & DGP1, DGP2, DGP3 \\
+Active support & DGP1: 5 active controls, DGP2: 10 active controls, DGP3: 5 active controls \\
+Sample sizes & 500, 1000 \\
+Control dimensions & 200, 500 \\
+Instrument-strength index pi & 0.1, 0.25, 0.5, 1.0 \\
+Quantiles tau & 0.25, 0.5, 0.75 \\
+Replications per cell & 500 \\
+Design cells & 144 \\
+True alpha by tau=(0.25, 0.50, 0.75) & DGP1: (0.3255, 1.0000, 1.6745); DGP2: (0.3255, 1.0000, 1.6745); DGP3: (0.4371, 1.0000, 1.5629) \\
+Initial alpha grid & [-1, 3], 21 points, spacing 0.2 \\
+CR refinement & Adaptive boundary refinement; tolerance 0.025 \\
+Nominal confidence level & 95\% \\
+Critical-value multiplier & 1 \\
+Estimators & DML-style residualized IVQR; true-support Oracle IVQR; mean-Lasso-union Post-selection IVQR \\
+\bottomrule
+\end{tabular}%
+}
+\vspace{0.4em}
+
+\begin{minipage}{0.98\textwidth}
+\footnotesize \textit{Note:} Configured values are cross-checked against validation.json and the current simulation code.
+\end{minipage}
+\end{table}

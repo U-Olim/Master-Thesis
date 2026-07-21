@@ -1,0 +1,13 @@
+Estimator,pi,Coverage,Mean CR length,Full grid
+DML-IVQR,0.1,95.41%,3.757,72.74%
+DML-IVQR,0.25,94.88%,3.451,45.32%
+DML-IVQR,0.5,94.79%,2.745,13.58%
+DML-IVQR,1,94.52%,1.886,0.72%
+Oracle IVQR,0.1,94.72%,3.643,60.82%
+Oracle IVQR,0.25,94.38%,2.977,16.32%
+Oracle IVQR,0.5,94.26%,1.892,0.36%
+Oracle IVQR,1,93.42%,1.114,0.00%
+Post-selection IVQR,0.1,93.31%,3.583,57.22%
+Post-selection IVQR,0.25,93.03%,2.939,15.24%
+Post-selection IVQR,0.5,92.38%,1.886,0.40%
+Post-selection IVQR,1,90.93%,1.112,0.00%
