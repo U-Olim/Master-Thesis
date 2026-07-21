@@ -51,4 +51,14 @@ parallel sorting. `simulation.resume` owns completion filtering, and
 `simulation.persistence` owns output projection, append validation, and CSV
 writing. `simulation.runner` remains the stable compatibility facade and
 re-exports established public names. CLI manifest validation and progress
-reporting remain in `scenarios.run_simulation`; block merging remains separate.
+reporting remain in `scenarios._cli_common`; block merging remains separate.
+
+## Generic CLI retirement
+
+The three dedicated runners now parse directly into estimator-specific typed
+configuration and call the decomposed design, resume, execution, serialization,
+and persistence infrastructure. `scenarios.run_simulation` is a non-executing
+migration stub. Historical single-estimator manifests retain the internal
+`mode = fast` field and exact resume signature; this is a compatibility field,
+not a supported CLI option. The internal `simulation.runner` compatibility
+facade remains available and is unrelated to the retired generic CLI.

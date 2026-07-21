@@ -15,10 +15,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scenarios import (  # noqa: E402
+    _cli_common,
     run_dml_ivqr,
     run_oracle_ivqr,
     run_post_selection_ivqr,
-    run_simulation,
 )
 from dgp.generators import generate_data  # noqa: E402
 from simulation.config import (  # noqa: E402
@@ -34,13 +34,14 @@ from simulation.config import (  # noqa: E402
     DEFAULT_DML_RIDGE_ALPHA,
     DEFAULT_GRID_STRATEGY,
     DEFAULT_N_JOBS,
+    runner_kwargs,
 )
 from simulation.output_schemas import (  # noqa: E402
     DML_OUTPUT_COLUMNS,
     ORACLE_OUTPUT_COLUMNS,
     POST_SELECTION_OUTPUT_COLUMNS,
 )
-from simulation.runner import make_simulation_grid  # noqa: E402
+from simulation.runner import make_simulation_grid, run_simulation_batch  # noqa: E402
 
 
 RUNNERS = {
@@ -127,13 +128,12 @@ def test_dedicated_runner_specific_defaults_match_generic_defaults() -> None:
         ("dml", ["--dml-k-folds", "2", "--dml-quantile-penalty", "0.05"]),
     ],
 )
-def test_dedicated_runner_matches_generic_single_estimator(
+def test_dedicated_runner_matches_direct_infrastructure(
     tmp_path: Path,
     estimator: str,
     specific_args: list[str],
 ) -> None:
-    generic_output = tmp_path / f"generic_{estimator}.csv"
-    generic_manifest = tmp_path / f"generic_{estimator}.json"
+    direct_output = tmp_path / f"direct_{estimator}.csv"
     dedicated_output = tmp_path / f"dedicated_{estimator}.csv"
     dedicated_manifest = tmp_path / f"dedicated_{estimator}.json"
     common = [
@@ -157,18 +157,35 @@ def test_dedicated_runner_matches_generic_single_estimator(
         "3",
         *specific_args,
     ]
-    run_simulation.main(
-        [
-            "--mode",
-            "fast",
-            "--estimators",
-            estimator,
-            *common,
-            "--output",
-            str(generic_output),
-            "--manifest",
-            str(generic_manifest),
-        ]
+    parsed = RUNNERS[estimator]._parser().parse_args(
+        [*common, "--output", str(direct_output)]
+    )
+    direct_args = _cli_common.prepare_namespace(estimator, parsed)
+    _cli_common.validate_namespace(direct_args)
+    config = _cli_common.build_run_config(estimator, direct_args)
+    alphas = np.linspace(
+        config.alpha_grid.alpha_min,
+        config.alpha_grid.alpha_max,
+        config.alpha_grid.alpha_grid_size,
+    )
+    designs = make_simulation_grid(
+        dgps=config.design.dgps,
+        n_values=config.design.sample_sizes,
+        p_values=config.design.dimensions,
+        pi_values=config.design.instrument_strengths,
+        taus=config.design.quantiles,
+        reps=config.execution.reps,
+        base_seed=config.execution.base_seed,
+        rep_start=config.execution.rep_start,
+        rep_end=config.execution.rep_end,
+    )
+    run_simulation_batch(
+        designs,
+        alphas,
+        estimators=(estimator,),
+        output_path=direct_output,
+        n_jobs=config.execution.n_jobs,
+        **runner_kwargs(config),
     )
     RUNNERS[estimator].main(
         [
@@ -180,28 +197,27 @@ def test_dedicated_runner_matches_generic_single_estimator(
         ]
     )
 
-    generic = pd.read_csv(generic_output)
+    direct = pd.read_csv(direct_output)
     dedicated = pd.read_csv(dedicated_output)
     expected_schema = SCHEMAS[estimator]
-    assert tuple(generic.columns) == tuple(dedicated.columns) == expected_schema
+    assert tuple(direct.columns) == tuple(dedicated.columns) == expected_schema
     assert len(expected_schema) == {"oracle": 26, "post_selection": 52, "dml": 43}[
         estimator
     ]
     pd.testing.assert_frame_equal(
         dedicated,
-        generic,
+        direct,
         check_dtype=False,
         check_exact=True,
     )
 
-    generic_provenance = json.loads(generic_manifest.read_text(encoding="utf-8"))
     dedicated_provenance = json.loads(
         dedicated_manifest.read_text(encoding="utf-8")
     )
     assert dedicated_provenance["estimators"] == [estimator]
-    assert dedicated_provenance["resume_signature"] == generic_provenance[
-        "resume_signature"
-    ]
+    assert dedicated_provenance["resume_signature"] == (
+        _cli_common.resume_signature(direct_args)
+    )
 
 
 def test_dedicated_runner_modules_are_import_safe() -> None:

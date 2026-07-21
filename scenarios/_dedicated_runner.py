@@ -6,7 +6,7 @@ import argparse
 from collections.abc import Sequence
 import sys
 
-from scenarios import run_simulation
+from scenarios._cli_common import build_run_config, execute
 from simulation.config import (
     DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
     DEFAULT_ALPHA_GRID_SIZE,
@@ -29,10 +29,6 @@ from simulation.config import (
     DEFAULT_QUANTREG_MAX_ITER,
     DEFAULT_REFINEMENT_TOLERANCE,
     DEFAULT_SELECTION_LASSO_MULTIPLIER,
-    EstimatorRunConfig,
-    build_dml_run_config,
-    build_oracle_run_config,
-    build_post_selection_run_config,
 )
 
 
@@ -185,35 +181,16 @@ def build_parser(estimator: EstimatorName, *, prog: str) -> argparse.ArgumentPar
     return parser
 
 
-def build_run_config(
-    estimator: EstimatorName, namespace: argparse.Namespace
-) -> EstimatorRunConfig:
-    """Build the immutable config owned by a dedicated estimator."""
-    builders = {
-        "oracle": build_oracle_run_config,
-        "post_selection": build_post_selection_run_config,
-        "dml": build_dml_run_config,
-    }
-    try:
-        builder = builders[estimator]
-    except KeyError as exc:
-        raise ValueError(f"Unknown dedicated estimator: {estimator}") from exc
-    return builder(namespace)
-
-
 def run_dedicated(
     estimator: EstimatorName,
     *,
     prog: str,
     argv: Sequence[str] | None = None,
 ) -> None:
-    """Validate the dedicated CLI and delegate to generic single-estimator mode."""
+    """Parse and execute one estimator through the shared direct CLI path."""
     arguments = list(sys.argv[1:] if argv is None else argv)
     namespace = build_parser(estimator, prog=prog).parse_args(arguments)
-    build_run_config(estimator, namespace)
-    run_simulation.main(
-        ["--mode", "fast", "--estimators", estimator, *arguments]
-    )
+    execute(estimator, namespace)
 
 
 __all__ = ["build_parser", "build_run_config", "run_dedicated"]

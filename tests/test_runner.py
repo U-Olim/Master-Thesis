@@ -1,16 +1,22 @@
+# ruff: noqa: E402
+
 import json
-import importlib.util
 import os
 from pathlib import Path
 import subprocess
 import sys
-from types import ModuleType
 
 import numpy as np
 import pandas as pd
 import pytest
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import simulation.runner as simulation_runner
+from scenarios import _cli_common as RUN_SIMULATION
+from scenarios._dedicated_runner import build_parser
 from analysis.data import _read_results
 from dgp import get_oracle_control_indices
 from dgp.designs import Design
@@ -32,7 +38,6 @@ from simulation.runner import (
 )
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PROJECT_ROOT / "scenarios" / "run_simulation.py"
 
 
@@ -115,21 +120,9 @@ def test_real_ch_csv_round_trip_preserves_components_and_schema(tmp_path: Path) 
             )
 
 
-def _load_run_simulation_module() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("run_simulation", SCRIPT)
-    if spec is None or spec.loader is None:
-        raise RuntimeError("Could not load run_simulation.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-RUN_SIMULATION = _load_run_simulation_module()
-
-
 def test_git_metadata_unavailable_is_nonfatal(monkeypatch) -> None:
     monkeypatch.setattr(RUN_SIMULATION.subprocess, "run", lambda *args, **kwargs: (_ for _ in ()).throw(OSError()))
-    assert RUN_SIMULATION._git_metadata() == {
+    assert RUN_SIMULATION.git_metadata() == {
         "git_commit": None,
         "git_branch": None,
         "git_dirty": None,
@@ -137,28 +130,63 @@ def test_git_metadata_unavailable_is_nonfatal(monkeypatch) -> None:
 
 
 def _signature(*extra_args: str) -> dict[str, object]:
-    estimator_args = () if "--estimators" in extra_args else ("--estimators", "oracle")
-    args = RUN_SIMULATION._parse_args(
-        ["--mode", "fast", *estimator_args, *extra_args]
-    )
-    RUN_SIMULATION._apply_defaults(args)
-    return RUN_SIMULATION._resume_signature(args)
+    estimator, arguments = _dedicated_arguments(extra_args)
+    parsed = build_parser(estimator, prog="test").parse_args(arguments)
+    args = RUN_SIMULATION.prepare_namespace(estimator, parsed)
+    return RUN_SIMULATION.resume_signature(args)
 
 
 def _validated_args(*extra_args: str):
-    estimator_args = () if "--estimators" in extra_args else ("--estimators", "oracle")
-    args = RUN_SIMULATION._parse_args(
-        ["--mode", "fast", *estimator_args, *extra_args]
-    )
-    RUN_SIMULATION._apply_defaults(args)
-    RUN_SIMULATION._validate_args(args)
+    estimator, arguments = _dedicated_arguments(extra_args)
+    parsed = build_parser(estimator, prog="test").parse_args(arguments)
+    args = RUN_SIMULATION.prepare_namespace(estimator, parsed)
+    RUN_SIMULATION.validate_namespace(args)
     return args
 
 
+def _dedicated_arguments(arguments) -> tuple[str, list[str]]:
+    values = list(arguments)
+    estimator = "oracle"
+    if "--estimators" in values:
+        index = values.index("--estimators")
+        estimator = values[index + 1]
+        del values[index : index + 2]
+    if "--mode" in values:
+        index = values.index("--mode")
+        del values[index : index + 2]
+    return estimator, values
+
+
 def _run_cli(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    estimator, arguments = _dedicated_arguments(args)
+    scripts = {
+        "oracle": "run_oracle_ivqr.py",
+        "post_selection": "run_post_selection_ivqr.py",
+        "dml": "run_dml_ivqr.py",
+    }
     env = os.environ.copy()
     env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
     env["MPLBACKEND"] = "Agg"
+    return subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "scenarios" / scripts[estimator]),
+            *arguments,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=env,
+        timeout=120,
+    )
+
+
+def _run_retired_cli(
+    tmp_path: Path, *args: str
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
     return subprocess.run(
         [sys.executable, str(SCRIPT), *args],
         check=False,
@@ -185,8 +213,9 @@ def _cell_str(df: pd.DataFrame, column: str, row: int = 0) -> str:
 def test_help_works(tmp_path: Path) -> None:
     result = _run_cli(tmp_path, "--help")
     assert result.returncode == 0
-    assert "--mode {fast}" in result.stdout
-    assert "full" not in result.stdout
+    assert "--alpha-grid-size" in result.stdout
+    assert "--mode" not in result.stdout
+    assert "--estimators" not in result.stdout
 
 
 def test_default_estimators_and_aliases() -> None:
@@ -371,29 +400,18 @@ def test_cli_rejects_invalid_replication_blocks(rep_start: int, rep_end: int) ->
 
 
 def test_cli_rejects_multiple_estimators_before_execution(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="Multi-estimator full mode has been removed") as exc:
-        _validated_args(
-            "--resume",
-            "--rerun-failed",
-            "--manifest",
-            str(tmp_path / "manifest.json"),
-            "--estimators",
-            "oracle",
-            "dml",
+    del tmp_path
+    with pytest.raises(SystemExit):
+        build_parser("oracle", prog="test").parse_args(
+            ["--estimators", "oracle", "dml"]
         )
-    for script in (
-        "scenarios/run_oracle_ivqr.py",
-        "scenarios/run_post_selection_ivqr.py",
-        "scenarios/run_dml_ivqr.py",
-    ):
-        assert script in str(exc.value)
 
 
 def test_resume_manifest_mismatch_is_rejected(tmp_path: Path) -> None:
     manifest = tmp_path / "manifest.json"
     base_args = _validated_args("--manifest", str(manifest))
     manifest.write_text(
-        json.dumps({"resume_signature": RUN_SIMULATION._resume_signature(base_args)}),
+        json.dumps({"resume_signature": RUN_SIMULATION.resume_signature(base_args)}),
         encoding="utf-8",
     )
 
@@ -405,7 +423,7 @@ def test_resume_manifest_mismatch_is_rejected(tmp_path: Path) -> None:
         "54321",
     )
     with pytest.raises(ValueError, match="resume signature does not match"):
-        RUN_SIMULATION._validate_resume_manifest(changed_args)
+        RUN_SIMULATION.validate_resume_manifest(changed_args)
 
 
 @pytest.mark.parametrize("legacy_key", ["resume_signature", "parameters"])
@@ -414,11 +432,11 @@ def test_old_full_mode_manifest_is_rejected_with_migration_message(
 ) -> None:
     manifest = tmp_path / "full_manifest.json"
     args = _validated_args("--resume", "--manifest", str(manifest))
-    previous = RUN_SIMULATION._resume_signature(args)
+    previous = RUN_SIMULATION.resume_signature(args)
     previous["mode"] = "full"
     manifest.write_text(json.dumps({legacy_key: previous}), encoding="utf-8")
     with pytest.raises(ValueError, match="Full-mode resume is no longer supported") as exc:
-        RUN_SIMULATION._validate_resume_manifest(args)
+        RUN_SIMULATION.validate_resume_manifest(args)
     assert "scenarios/run_oracle_ivqr.py" in str(exc.value)
     assert "scenarios/run_post_selection_ivqr.py" in str(exc.value)
     assert "scenarios/run_dml_ivqr.py" in str(exc.value)
@@ -429,7 +447,9 @@ def test_resume_signature_seed_and_execution_invariance() -> None:
     changed_execution = _signature("--n-jobs", "4", "--batch-size", "10")
     changed_seed = _signature("--base-seed", "54321")
     changed_estimators = _signature("--estimators", "dml")
-    changed_selection_lasso = _signature("--selection-lasso-multiplier", "1.2")
+    changed_selection_lasso = _signature(
+        "--estimators", "post_selection", "--selection-lasso-multiplier", "1.2"
+    )
     assert base == changed_execution
     assert base != changed_seed
     assert base != changed_estimators
@@ -488,20 +508,20 @@ def test_seed_uses_global_replication_index_inside_block() -> None:
 
 
 def test_generic_dry_run_requires_exactly_one_estimator(tmp_path: Path) -> None:
-    result = _run_cli(tmp_path, "--mode", "fast", "--dry-run")
+    result = _run_retired_cli(tmp_path, "--mode", "fast", "--dry-run")
     assert result.returncode != 0
-    assert "Multi-estimator full mode has been removed" in result.stderr
+    assert "generic simulation CLI has been retired" in result.stderr
     assert "scenarios/run_oracle_ivqr.py" in result.stderr
     assert "scenarios/run_post_selection_ivqr.py" in result.stderr
     assert "scenarios/run_dml_ivqr.py" in result.stderr
 
 
 def test_generic_full_mode_is_rejected_with_migration_message(tmp_path: Path) -> None:
-    result = _run_cli(
+    result = _run_retired_cli(
         tmp_path, "--mode", "full", "--estimators", "oracle", "--dry-run"
     )
     assert result.returncode != 0
-    assert "Multi-estimator full mode has been removed" in result.stderr
+    assert "generic simulation CLI has been retired" in result.stderr
     assert "scenarios/run_oracle_ivqr.py" in result.stderr
     assert "scenarios/run_post_selection_ivqr.py" in result.stderr
     assert "scenarios/run_dml_ivqr.py" in result.stderr
@@ -539,9 +559,16 @@ def test_selection_lasso_multiplier_rejects_nonpositive_values(tmp_path: Path) -
 
 
 def test_dry_run_rejects_full_control(tmp_path: Path) -> None:
-    result = _run_cli(tmp_path, "--mode", "fast", "--estimators", "full_control", "--dry-run")
+    result = _run_retired_cli(
+        tmp_path,
+        "--mode",
+        "fast",
+        "--estimators",
+        "full_control",
+        "--dry-run",
+    )
     assert result.returncode != 0
-    assert "Unknown estimator name" in result.stderr
+    assert "generic simulation CLI has been retired" in result.stderr
 
 
 @pytest.mark.slow

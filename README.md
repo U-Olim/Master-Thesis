@@ -25,7 +25,7 @@ scenarios/
   run_oracle_ivqr.py
   run_post_selection_ivqr.py
   run_dml_ivqr.py
-  run_simulation.py
+  run_simulation.py        Retired generic-CLI migration stub.
 
 src/
   analysis/     Final-result validation, tables, and figures.
@@ -101,24 +101,11 @@ DML development run:
 pixi run dml
 ```
 
-The generic runner remains temporarily available for single-estimator
-compatibility:
-
-```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/experiments/fast_oracle.csv --manifest results/experiments/fast_oracle_manifest.json
-```
-
-Generic commands must name exactly one estimator. A generic dry run is:
-
-```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --dry-run
-```
-
 ### Dedicated estimator runners
 
 Each dedicated runner locks execution to one estimator while reusing the same
 production grid, seed, DGP, parallel execution, resume, manifest, and serializer
-paths as generic single-estimator execution:
+infrastructure directly:
 
 ```powershell
 pixi run python scenarios/run_oracle_ivqr.py --reps 10 --output results/experiments/oracle_fast.csv
@@ -129,8 +116,14 @@ pixi run python scenarios/run_dml_ivqr.py --reps 10 --output results/experiments
 The former multi-estimator full mode was removed. Run Oracle, Post-selection and
 DML separately through their dedicated entry points. All runners retain the
 same deterministic design-seed mapping, so corresponding designs use the same
-simulated data. The generic `scenarios/run_simulation.py` runner remains
-temporarily available only for single-estimator compatibility.
+simulated data. The generic `scenarios/run_simulation.py` path is retired and
+now exits with a migration message; it cannot execute simulations.
+
+Resume through the same dedicated estimator runner that created the output:
+
+```powershell
+pixi run python scenarios/run_oracle_ivqr.py --resume --output results/experiments/oracle_fast.csv --manifest results/experiments/oracle_fast_manifest.json
+```
 
 Dedicated output contracts are fixed at 26 columns for Oracle, 52 columns for
 Post-selection, and 43 columns for DML.

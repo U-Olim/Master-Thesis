@@ -163,3 +163,19 @@ def test_low_level_execution_modules_do_not_import_cli_scripts() -> None:
         not name.startswith("estimators")
         for name in _imported_modules("src/simulation/persistence.py")
     )
+
+
+def test_dedicated_cli_import_direction_and_retired_stub_isolation() -> None:
+    for module in (
+        "scenarios/run_oracle_ivqr.py",
+        "scenarios/run_post_selection_ivqr.py",
+        "scenarios/run_dml_ivqr.py",
+        "scenarios/_dedicated_runner.py",
+        "scenarios/_cli_common.py",
+    ):
+        assert "scenarios.run_simulation" not in _imported_modules(module)
+    stub_imports = _imported_modules("scenarios/run_simulation.py")
+    assert all(not name.startswith("simulation") for name in stub_imports)
+    assert all(not name.startswith("dgp") for name in stub_imports)
+    assert all(not name.startswith("estimators") for name in stub_imports)
+    assert all(not name.startswith("ivqr") for name in stub_imports)

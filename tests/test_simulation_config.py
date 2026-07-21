@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scenarios import run_simulation  # noqa: E402
+from scenarios import _cli_common  # noqa: E402
 from scenarios._dedicated_runner import build_parser, build_run_config  # noqa: E402
 from simulation.config import (  # noqa: E402
     DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
@@ -58,11 +58,9 @@ ESTIMATOR_CONFIG_TYPES = {
 
 
 def _generic_config(estimator: str):
-    args = run_simulation._parse_args(
-        ["--mode", "fast", "--estimators", estimator]
-    )
-    run_simulation._apply_defaults(args)
-    run_simulation._validate_args(args)
+    parsed = build_parser(estimator, prog="test").parse_args([])
+    args = _cli_common.prepare_namespace(estimator, parsed)
+    _cli_common.validate_namespace(args)
     return args, build_estimator_run_config(args)
 
 
@@ -94,9 +92,9 @@ def test_exact_default_configs_and_dedicated_generic_equivalence(
     assert generic.alpha_grid.alpha_max == DEFAULT_ALPHA_MAX
     assert generic.alpha_grid.alpha_grid_size == DEFAULT_ALPHA_GRID_SIZE
 
-    before = run_simulation._resume_signature(generic_args)
+    before = _cli_common.resume_signature(generic_args)
     build_estimator_run_config(generic_args)
-    assert run_simulation._resume_signature(generic_args) == before
+    assert _cli_common.resume_signature(generic_args) == before
 
 
 def test_ch_post_selection_and_dml_defaults_are_exact() -> None:
@@ -142,16 +140,9 @@ def test_configs_are_frozen_and_exclude_irrelevant_settings() -> None:
 
 @pytest.mark.parametrize("estimator", ESTIMATOR_CONFIG_TYPES)
 def test_critical_value_multiplier_reaches_owned_runner_path(estimator: str) -> None:
-    args = run_simulation._parse_args(
-        [
-            "--mode",
-            "fast",
-            "--estimators",
-            estimator,
-            "--critical-value-multiplier",
-            "1.75",
-        ]
+    parsed = build_parser(estimator, prog="test").parse_args(
+        ["--critical-value-multiplier", "1.75"]
     )
-    run_simulation._apply_defaults(args)
+    args = _cli_common.prepare_namespace(estimator, parsed)
     config = build_estimator_run_config(args)
     assert runner_kwargs(config)["critical_value_multiplier"] == 1.75
