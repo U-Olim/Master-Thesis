@@ -10,7 +10,7 @@ The project compares three estimators:
 - Post-selection IVQR (mean-Lasso union followed by CH inverse-IVQR)
 - DML-style residualized IVQR
 
-The only simulation entry point is:
+The generic simulation entry point is:
 
 ```powershell
 pixi run fast
@@ -112,6 +112,22 @@ Generic dry run:
 ```powershell
 pixi run python scenarios/run_simulation.py --mode fast --dry-run
 ```
+
+### Dedicated estimator runners
+
+Each dedicated runner locks execution to one estimator while reusing the same
+production grid, seed, DGP, parallel execution, resume, manifest, and serializer
+paths as generic single-estimator execution:
+
+```powershell
+pixi run python scenarios/run_oracle_ivqr.py --reps 10 --output results/raw/oracle_fast.csv
+pixi run python scenarios/run_post_selection_ivqr.py --reps 10 --output results/raw/post_selection_fast.csv
+pixi run python scenarios/run_dml_ivqr.py --reps 10 --output results/raw/dml_fast.csv
+```
+
+The generic `scenarios/run_simulation.py` runner remains available temporarily.
+The dedicated runners are behaviorally equivalent to its single-estimator mode;
+generic `full` mode remains available and has not yet been removed.
 
 ### Canonical final thesis production commands
 
