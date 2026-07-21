@@ -7,7 +7,7 @@ instruments.
 The project compares three estimators:
 
 - Oracle IVQR
-- Post-selection IVQR
+- Post-selection IVQR (mean-Lasso union followed by CH inverse-IVQR)
 - DML-style residualized IVQR
 
 The only simulation entry point is:
@@ -219,6 +219,80 @@ Set `iteration_warning_policy="reject"` explicitly when reproducing legacy
 Oracle or post-selection simulation results. That mode rejects every
 iteration-limit fit through the historical failed-alpha path. The DML
 estimator does not use this policy.
+
+Genuine unusable CH alpha evaluations use `hard_failure_policy="unresolved"`
+in production. They are excluded from the usable-only point-estimate argmin,
+are neither accepted nor rejected, and cannot be used for confidence-region
+boundary interpolation. Confidence-region and coverage outputs explicitly
+record partial or full numerical non-resolution. Set
+`hard_failure_policy="legacy_reject"` only to reproduce the historical
+sentinel-statistic rejection behavior. This policy applies to Oracle and
+post-selection CH inference only; DML estimation is unchanged.
+
+## CH Alpha-Grid Strategy
+
+Oracle and post-selection use `grid_strategy="adaptive"` in production. The
+midpoint-assisted adaptive boundary refinement first evaluates the configured
+initial grid, probes each adjacent usable initial interval once, and then
+bisects detected accepted/rejected transitions. Transitions are refined
+widest-first with deterministic tie-breaking. Refinement stops at tolerance
+`0.025`, depth `10`, or `201` total alpha evaluations; unresolved points are
+barriers and are never refined or interpolated through. Evaluations are cached.
+This controlled search reduces the risk of missing narrow islands or gaps but
+does not guarantee discovery of every disconnected confidence region.
+
+The production point-estimate rule is `alpha_hat_grid="initial"`: boundary
+resolution does not redefine the point estimator. Set
+`alpha_hat_grid="all_evaluated"` to reproduce the earlier adaptive argmin over
+initial, midpoint, and refined points. Fixed mode gives the same point estimate
+under either setting because it adds no adaptive points.
+
+Set `grid_strategy="fixed"` (CLI: `--grid-strategy fixed`) to reproduce the
+original fixed-grid estimator and its initial-grid point estimate. The adaptive
+limits can be configured with `--refinement-tolerance`,
+`--max-refinement-depth`, and `--max-alpha-evaluations`. These options apply
+only to the shared CH path; DML keeps its supplied fixed alpha grid and does not
+receive the CH refinement options.
+
+## Post-selection methodology
+
+The feasible benchmark is **mean-Lasso union selection followed by CH
+inverse-IVQR**. It fits ordinary mean LassoCV models for Y on X and D on X,
+uses the union of selected controls, retains all instruments, and then applies
+CH inversion. Canonical metadata records `selection_method="mean_lasso_union"`,
+conditional-mean targets, `selection_quantile_specific=False`,
+`instrument_selection_method="retain_all"`, and no post-selection inference
+adjustment. It is not quantile-Lasso or alpha-specific selection, is not
+cross-fitted or orthogonal-score DML, and does not provide formally
+selection-adjusted inference.
+
+`selection_random_state` remains accepted as deprecated compatibility metadata.
+The cyclic LassoCV/default-CV configuration is deterministic, so the value does
+not affect selection. New reports use **retained instruments**; historical
+`ps_n_selected_instruments` fields remain compatibility aliases only.
+
+## Compatibility paths
+
+Historical reproducibility paths intentionally retained are
+`iteration_warning_policy="reject"`,
+`hard_failure_policy="legacy_reject"`, `grid_strategy="fixed"`,
+`adaptive_midpoint_probe=False`, and
+`alpha_hat_grid="all_evaluated"`. The fixed-grid path, warning rejection,
+legacy hard-failure sentinel, deprecated selected-instrument aliases, and
+deprecated `selection_random_state` parsing remain supported. Production
+defaults are respectively `"use_if_valid"`, `"unresolved"`, `"adaptive"`,
+midpoint probing enabled, and `alpha_hat_grid="initial"`. These CH settings are
+inherited by Oracle and post-selection only; DML does not call or accept them.
+
+CH result rows preserve the complete confidence region in `cr_components` as
+compact JSON, for example `[[-1.0,-0.42],[0.18,1.36]]`. Internally the same
+geometry is an immutable `tuple[tuple[float, float], ...]`. `cr_lower` and
+`cr_upper` are only the outer hull endpoints, while `cr_length` is the sum of
+component lengths; a disconnected hull must not be read as one accepted
+interval. Empty or fully unresolved CH regions serialize as `[]` and remain
+distinguishable through `cr_status`. DML uses a null component value. Readers
+retain older rows without this column as “components unavailable” and never
+reconstruct components from hull bounds.
 
 ## Reproducibility and Separate Estimator Runs
 

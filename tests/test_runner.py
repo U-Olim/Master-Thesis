@@ -10,6 +10,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import simulation.runner as simulation_runner
+from analysis.data import _read_results
+from dgp import get_oracle_control_indices
+from dgp.designs import Design
+from ivqr.confidence_regions import parse_cr_components
+from simulation.results import RESULT_SCHEMA_VERSION
 from simulation.config import DEFAULT_BASE_SEED
 from simulation.runner import (
     SEED_RULE_TEXT,
@@ -17,6 +23,7 @@ from simulation.runner import (
     make_simulation_grid,
     normalize_estimator_names,
     run_simulation_batch,
+    validate_oracle_support,
 )
 from simulation.dml_output import REQUIRED_CORE_COLUMNS, REQUIRED_DML_COLUMNS
 from simulation.post_selection_output import REQUIRED_POST_SELECTION_COLUMNS
@@ -24,6 +31,79 @@ from simulation.post_selection_output import REQUIRED_POST_SELECTION_COLUMNS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PROJECT_ROOT / "scenarios" / "run_simulation.py"
+
+
+@pytest.mark.parametrize("supplied", [np.array([4, 3, 2, 1, 0]), np.arange(5)])
+def test_oracle_support_invariant_accepts_matching_order(supplied: np.ndarray) -> None:
+    design = Design("dgp1", 80, 20, 1.0, 0.5, 0, 123)
+    np.testing.assert_array_equal(validate_oracle_support(design, supplied), np.arange(5))
+
+
+@pytest.mark.parametrize("supplied", [np.arange(4), np.arange(6)])
+def test_oracle_support_invariant_rejects_mismatch(supplied: np.ndarray) -> None:
+    design = Design("dgp1", 80, 20, 1.0, 0.5, 7, 123)
+    with pytest.raises(ValueError, match=r"Oracle support mismatch.*dgp=dgp1.*rep=7"):
+        validate_oracle_support(design, supplied)
+
+
+def test_oracle_support_invariant_rejects_duplicates() -> None:
+    design = Design("dgp1", 80, 20, 1.0, 0.5, 0, 123)
+    with pytest.raises(ValueError, match="duplicate"):
+        validate_oracle_support(design, np.array([0, 1, 2, 3, 3]))
+
+
+def test_oracle_runner_receives_the_unchanged_coefficient_implied_support(
+    monkeypatch,
+) -> None:
+    captured: dict[str, np.ndarray] = {}
+
+    def capture_oracle(*args, **kwargs):
+        captured["oracle_indices"] = np.asarray(kwargs["oracle_indices"])
+        raise RuntimeError("stop after support capture")
+
+    monkeypatch.setattr(simulation_runner, "estimate_oracle_ivqr", capture_oracle)
+    design = Design("dgp2", 40, 10, 1.0, 0.5, 0, 123)
+    simulation_runner.run_simulation_design(
+        design,
+        np.array([-1.0, 0.0, 1.0]),
+        estimators=("oracle",),
+    )
+    np.testing.assert_array_equal(
+        captured["oracle_indices"],
+        get_oracle_control_indices(design.dgp, design.p),
+    )
+
+
+def test_real_ch_csv_round_trip_preserves_components_and_schema(tmp_path: Path) -> None:
+    design = Design("dgp1", 80, 20, 1.0, 0.5, 0, 321)
+    alphas = np.linspace(-1.0, 3.0, 5)
+    for estimator, label in (
+        ("oracle", "oracle"),
+        ("post_selection", "post_selection"),
+    ):
+        path = tmp_path / f"{estimator}.csv"
+        run_simulation_batch(
+            [design],
+            alphas,
+            estimators=(estimator,),
+            output_path=path,
+            n_jobs=1,
+            adaptive_midpoint_probe=True,
+            alpha_hat_grid="initial",
+        )
+        loaded = _read_results(path, label, expected_replications=1)
+        row = loaded.iloc[0]
+        components = parse_cr_components(row["cr_components"])
+        assert components is not None
+        assert int(row["result_schema_version"]) == RESULT_SCHEMA_VERSION
+        assert int(row["cr_n_blocks"]) == len(components)
+        assert bool(row["cr_disconnected"]) == (len(components) > 1)
+        if components:
+            assert row["cr_lower"] == pytest.approx(components[0][0])
+            assert row["cr_upper"] == pytest.approx(components[-1][1])
+            assert row["cr_length"] == pytest.approx(
+                sum(upper - lower for lower, upper in components)
+            )
 
 
 def _load_run_simulation_module() -> ModuleType:
@@ -36,6 +116,15 @@ def _load_run_simulation_module() -> ModuleType:
 
 
 RUN_SIMULATION = _load_run_simulation_module()
+
+
+def test_git_metadata_unavailable_is_nonfatal(monkeypatch) -> None:
+    monkeypatch.setattr(RUN_SIMULATION.subprocess, "run", lambda *args, **kwargs: (_ for _ in ()).throw(OSError()))
+    assert RUN_SIMULATION._git_metadata() == {
+        "git_commit": None,
+        "git_branch": None,
+        "git_dirty": None,
+    }
 
 
 def _signature(*extra_args: str) -> dict[str, object]:
@@ -454,6 +543,11 @@ def test_tiny_one_design_run_writes_csv_and_manifest(tmp_path: Path) -> None:
         rep=0,
     )
     payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["result_schema_version"] == RESULT_SCHEMA_VERSION
+    assert {"git_commit", "git_branch", "git_dirty"}.issubset(payload)
+    assert payload["adaptive_midpoint_probe"] is True
+    assert payload["alpha_hat_grid"] == "initial"
+    assert payload["confidence_level"] == pytest.approx(0.95)
     assert payload["estimators"] == ["oracle"]
     assert payload["base_seed"] == DEFAULT_BASE_SEED
     assert payload["seed_rule"] == SEED_RULE_TEXT
@@ -620,6 +714,29 @@ def test_dml_append_rejects_different_output_schema(tmp_path: Path) -> None:
             [],
             np.linspace(-1.0, 1.0, 3),
             estimators=("dml",),
+            output_path=output,
+            append=True,
+        )
+
+
+def test_append_rejects_incompatible_result_schema_version(tmp_path: Path) -> None:
+    output = tmp_path / "incompatible_version.csv"
+    current = run_simulation_batch(
+        [],
+        np.linspace(-1.0, 1.0, 3),
+        estimators=("oracle",),
+    )
+    legacy_version = pd.DataFrame(
+        [{column: np.nan for column in current.columns}], columns=current.columns
+    )
+    legacy_version.loc[0, "result_schema_version"] = RESULT_SCHEMA_VERSION - 1
+    legacy_version.to_csv(output, index=False)
+
+    with pytest.raises(ValueError, match="incompatible result schema version"):
+        run_simulation_batch(
+            [],
+            np.linspace(-1.0, 1.0, 3),
+            estimators=("oracle",),
             output_path=output,
             append=True,
         )

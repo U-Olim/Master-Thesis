@@ -1,6 +1,12 @@
 import numpy as np
 
-from dgp import Design, generate_data, get_oracle_control_indices, true_alpha
+from dgp import (
+    Design,
+    generate_data,
+    get_oracle_control_indices,
+    true_active_control_indices,
+    true_alpha,
+)
 from dgp.true_parameters import true_sparse_coefficients
 from simulation.config import DGPS, TAUS
 
@@ -40,6 +46,15 @@ def test_oracle_control_indices_are_valid() -> None:
         assert len(indices) == EXPECTED_ACTIVE_CONTROLS[dgp]
         assert np.all(indices >= 0)
         assert np.all(indices < p)
+
+
+def test_declared_and_coefficient_implied_support_are_exactly_equal() -> None:
+    for dgp, minimum_p in EXPECTED_ACTIVE_CONTROLS.items():
+        for p in (minimum_p, 20, 200):
+            np.testing.assert_array_equal(
+                get_oracle_control_indices(dgp, p),
+                true_active_control_indices(dgp, p),
+            )
 
 
 def test_sparse_coefficient_vectors_have_expected_active_counts() -> None:

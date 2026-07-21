@@ -22,10 +22,13 @@ from dgp.designs import Design, SimData
 from dgp.generators import generate_data
 from dgp.true_parameters import get_oracle_control_indices, true_alpha
 from ivqr.ch_inverse import (
+    HARD_FAILURE_POLICIES,
     ITERATION_WARNING_POLICIES,
     IterationWarningPolicy,
+    HardFailurePolicy,
     ch_ivqr_design,
     validate_iteration_warning_policy,
+    validate_hard_failure_policy,
     wald_statistic,
 )
 from simulation.config import DEFAULT_BASE_SEED, DEFAULT_QUANTREG_MAX_ITER
@@ -66,12 +69,14 @@ def evaluate_true_alpha_wald(
     variant: CovarianceVariant,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
+    hard_failure_policy: HardFailurePolicy = "unresolved",
 ) -> dict[str, object]:
     """Fit the Oracle QR at true alpha and return instrument-Wald diagnostics."""
     alpha = true_alpha(tau, dgp)
     iteration_warning_policy = validate_iteration_warning_policy(
         iteration_warning_policy
     )
+    hard_failure_policy = validate_hard_failure_policy(hard_failure_policy)
     oracle_indices = get_oracle_control_indices(dgp, p)
     x_oracle = np.asarray(data.x, dtype=float)[:, oracle_indices]
     design, z_block = ch_ivqr_design(x_oracle, data.z)
@@ -87,6 +92,7 @@ def evaluate_true_alpha_wald(
         "converged": False,
         "usable": False,
         "iteration_warning_policy": iteration_warning_policy,
+        "hard_failure_policy": hard_failure_policy,
         "warning_type": "",
         "failure_reason": "",
         "iteration_limit_warning": False,
@@ -97,7 +103,19 @@ def evaluate_true_alpha_wald(
         "gamma_hat": np.nan,
         "cov_gamma": np.nan,
         "wald": np.nan,
-        "rejected": np.nan,
+        "rejected": np.nan if hard_failure_policy == "unresolved" else True,
+        "usable_alpha_evaluations": 0,
+        "unresolved_alpha_evaluations": (
+            1 if hard_failure_policy == "unresolved" else 0
+        ),
+        "coverage_status": (
+            "coverage_unresolved"
+            if hard_failure_policy == "unresolved"
+            else "not_covered"
+        ),
+        "cr_status": (
+            "fully_unresolved" if hard_failure_policy == "unresolved" else "empty_valid"
+        ),
     }
 
     try:
@@ -164,6 +182,12 @@ def evaluate_true_alpha_wald(
             "rejected": bool(statistic > THEORETICAL_CHI2_Q95),
             "finite_statistic_available": True,
             "statistic_used_for_inference": True,
+            "usable_alpha_evaluations": 1,
+            "unresolved_alpha_evaluations": 0,
+            "coverage_status": (
+                "not_covered" if statistic > THEORETICAL_CHI2_Q95 else "covered"
+            ),
+            "cr_status": "valid",
         }
     )
     return base
@@ -172,11 +196,21 @@ def evaluate_true_alpha_wald(
 def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
     """Aggregate replication-level Wald diagnostics by design and covariance."""
     replications = replications.copy()
+    rejected = replications["rejected"].astype("boolean").fillna(False)
     defaults: dict[str, object] = {
         "iteration_warning_policy": "reject",
+        "hard_failure_policy": "unresolved",
         "usable": replications["converged"],
         "iteration_limit_warning": False,
         "finite_statistic_available": np.isfinite(replications["wald"]),
+        "coverage_status": np.where(
+            replications["converged"],
+            np.where(rejected, "not_covered", "covered"),
+            "coverage_unresolved",
+        ),
+        "cr_status": np.where(replications["converged"], "valid", "fully_unresolved"),
+        "usable_alpha_evaluations": replications["converged"].astype(int),
+        "unresolved_alpha_evaluations": (~replications["converged"]).astype(int),
     }
     for column, default in defaults.items():
         if column not in replications:
@@ -188,11 +222,16 @@ def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
         "pi",
         "tau",
         "iteration_warning_policy",
+        "hard_failure_policy",
         "covariance_variant",
     ]
     rows: list[dict[str, object]] = []
     for keys, group in replications.groupby(group_columns, sort=False):
-        successful = group.loc[group["usable"].astype(bool)]
+        inference_available = group["usable"].astype(bool) | (
+            group["hard_failure_policy"].eq("legacy_reject")
+            & ~group["usable"].astype(bool)
+        )
+        successful = group.loc[inference_available]
         warnings_group = group.loc[group["iteration_limit_warning"].astype(bool)]
         wald = successful["wald"].astype(float)
         requested = len(group)
@@ -248,6 +287,42 @@ def summarize_replications(replications: pd.DataFrame) -> pd.DataFrame:
                     if len(warnings_group)
                     else np.nan
                 ),
+                "resolved_replications": int(
+                    group["coverage_status"].isin(["covered", "not_covered"]).sum()
+                ),
+                "partially_unresolved_replications": 0,
+                "fully_unresolved_replications": int(
+                    (group["cr_status"] == "fully_unresolved").sum()
+                ),
+                "valid_coverage_denominator": int(
+                    group["coverage_status"].isin(["covered", "not_covered"]).sum()
+                ),
+                "covered_count": int((group["coverage_status"] == "covered").sum()),
+                "not_covered_count": int(
+                    (group["coverage_status"] == "not_covered").sum()
+                ),
+                "coverage_unresolved_count": int(
+                    (group["coverage_status"] == "coverage_unresolved").sum()
+                ),
+                "conditional_coverage_resolved": (
+                    float(
+                        (group["coverage_status"] == "covered").sum()
+                        / group["coverage_status"]
+                        .isin(["covered", "not_covered"])
+                        .sum()
+                    )
+                    if group["coverage_status"].isin(["covered", "not_covered"]).sum()
+                    else np.nan
+                ),
+                "unresolved_replication_rate": float(
+                    (group["coverage_status"] == "coverage_unresolved").mean()
+                ),
+                "valid_empty_region_rate": 0.0,
+                "unresolved_apparent_empty_count": int(
+                    (group["coverage_status"] == "coverage_unresolved").sum()
+                ),
+                "valid_full_grid_rate": np.nan,
+                "unresolved_apparent_full_grid_count": 0,
             }
         )
     return pd.DataFrame(rows)
@@ -258,6 +333,7 @@ def run_diagnostic(
     *,
     max_iter: int = DEFAULT_QUANTREG_MAX_ITER,
     iteration_warning_policy: IterationWarningPolicy = "use_if_valid",
+    hard_failure_policy: HardFailurePolicy = "unresolved",
 ) -> pd.DataFrame:
     """Generate each design once and evaluate every covariance variant."""
     rows: list[dict[str, object]] = []
@@ -272,6 +348,7 @@ def run_diagnostic(
                 variant=variant,
                 max_iter=max_iter,
                 iteration_warning_policy=iteration_warning_policy,
+                hard_failure_policy=hard_failure_policy,
             )
             rows.append(
                 {
@@ -318,6 +395,15 @@ def _parser() -> argparse.ArgumentParser:
             "reject reproduces legacy results"
         ),
     )
+    parser.add_argument(
+        "--hard-failure-policy",
+        choices=HARD_FAILURE_POLICIES,
+        default="unresolved",
+        help=(
+            "unresolved is the production default; legacy_reject reproduces "
+            "sentinel rejection"
+        ),
+    )
     parser.add_argument("--summary-output", type=Path, default=None)
     parser.add_argument("--replication-output", type=Path, default=None)
     return parser
@@ -326,13 +412,16 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
     policy = args.iteration_warning_policy
+    hard_failure_policy = args.hard_failure_policy
+    policy_stem = f"{policy}_{hard_failure_policy}"
     summary_output = _safe_output_path(
         args.summary_output
-        or POLICY_OUTPUT_DIRECTORY / f"oracle_calibration_{policy}_summary.csv"
+        or POLICY_OUTPUT_DIRECTORY / f"oracle_calibration_{policy_stem}_summary.csv"
     )
     replication_output = _safe_output_path(
         args.replication_output
-        or POLICY_OUTPUT_DIRECTORY / f"oracle_calibration_{policy}_replications.csv"
+        or POLICY_OUTPUT_DIRECTORY
+        / f"oracle_calibration_{policy_stem}_replications.csv"
     )
     designs = make_simulation_grid(
         dgps=tuple(args.dgps),
@@ -351,6 +440,7 @@ def main() -> None:
     )
     print("Requested statsmodels covariance variants:")
     print(f"Iteration-warning policy: {policy}")
+    print(f"Hard-failure policy: {hard_failure_policy}")
     for variant in COVARIANCE_VARIANTS:
         print(
             f"  {variant.name}: vcov={variant.vcov}, kernel={variant.kernel}, "
@@ -361,6 +451,7 @@ def main() -> None:
         designs,
         max_iter=args.max_iter,
         iteration_warning_policy=policy,
+        hard_failure_policy=hard_failure_policy,
     )
     summary = summarize_replications(replications)
     replication_output.parent.mkdir(parents=True, exist_ok=True)

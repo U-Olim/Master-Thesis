@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ivqr.confidence_regions import CRComponents, validate_cr_geometry
 from utils.timing import RUNTIME_COLUMNS
 
 
@@ -52,6 +53,10 @@ POST_SELECTION_DIAGNOSTIC_FIELDS: tuple[str, ...] = (
     "ps_first_stage_f_stat",
     "ps_first_stage_condition_number",
     "ps_selection_method",
+    "ps_selection_target_y",
+    "ps_selection_target_d",
+    "ps_selection_quantile_specific",
+    "ps_post_selection_inference_adjustment",
     "ps_selection_lasso_multiplier",
     "ps_lasso_alpha_controls",
     "ps_lasso_alpha_instruments",
@@ -127,6 +132,36 @@ class EstimationResult:
     selected_controls: int | None
     runtime_seconds: float
     error_type: str | None = None
+    cr_components: CRComponents | None = None
+    hard_failure_policy: str = "not_applicable"
+    cr_status: str = "not_applicable"
+    cr_is_numerically_resolved: bool | None = None
+    cr_unresolved_count: int = 0
+    cr_unresolved_alphas: str = "[]"
+    coverage_status: str = "unknown"
+    point_estimate_status: str = "not_applicable"
+    usable_alpha_evaluations: int | None = None
+    unresolved_alpha_evaluations: int | None = None
+    grid_strategy: str = "not_applicable"
+    adaptive_midpoint_probe: bool | None = None
+    alpha_hat_grid: str = "not_applicable"
+    midpoint_intervals_considered: int | None = None
+    midpoint_evaluations_added: int | None = None
+    midpoint_unresolved_barriers: int | None = None
+    midpoint_probe_limit_hit: bool | None = None
+    initial_alpha_grid_size: int | None = None
+    final_alpha_evaluations: int | None = None
+    refinement_tolerance: float | None = None
+    refinement_depth_reached: int | None = None
+    refinement_limit_hit: bool | None = None
+    max_alpha_evaluations_hit: bool | None = None
+    number_of_refined_intervals: int | None = None
+    number_of_unresolved_refinement_barriers: int | None = None
+    minimum_final_grid_spacing: float | None = None
+    median_final_grid_spacing: float | None = None
+    maximum_final_grid_spacing: float | None = None
+    iteration_warning_evaluations: int | None = None
+    rank_deficient_covariance_failures: int | None = None
 
     alpha_grid_min: float | None = None
     alpha_grid_max: float | None = None
@@ -195,6 +230,10 @@ class EstimationResult:
     ps_first_stage_f_stat: float | None = None
     ps_first_stage_condition_number: float | None = None
     ps_selection_method: str | None = None
+    ps_selection_target_y: str | None = None
+    ps_selection_target_d: str | None = None
+    ps_selection_quantile_specific: bool | None = None
+    ps_post_selection_inference_adjustment: str | None = None
     ps_selection_lasso_multiplier: float | None = None
     ps_lasso_alpha_controls: float | None = None
     ps_lasso_alpha_instruments: float | None = None
@@ -218,6 +257,18 @@ class EstimationResult:
     dml_qr_nonzero_mean: float | None = None
     dml_z_resid_var_mean: float | None = None
 
+    def __post_init__(self) -> None:
+        if self.cr_components is None:
+            return
+        self.cr_components = validate_cr_geometry(
+            self.cr_components,
+            lower=self.cr_lower,
+            upper=self.cr_upper,
+            length=self.cr_length,
+            n_blocks=self.cr_n_blocks,
+            disconnected=self.cr_disconnected,
+        )
+
     @property
     def status(self) -> str:
         """Return the public estimator status used in simulation CSV rows."""
@@ -229,6 +280,7 @@ class EstimationResult:
         return {
             "lower": self.cr_lower,
             "upper": self.cr_upper,
+            "components": self.cr_components,
             "length": self.cr_length,
             "empty": self.cr_empty,
             "covers_true": self.cr_covers_true,
@@ -238,6 +290,11 @@ class EstimationResult:
             "n_blocks": self.cr_n_blocks,
             "disconnected": self.cr_disconnected,
             "hull_length": self.cr_hull_length,
+            "status": self.cr_status,
+            "is_numerically_resolved": self.cr_is_numerically_resolved,
+            "unresolved_count": self.cr_unresolved_count,
+            "unresolved_alphas": self.cr_unresolved_alphas,
+            "coverage_status": self.coverage_status,
         }
 
     @property
@@ -249,4 +306,6 @@ class EstimationResult:
             + DML_DIAGNOSTIC_FIELDS
             + RUNTIME_DIAGNOSTIC_FIELDS
         )
-        return {name: getattr(self, name) for name in names}
+        diagnostics = {name: getattr(self, name) for name in names}
+        diagnostics["cr_components"] = self.cr_components
+        return diagnostics

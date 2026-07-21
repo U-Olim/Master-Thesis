@@ -9,6 +9,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from simulation.dml_output import validate_component_columns
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RAW_RESULT_FILES = {
@@ -43,7 +45,17 @@ CORE_COLUMNS = [
     "converged",
 ]
 SELECTION_COLUMNS = ["n_selected_controls", "selection_lasso_multiplier"]
-COMMON_COLUMNS = [*CORE_COLUMNS, *SELECTION_COLUMNS]
+CR_REPORTING_COLUMNS = [
+    "result_schema_version",
+    "cr_components",
+    "cr_n_blocks",
+    "cr_disconnected",
+    "cr_status",
+    "cr_is_numerically_resolved",
+    "cr_unresolved_count",
+    "cr_unresolved_alphas",
+]
+COMMON_COLUMNS = [*CORE_COLUMNS, *CR_REPORTING_COLUMNS, *SELECTION_COLUMNS]
 NUMERIC_COLUMNS = [
     "n",
     "p",
@@ -343,6 +355,19 @@ def _read_results(
     for column in SELECTION_COLUMNS:
         if column not in frame:
             frame[column] = np.nan
+    cr_defaults: dict[str, object] = {
+        "result_schema_version": np.nan,
+        "cr_components": None,
+        "cr_n_blocks": np.nan,
+        "cr_disconnected": np.nan,
+        "cr_status": "unavailable",
+        "cr_is_numerically_resolved": np.nan,
+        "cr_unresolved_count": np.nan,
+        "cr_unresolved_alphas": None,
+    }
+    for column in CR_REPORTING_COLUMNS:
+        if column not in frame:
+            frame[column] = cr_defaults[column]
     frame = frame.loc[:, COMMON_COLUMNS]
     validate_results(
         frame,
@@ -478,6 +503,8 @@ def validate_results(
         raise ValueError("A missing confidence region cannot have covered=True")
     if results.loc[~successful, "covered"].any():
         raise ValueError("Failed rows cannot have covered=True")
+    if set(CR_REPORTING_COLUMNS).issubset(results.columns):
+        validate_component_columns(results)
 
     true_spread = results.groupby(["dgp", "tau"], dropna=False)["alpha_true"].agg(
         lambda values: float(values.max() - values.min())

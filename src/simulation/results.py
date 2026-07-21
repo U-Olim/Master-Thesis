@@ -12,12 +12,16 @@ from estimators.base import (
     EstimationResult,
     POST_SELECTION_DIAGNOSTIC_FIELDS,
 )
-from ivqr.confidence_regions import summarize_alpha_grid_diagnostics
+from ivqr.confidence_regions import (
+    serialize_cr_components,
+    summarize_alpha_grid_diagnostics,
+)
 from utils.timing import RUNTIME_COLUMNS, empty_runtime_columns
 
 
 POST_SELECTION_WARNING_NONE = ""
 MAX_ERROR_MESSAGE_LENGTH = 500
+RESULT_SCHEMA_VERSION = 4
 
 RESULT_COLUMNS: tuple[str, ...] = (
     "dgp",
@@ -27,6 +31,7 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "tau",
     "rep",
     "seed",
+    "result_schema_version",
     "estimator",
     "alpha_hat",
     "alpha_true",
@@ -41,6 +46,7 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "cr_lower",
     "cr_upper",
     "cr_length",
+    "cr_components",
     "cr_empty",
     "cr_covers_true",
     "cr_hits_lower_boundary",
@@ -51,6 +57,35 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "cr_n_blocks",
     "cr_disconnected",
     "cr_hull_length",
+    "hard_failure_policy",
+    "cr_status",
+    "cr_is_numerically_resolved",
+    "cr_unresolved_count",
+    "cr_unresolved_alphas",
+    "coverage_status",
+    "point_estimate_status",
+    "usable_alpha_evaluations",
+    "unresolved_alpha_evaluations",
+    "grid_strategy",
+    "adaptive_midpoint_probe",
+    "alpha_hat_grid",
+    "midpoint_intervals_considered",
+    "midpoint_evaluations_added",
+    "midpoint_unresolved_barriers",
+    "midpoint_probe_limit_hit",
+    "initial_alpha_grid_size",
+    "final_alpha_evaluations",
+    "refinement_tolerance",
+    "refinement_depth_reached",
+    "refinement_limit_hit",
+    "max_alpha_evaluations_hit",
+    "number_of_refined_intervals",
+    "number_of_unresolved_refinement_barriers",
+    "minimum_final_grid_spacing",
+    "median_final_grid_spacing",
+    "maximum_final_grid_spacing",
+    "iteration_warning_evaluations",
+    "rank_deficient_covariance_failures",
     "alpha_grid_min",
     "alpha_grid_max",
     "alpha_grid_size",
@@ -97,6 +132,10 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "ps_first_stage_f_stat",
     "ps_first_stage_condition_number",
     "ps_selection_method",
+    "ps_selection_target_y",
+    "ps_selection_target_d",
+    "ps_selection_quantile_specific",
+    "ps_post_selection_inference_adjustment",
     "ps_selection_lasso_multiplier",
     "ps_lasso_alpha_controls",
     "ps_lasso_alpha_instruments",
@@ -136,6 +175,10 @@ def empty_post_selection_diagnostics() -> dict[str, Any]:
         "ps_first_stage_f_stat": None,
         "ps_first_stage_condition_number": None,
         "ps_selection_method": None,
+        "ps_selection_target_y": None,
+        "ps_selection_target_d": None,
+        "ps_selection_quantile_specific": None,
+        "ps_post_selection_inference_adjustment": None,
         "ps_selection_lasso_multiplier": None,
         "ps_lasso_alpha_controls": None,
         "ps_lasso_alpha_instruments": None,
@@ -237,6 +280,8 @@ def result_diagnostics(result: EstimationResult, alphas: np.ndarray) -> dict[str
     diagnostics["alpha_grid_size"] = _diagnostic_value(
         result, "alpha_grid_size", diagnostics["alpha_grid_size"]
     )
+    if result.grid_strategy == "adaptive":
+        diagnostics["alpha_grid_step"] = np.nan
     diagnostics["failed_alpha_count"] = _diagnostic_value(
         result, "failed_alpha_count", diagnostics["failed_alpha_count"]
     )
@@ -283,6 +328,7 @@ def build_simulation_result_row(
         "tau": design.tau,
         "rep": design.rep,
         "seed": design.seed,
+        "result_schema_version": RESULT_SCHEMA_VERSION,
         "estimator": result.estimator,
         "alpha_hat": result.alpha_hat,
         "alpha_true": result.alpha_true,
@@ -303,6 +349,11 @@ def build_simulation_result_row(
         "cr_lower": diagnostics["cr_lower"],
         "cr_upper": diagnostics["cr_upper"],
         "cr_length": diagnostics["cr_length"],
+        "cr_components": (
+            None
+            if result.cr_components is None
+            else serialize_cr_components(result.cr_components)
+        ),
         "cr_empty": diagnostics["cr_empty"],
         "cr_covers_true": result.cr_covers_true,
         "cr_hits_lower_boundary": diagnostics["cr_hits_lower_boundary"],
@@ -313,6 +364,39 @@ def build_simulation_result_row(
         "cr_n_blocks": diagnostics["cr_n_blocks"],
         "cr_disconnected": diagnostics["cr_disconnected"],
         "cr_hull_length": diagnostics["cr_hull_length"],
+        "hard_failure_policy": result.hard_failure_policy,
+        "cr_status": result.cr_status,
+        "cr_is_numerically_resolved": result.cr_is_numerically_resolved,
+        "cr_unresolved_count": result.cr_unresolved_count,
+        "cr_unresolved_alphas": result.cr_unresolved_alphas,
+        "coverage_status": result.coverage_status,
+        "point_estimate_status": result.point_estimate_status,
+        "usable_alpha_evaluations": result.usable_alpha_evaluations,
+        "unresolved_alpha_evaluations": result.unresolved_alpha_evaluations,
+        "grid_strategy": result.grid_strategy,
+        "adaptive_midpoint_probe": result.adaptive_midpoint_probe,
+        "alpha_hat_grid": result.alpha_hat_grid,
+        "midpoint_intervals_considered": result.midpoint_intervals_considered,
+        "midpoint_evaluations_added": result.midpoint_evaluations_added,
+        "midpoint_unresolved_barriers": result.midpoint_unresolved_barriers,
+        "midpoint_probe_limit_hit": result.midpoint_probe_limit_hit,
+        "initial_alpha_grid_size": result.initial_alpha_grid_size,
+        "final_alpha_evaluations": result.final_alpha_evaluations,
+        "refinement_tolerance": result.refinement_tolerance,
+        "refinement_depth_reached": result.refinement_depth_reached,
+        "refinement_limit_hit": result.refinement_limit_hit,
+        "max_alpha_evaluations_hit": result.max_alpha_evaluations_hit,
+        "number_of_refined_intervals": result.number_of_refined_intervals,
+        "number_of_unresolved_refinement_barriers": (
+            result.number_of_unresolved_refinement_barriers
+        ),
+        "minimum_final_grid_spacing": result.minimum_final_grid_spacing,
+        "median_final_grid_spacing": result.median_final_grid_spacing,
+        "maximum_final_grid_spacing": result.maximum_final_grid_spacing,
+        "iteration_warning_evaluations": result.iteration_warning_evaluations,
+        "rank_deficient_covariance_failures": (
+            result.rank_deficient_covariance_failures
+        ),
         "alpha_grid_min": diagnostics["alpha_grid_min"],
         "alpha_grid_max": diagnostics["alpha_grid_max"],
         "alpha_grid_size": diagnostics["alpha_grid_size"],
@@ -361,6 +445,7 @@ def build_failure_result_row(
     diagnostics["failed_alpha_rate"] = np.nan
     if critical_value_multiplier is not None:
         diagnostics["critical_value_multiplier"] = float(critical_value_multiplier)
+    is_ch_estimator = estimator in {"oracle", "post_selection_ivqr"}
     result = EstimationResult(
         estimator=estimator,
         alpha_hat=None,
@@ -378,10 +463,12 @@ def build_failure_result_row(
         cr_length=None,
         cr_covers_true=None,
         cr_empty=True,
-        cr_disconnected=None,
+        cr_disconnected=False if is_ch_estimator else None,
         selected_controls=None,
         runtime_seconds=float("nan"),
         error_type=type(exc).__name__,
+        cr_components=() if is_ch_estimator else None,
+        cr_n_blocks=0 if is_ch_estimator else None,
     )
     row = build_simulation_result_row(design, result, alphas)
     row["error_message"] = str(exc)[:max_error_message_length]
@@ -408,6 +495,7 @@ def _diagnostic_value(
 
 __all__ = [
     "MAX_ERROR_MESSAGE_LENGTH",
+    "RESULT_SCHEMA_VERSION",
     "RESULT_COLUMNS",
     "build_failure_result_row",
     "build_simulation_result_row",

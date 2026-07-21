@@ -5,6 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from simulation.dml_output import (
+    CR_GEOMETRY_COLUMNS,
+    GRID_METADATA_COLUMNS,
+    validate_component_columns,
+    with_neutral_grid_metadata,
+)
+
 
 REQUIRED_POST_SELECTION_COLUMNS: tuple[str, ...] = (
     "dgp",
@@ -14,6 +21,7 @@ REQUIRED_POST_SELECTION_COLUMNS: tuple[str, ...] = (
     "tau",
     "rep",
     "seed",
+    "result_schema_version",
     "estimator",
     "alpha_hat",
     "alpha_true",
@@ -22,8 +30,17 @@ REQUIRED_POST_SELECTION_COLUMNS: tuple[str, ...] = (
     "cr_length",
     "covered",
     "converged",
+    *CR_GEOMETRY_COLUMNS,
+    *GRID_METADATA_COLUMNS,
     "n_selected_controls",
     "selection_lasso_multiplier",
+    "selection_method",
+    "selection_target_y",
+    "selection_target_d",
+    "selection_quantile_specific",
+    "instrument_selection_method",
+    "post_selection_inference_adjustment",
+    "n_retained_instruments",
 )
 
 POST_SELECTION_IDENTIFIER_COLUMNS: tuple[str, ...] = (
@@ -40,8 +57,22 @@ _SOURCE_COLUMNS = {
     "covered": "cr_covers_true",
     "n_selected_controls": "ps_n_selected_controls",
     "selection_lasso_multiplier": "ps_selection_lasso_multiplier",
+    "selection_method": "ps_selection_method",
+    "selection_target_y": "ps_selection_target_y",
+    "selection_target_d": "ps_selection_target_d",
+    "selection_quantile_specific": "ps_selection_quantile_specific",
+    "instrument_selection_method": "ps_instrument_selection_method",
+    "post_selection_inference_adjustment": (
+        "ps_post_selection_inference_adjustment"
+    ),
+    "n_retained_instruments": "ps_n_retained_instruments",
 }
-_BOOLEAN_COLUMNS = ("covered", "converged")
+_BOOLEAN_COLUMNS = (
+    "covered",
+    "converged",
+    "cr_disconnected",
+    "selection_quantile_specific",
+)
 
 
 def _as_boolean(series: pd.Series, column: str) -> pd.Series:
@@ -118,6 +149,7 @@ def _validate_confidence_regions(frame: pd.DataFrame) -> None:
     empty = missing.all(axis=1)
     if (empty & actual).any():
         raise ValueError("an empty confidence region cannot have covered=True")
+    validate_component_columns(frame)
 
 
 def _validate_selection_variables(frame: pd.DataFrame) -> None:
@@ -188,6 +220,19 @@ def clean_post_selection_results_frame(
     if source.columns.duplicated().any():
         duplicates = sorted(set(source.columns[source.columns.duplicated()].astype(str)))
         raise ValueError(f"source has duplicate columns: {duplicates}")
+    source = with_neutral_grid_metadata(source)
+    legacy_defaults: dict[str, object] = {
+        "ps_selection_method": "unavailable",
+        "ps_selection_target_y": "unavailable",
+        "ps_selection_target_d": "unavailable",
+        "ps_selection_quantile_specific": np.nan,
+        "ps_instrument_selection_method": "unavailable",
+        "ps_post_selection_inference_adjustment": "unavailable",
+        "ps_n_retained_instruments": np.nan,
+    }
+    for column, default in legacy_defaults.items():
+        if column not in source:
+            source[column] = default
     _validate_selection_count_agreement(source)
 
     source_columns = {

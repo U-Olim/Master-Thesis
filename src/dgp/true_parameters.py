@@ -88,6 +88,14 @@ def get_oracle_control_indices(
     return np.asarray(active, dtype=int)
 
 
+def true_active_control_indices(dgp_name: str, p: int) -> np.ndarray:
+    """Return the exact DGP-declared active control support without tolerance."""
+    required = _active_control_count(dgp_name)
+    if p < required:
+        raise ValueError(f"{dgp_name} requires p >= {required}; received p={p}.")
+    return np.arange(required, dtype=int)
+
+
 def get_oracle_control_count(dgp_name: str, p: int) -> int:
     """Return the number of simulation-only oracle controls."""
     return int(get_oracle_control_indices(dgp_name, p).size)

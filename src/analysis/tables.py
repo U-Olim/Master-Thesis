@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from analysis.data import require_unique_selection_lasso_multiplier
+from ivqr.confidence_regions import format_cr_components, parse_cr_components
 
 
 ESTIMATOR_NAMES = {
@@ -23,11 +24,24 @@ PERFORMANCE_COLUMNS = [
     "rmse",
     "estimate_sd",
     "coverage",
+    "coverage_conditional_on_resolved",
+    "n_coverage_resolved",
+    "n_coverage_unresolved",
+    "coverage_unresolved_rate",
+    "estimator_failure_rate",
     "average_cr_length",
     "median_cr_length",
     "valid_rate",
     "n_results",
 ]
+
+
+def format_confidence_region_components(value: object, *, precision: int = 3) -> str | None:
+    """Format serialized CR components; keep unavailable legacy rows distinct."""
+    components = parse_cr_components(value)
+    if components is None:
+        return None
+    return format_cr_components(components, precision=precision)
 
 
 def summarize_performance(
@@ -37,7 +51,8 @@ def summarize_performance(
 
     Point metrics use converged rows with finite estimates and truths. Coverage
     and length metrics use converged rows with complete, valid confidence-region
-    output, so failed replications remain visible without counting as noncoverage.
+    output. ``coverage`` is retained as a compatibility alias for coverage
+    conditional on explicitly resolved rows; unresolved coverage is separate.
     """
     required = {
         *group_by,
@@ -77,6 +92,13 @@ def summarize_performance(
         complete_cr = np.isfinite(lower) & np.isfinite(upper) & np.isfinite(lengths)
         hull_length = upper - lower
         covered = group["covered"]
+        if "coverage_status" in group:
+            coverage_status = group["coverage_status"].astype(str)
+            coverage_resolved = coverage_status.isin(["covered", "not_covered"])
+            coverage_unresolved = coverage_status.eq("coverage_unresolved")
+        else:
+            coverage_resolved = pd.Series(False, index=group.index)
+            coverage_unresolved = pd.Series(False, index=group.index)
         covered_true = covered.eq(True).to_numpy(dtype=bool)
         coverage_consistent = ~covered_true | (
             (all_truth >= lower) & (all_truth <= upper)
@@ -84,7 +106,7 @@ def summarize_performance(
         valid_cr = (
             converged
             & np.isfinite(all_truth)
-            & covered.notna().to_numpy(dtype=bool)
+            & coverage_resolved.to_numpy(dtype=bool)
             & complete_cr
             & (lower <= upper)
             & (lengths >= -1e-10)
@@ -119,6 +141,22 @@ def summarize_performance(
                 float(np.mean(coverage_values))
                 if coverage_values.size
                 else float("nan")
+            ),
+            coverage_conditional_on_resolved=(
+                float(np.mean(coverage_values))
+                if coverage_values.size
+                else float("nan")
+            ),
+            n_coverage_resolved=int(coverage_resolved.sum()),
+            n_coverage_unresolved=int(coverage_unresolved.sum()),
+            coverage_unresolved_rate=float(coverage_unresolved.sum() / len(group)),
+            estimator_failure_rate=float(
+                (
+                    group["failed"].fillna(False).astype(bool).sum()
+                    if "failed" in group
+                    else (~group["converged"].eq(True)).sum()
+                )
+                / len(group)
             ),
             average_cr_length=(
                 float(np.mean(valid_lengths))

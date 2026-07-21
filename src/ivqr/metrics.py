@@ -154,18 +154,26 @@ def mae(df: pd.DataFrame) -> float:
 
 
 def coverage(df: pd.DataFrame) -> float:
-    """Return coverage over successful rows, counting missing values as false."""
-    successful = _successful_rows(df)
-    if successful.empty:
-        return float(np.nan)
-    values = _to_bool(successful[_coverage_column(successful)]).fillna(False)
-    return float(values.astype(float).mean())
+    """Return coverage conditional on explicitly resolved successful rows."""
+    return coverage_valid_only(df)
 
 
 def coverage_valid_only(df: pd.DataFrame) -> float:
     """Return coverage over successful rows with nonmissing coverage values."""
     successful = _successful_rows(df)
+    if "coverage_status" in successful.columns:
+        successful = successful.loc[
+            successful["coverage_status"].isin(["covered", "not_covered"])
+        ]
     return _mean_bool(successful[_coverage_column(successful)])
+
+
+def coverage_unresolved_rate(df: pd.DataFrame) -> float:
+    """Return unresolved-coverage rows as a share of all replications."""
+    validate_metric_input(df)
+    if "coverage_status" not in df.columns or df.empty:
+        return float(np.nan)
+    return float(df["coverage_status"].eq("coverage_unresolved").mean())
 
 
 def average_cr_length_valid_only(df: pd.DataFrame) -> float:
@@ -426,6 +434,8 @@ def summarize_group(df: pd.DataFrame) -> dict[str, float | int]:
         "mae": mae(df),
         "coverage": coverage(df),
         "coverage_valid_only": coverage_valid_only(df),
+        "coverage_conditional_on_resolved": coverage_valid_only(df),
+        "coverage_unresolved_rate": coverage_unresolved_rate(df),
         "avg_cr_length": average_cr_length_all(df),
         "avg_cr_length_valid_only": average_cr_length_valid_only(df),
         "avg_cr_hull_length": average_cr_hull_length(df),

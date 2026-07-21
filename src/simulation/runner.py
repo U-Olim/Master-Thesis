@@ -17,13 +17,22 @@ from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 from dgp.designs import Design
 from dgp.generators import generate_data
-from dgp.true_parameters import get_oracle_control_indices, true_alpha
+from dgp.true_parameters import (
+    true_active_control_indices,
+    true_alpha,
+)
 from estimators.base import EstimationResult
 from estimators.dml import QuantileSolver, estimate_dml_ivqr
 from estimators.oracle import estimate_oracle_ivqr
 from estimators.post_selection import (
     estimate_post_selection_ivqr,
     validate_selection_lasso_multiplier,
+)
+from ivqr.ch_inverse import (
+    validate_grid_strategy,
+    validate_hard_failure_policy,
+    validate_iteration_warning_policy,
+    validate_alpha_hat_grid,
 )
 from simulation.config import (
     DEFAULT_ALPHA_GRID_SIZE,
@@ -37,6 +46,14 @@ from simulation.config import (
     DEFAULT_DML_RIDGE_ALPHA,
     DEFAULT_ESTIMATORS,
     DEFAULT_N_JOBS,
+    DEFAULT_GRID_STRATEGY,
+    DEFAULT_REFINEMENT_TOLERANCE,
+    DEFAULT_MAX_REFINEMENT_DEPTH,
+    DEFAULT_MAX_ALPHA_EVALUATIONS,
+    DEFAULT_ITERATION_WARNING_POLICY,
+    DEFAULT_HARD_FAILURE_POLICY,
+    DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    DEFAULT_ALPHA_HAT_GRID,
     DEFAULT_QUANTREG_MAX_ITER,
     DGPS,
     ESTIMATORS,
@@ -46,6 +63,7 @@ from simulation.post_selection_output import clean_post_selection_results_frame
 from simulation.results import (
     MAX_ERROR_MESSAGE_LENGTH,
     RESULT_COLUMNS,
+    RESULT_SCHEMA_VERSION,
     build_failure_result_row,
     build_simulation_result_row,
 )
@@ -97,6 +115,7 @@ __all__ = [
     "run_simulation_design",
     "run_single_replication",
     "run_small_simulation",
+    "validate_oracle_support",
     "SEED_RULE_TEXT",
 ]
 
@@ -115,6 +134,14 @@ class WorkerArgs:
     critical_value_multiplier: float
     selection_lasso_multiplier: float
     show_quantreg_warnings: bool
+    grid_strategy: str
+    refinement_tolerance: float
+    max_refinement_depth: int
+    max_alpha_evaluations: int
+    iteration_warning_policy: str
+    hard_failure_policy: str
+    adaptive_midpoint_probe: bool
+    alpha_hat_grid: str
 
 
 @contextmanager
@@ -409,6 +436,28 @@ def _estimator_random_state(design_seed: int) -> int:
     return int(design_seed % (2**32 - 1))
 
 
+def validate_oracle_support(design: Design, supplied_indices: np.ndarray) -> np.ndarray:
+    """Verify supplied Oracle controls equal the exact DGP truth support."""
+    supplied = np.asarray(supplied_indices)
+    design_id = (
+        f"dgp={design.dgp}, n={design.n}, p={design.p}, pi={design.pi}, "
+        f"tau={design.tau}, rep={design.rep}, seed={design.seed}"
+    )
+    if supplied.ndim != 1 or not np.issubdtype(supplied.dtype, np.integer):
+        raise ValueError(f"Oracle support must be a one-dimensional integer vector; {design_id}")
+    supplied = supplied.astype(int, copy=False)
+    if np.unique(supplied).size != supplied.size:
+        raise ValueError(f"Oracle support contains duplicate indices; {design_id}")
+    expected = true_active_control_indices(design.dgp, design.p)
+    supplied_sorted = np.sort(supplied)
+    if not np.array_equal(supplied_sorted, expected):
+        raise ValueError(
+            f"Oracle support mismatch; {design_id}; expected={expected.tolist()}, "
+            f"supplied={supplied_sorted.tolist()}"
+        )
+    return supplied_sorted
+
+
 def _validate_dml_quantile_solver(solver: str) -> QuantileSolver:
     """Validate and narrow a runner-level solver string."""
     if solver not in get_args(QuantileSolver):
@@ -429,6 +478,14 @@ def run_simulation_design(
     critical_value_multiplier: float = DEFAULT_CRITICAL_VALUE_MULTIPLIER,
     selection_lasso_multiplier: float = 1.0,
     show_quantreg_warnings: bool = False,
+    grid_strategy: str = DEFAULT_GRID_STRATEGY,
+    refinement_tolerance: float = DEFAULT_REFINEMENT_TOLERANCE,
+    max_refinement_depth: int = DEFAULT_MAX_REFINEMENT_DEPTH,
+    max_alpha_evaluations: int = DEFAULT_MAX_ALPHA_EVALUATIONS,
+    iteration_warning_policy: str = DEFAULT_ITERATION_WARNING_POLICY,
+    hard_failure_policy: str = DEFAULT_HARD_FAILURE_POLICY,
+    adaptive_midpoint_probe: bool = DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    alpha_hat_grid: str = DEFAULT_ALPHA_HAT_GRID,
 ) -> list[dict[str, object]]:
     """Generate one dataset and run requested estimators on it."""
     design = _validate_design(design)
@@ -450,6 +507,12 @@ def run_simulation_design(
         selection_lasso_multiplier
     )
     alphas = validate_alpha_grid(alphas)
+    grid_strategy = validate_grid_strategy(grid_strategy)
+    iteration_warning_policy = validate_iteration_warning_policy(
+        iteration_warning_policy
+    )
+    hard_failure_policy = validate_hard_failure_policy(hard_failure_policy)
+    alpha_hat_grid = validate_alpha_hat_grid(alpha_hat_grid)
 
     data = generate_data(design)
     estimator_random_state = _estimator_random_state(design.seed)
@@ -458,14 +521,26 @@ def run_simulation_design(
         try:
             with quantreg_iteration_warning_filter(show_quantreg_warnings):
                 if estimator_name == "oracle":
+                    oracle_indices = validate_oracle_support(
+                        design,
+                        true_active_control_indices(design.dgp, design.p),
+                    )
                     result = estimate_oracle_ivqr(
                         data,
                         tau=design.tau,
                         alphas=alphas,
-                        oracle_indices=get_oracle_control_indices(design.dgp, design.p),
+                        oracle_indices=oracle_indices,
                         max_iter=quantreg_max_iter,
                         gmm_ridge=gmm_ridge,
                         critical_value_multiplier=critical_value_multiplier,
+                        grid_strategy=grid_strategy,
+                        refinement_tolerance=refinement_tolerance,
+                        max_refinement_depth=max_refinement_depth,
+                        max_alpha_evaluations=max_alpha_evaluations,
+                        iteration_warning_policy=iteration_warning_policy,
+                        hard_failure_policy=hard_failure_policy,
+                        adaptive_midpoint_probe=adaptive_midpoint_probe,
+                        alpha_hat_grid=alpha_hat_grid,
                     )
                 elif estimator_name == "post_selection":
                     result = estimate_post_selection_ivqr(
@@ -478,6 +553,14 @@ def run_simulation_design(
                         selection_random_state=estimator_random_state,
                         selection_lasso_multiplier=selection_lasso_multiplier,
                         critical_value_multiplier=critical_value_multiplier,
+                        grid_strategy=grid_strategy,
+                        refinement_tolerance=refinement_tolerance,
+                        max_refinement_depth=max_refinement_depth,
+                        max_alpha_evaluations=max_alpha_evaluations,
+                        iteration_warning_policy=iteration_warning_policy,
+                        hard_failure_policy=hard_failure_policy,
+                        adaptive_midpoint_probe=adaptive_midpoint_probe,
+                        alpha_hat_grid=alpha_hat_grid,
                     )
                 elif estimator_name == "dml":
                     quantile_solver = _validate_dml_quantile_solver(
@@ -530,6 +613,14 @@ def _run_worker(args: WorkerArgs) -> list[dict[str, object]]:
         critical_value_multiplier=args.critical_value_multiplier,
         selection_lasso_multiplier=args.selection_lasso_multiplier,
         show_quantreg_warnings=args.show_quantreg_warnings,
+        grid_strategy=args.grid_strategy,
+        refinement_tolerance=args.refinement_tolerance,
+        max_refinement_depth=args.max_refinement_depth,
+        max_alpha_evaluations=args.max_alpha_evaluations,
+        iteration_warning_policy=args.iteration_warning_policy,
+        hard_failure_policy=args.hard_failure_policy,
+        adaptive_midpoint_probe=args.adaptive_midpoint_probe,
+        alpha_hat_grid=args.alpha_hat_grid,
     )
 
 
@@ -553,6 +644,14 @@ def run_simulation_batch(
     selection_lasso_multiplier: float = 1.0,
     n_jobs: int = DEFAULT_N_JOBS,
     show_quantreg_warnings: bool = False,
+    grid_strategy: str = DEFAULT_GRID_STRATEGY,
+    refinement_tolerance: float = DEFAULT_REFINEMENT_TOLERANCE,
+    max_refinement_depth: int = DEFAULT_MAX_REFINEMENT_DEPTH,
+    max_alpha_evaluations: int = DEFAULT_MAX_ALPHA_EVALUATIONS,
+    iteration_warning_policy: str = DEFAULT_ITERATION_WARNING_POLICY,
+    hard_failure_policy: str = DEFAULT_HARD_FAILURE_POLICY,
+    adaptive_midpoint_probe: bool = DEFAULT_ADAPTIVE_MIDPOINT_PROBE,
+    alpha_hat_grid: str = DEFAULT_ALPHA_HAT_GRID,
 ) -> pd.DataFrame:
     """Run a batch of designs and optionally persist the raw rows to CSV."""
     designs = [_validate_design(design) for design in designs]
@@ -582,6 +681,14 @@ def run_simulation_batch(
             critical_value_multiplier=critical_value_multiplier,
             selection_lasso_multiplier=selection_lasso_multiplier,
             show_quantreg_warnings=show_quantreg_warnings,
+            grid_strategy=grid_strategy,
+            refinement_tolerance=refinement_tolerance,
+            max_refinement_depth=max_refinement_depth,
+            max_alpha_evaluations=max_alpha_evaluations,
+            iteration_warning_policy=iteration_warning_policy,
+            hard_failure_policy=hard_failure_policy,
+            adaptive_midpoint_probe=adaptive_midpoint_probe,
+            alpha_hat_grid=alpha_hat_grid,
         )
         for design in designs
     ]
@@ -608,12 +715,30 @@ def run_simulation_batch(
         if path.exists() and path.is_dir():
             raise ValueError("output_path must be a file path")
         if append and path.exists() and path.stat().st_size > 0:
-            existing_columns = tuple(pd.read_csv(path, nrows=0).columns)
+            existing_header = pd.read_csv(path, nrows=0)
+            existing_columns = tuple(existing_header.columns)
+            if "result_schema_version" not in existing_columns:
+                raise ValueError(
+                    "cannot append results with a different schema: existing file "
+                    "is legacy/unversioned"
+                )
             if existing_columns != tuple(results.columns):
                 raise ValueError(
                     "cannot append results with a different schema: "
                     f"existing file has {len(existing_columns)} columns, "
                     f"new rows have {len(results.columns)}"
+                )
+            existing_versions = pd.read_csv(
+                path, usecols=["result_schema_version"]
+            )["result_schema_version"].dropna().unique()
+            if (
+                len(existing_versions) != 1
+                or int(existing_versions[0]) != RESULT_SCHEMA_VERSION
+            ):
+                raise ValueError(
+                    "cannot append results with an incompatible result schema "
+                    f"version; expected {RESULT_SCHEMA_VERSION}, observed "
+                    f"{existing_versions.tolist()}"
                 )
         path.parent.mkdir(parents=True, exist_ok=True)
         results.to_csv(

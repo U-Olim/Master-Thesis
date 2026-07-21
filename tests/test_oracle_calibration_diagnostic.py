@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 import sys
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -53,9 +54,36 @@ def test_summary_uses_successful_replications_and_scipy_critical_value() -> None
     assert summary["rejection_rate"] == pytest.approx(0.5)
     assert summary["implied_coverage"] == pytest.approx(0.5)
     assert summary["mean_wald"] == pytest.approx(3.0)
+    assert summary["valid_coverage_denominator"] == 2
+    assert summary["covered_count"] == 1
+    assert summary["not_covered_count"] == 1
+    assert summary["coverage_unresolved_count"] == 1
+    assert summary["conditional_coverage_resolved"] == pytest.approx(0.5)
     assert summary["theoretical_chi2_q95"] == pytest.approx(
         diagnostic.chi2.ppf(0.95, df=1)
     )
+
+
+def test_summary_object_rejections_emit_no_future_warning() -> None:
+    frame = pd.DataFrame(
+        {
+            "dgp": ["dgp1"] * 3,
+            "n": [100] * 3,
+            "p": [20] * 3,
+            "pi": [1.0] * 3,
+            "tau": [0.5] * 3,
+            "covariance_variant": ["robust_epa_hsheather"] * 3,
+            "converged": [True, True, False],
+            "wald": [1.0, 5.0, np.nan],
+            "rejected": pd.Series([False, True, np.nan], dtype=object),
+        }
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        summary = diagnostic.summarize_replications(frame).iloc[0]
+    assert summary["covered_count"] == 1
+    assert summary["not_covered_count"] == 1
+    assert summary["coverage_unresolved_count"] == 1
 
 
 def test_raw_results_output_is_rejected() -> None:

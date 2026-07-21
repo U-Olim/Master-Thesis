@@ -67,12 +67,22 @@ def test_boundary_interpolation_matches_linear_crossing() -> None:
 
 
 def test_adaptive_refinement_stops_at_requested_transition_spacing() -> None:
-    def statistic(alpha: float) -> float:
-        return alpha
+    def evaluation(alpha: float):
+        return diagnostic.AlphaEvaluation(
+            statistic=alpha,
+            gamma_hat=np.array([0.0]),
+            cov_gamma=np.array([[1.0]]),
+            dim_z=1,
+            converged=True,
+            usable=True,
+            warning_type=None,
+            failure_reason=None,
+            message="ok",
+        )
 
     grid = diagnostic.adaptive_refinement_grid(
         np.array([0.0, 0.2]),
-        statistic,
+        evaluation,
         critical_value=0.07,
         max_spacing=0.025,
     )
@@ -104,3 +114,36 @@ def test_exact_grid_point_coverage_consistency() -> None:
     )
     assert exact is True
     assert mismatch is True
+
+
+def test_grid_diagnostic_keeps_failed_alpha_unresolved() -> None:
+    evaluations = _cached_evaluations(
+        np.array([0.0, 1.0, 2.0]), np.array([1.0, np.inf, 5.0])
+    )
+    failed, runtime = evaluations[1.0]
+    evaluations[1.0] = (
+        diagnostic.AlphaEvaluation(
+            statistic=np.inf,
+            gamma_hat=failed.gamma_hat,
+            cov_gamma=failed.cov_gamma,
+            dim_z=1,
+            converged=False,
+            usable=False,
+            warning_type=None,
+            failure_reason="numerical_failure",
+            message="numerical_failure",
+        ),
+        runtime,
+    )
+    result = diagnostic._evaluate_grid(
+        grid_variant="test",
+        alphas=np.array([0.0, 1.0, 2.0]),
+        cached_evaluations=evaluations,
+        alpha_true=1.0,
+        direct_accepted=None,
+    )
+    assert result["cr_status"] == "partially_unresolved"
+    assert result["coverage_status"] == "coverage_unresolved"
+    assert result["covered"] is np.nan or np.isnan(result["covered"])
+    assert result["unresolved_alpha_evaluations"] == 1
+    assert result["cr_components"] == "[[0.0,0.0]]"
