@@ -1,0 +1,13 @@
+{
+  "acceptable with caveats": "neither concerning nor fully strong",
+  "concerning": "overall coverage gap <= -0.02, severe-undercoverage share >= 0.05, unresolved rate > 0.01, or empty-CR rate > 0.01",
+  "diagnostic_confidence": {
+    "high": "CR status, numerical resolution, components, blocks, and warnings stored",
+    "limited": "one or more rich CR diagnostic families absent"
+  },
+  "insufficiently diagnosable": "coverage itself or the fields needed to apply performance rules are unavailable",
+  "no_composite_score": true,
+  "nominal_coverage": 0.95,
+  "severe_scenario": "coverage gap <= -0.10",
+  "strong": "absolute overall coverage gap <= 0.01; overall Wilson interval includes 0.95; zero severe scenarios; unresolved and empty rates <= 0.001; relative RMSE <= 1.15; relative mean CR length <= 1.20; and rich CR diagnostics"
+}

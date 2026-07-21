@@ -1,0 +1,4 @@
+estimator,classification,diagnostic_confidence,conditional_coverage,coverage_denominator,overall_wilson95_lower,overall_wilson95_upper,wilson_includes_nominal,machine_readable_reasons
+dml,acceptable with caveats,limited,0.9489834207,71957,0.9473516179,0.9505672858,True,"[""failed: relative RMSE <= 1.15"",""failed: relative CR length <= 1.20"",""failed: rich diagnostic schema""]"
+oracle,acceptable with caveats,high,0.9421145485,71987,0.9403848913,0.9437970211,False,"[""failed: Wilson interval includes 0.95""]"
+post_selection,concerning,high,0.9246772378,71957,0.9227261708,0.9265829624,False,"[""overall coverage gap -0.0253 <= -0.02""]"

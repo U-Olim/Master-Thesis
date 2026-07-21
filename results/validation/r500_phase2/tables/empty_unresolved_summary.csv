@@ -1,0 +1,5 @@
+estimator_name,exception_type,cause_classification,count
+dml,missing_legacy_geometry,missing_legacy_geometry,43
+oracle,empty_cr,complete_rejection_across_evaluated_grid,13
+post_selection,empty_cr,complete_rejection_across_evaluated_grid,41
+post_selection,unresolved_cr,numerical_non_resolution,2

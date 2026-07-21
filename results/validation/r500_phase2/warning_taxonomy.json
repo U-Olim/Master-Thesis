@@ -1,0 +1,76 @@
+{
+  "availability": {
+    "oracle": {
+      "available_categories": [
+        "iteration_warning",
+        "rank_deficient_covariance",
+        "midpoint_unresolved_barrier",
+        "refinement_unresolved_barrier",
+        "midpoint_probe_limit",
+        "refinement_limit",
+        "maximum_alpha_evaluations"
+      ],
+      "counting_rule": "A row belongs to every category whose stored Boolean is true or stored count is positive. warning_count counts affected rows; warning_event_count sums stored counts, so categories may overlap.",
+      "textual_warning_reason_available": false,
+      "unavailable_categories": []
+    },
+    "post_selection": {
+      "available_categories": [
+        "iteration_warning",
+        "rank_deficient_covariance",
+        "midpoint_unresolved_barrier",
+        "refinement_unresolved_barrier",
+        "midpoint_probe_limit",
+        "refinement_limit",
+        "maximum_alpha_evaluations"
+      ],
+      "counting_rule": "A row belongs to every category whose stored Boolean is true or stored count is positive. warning_count counts affected rows; warning_event_count sums stored counts, so categories may overlap.",
+      "textual_warning_reason_available": false,
+      "unavailable_categories": []
+    }
+  },
+  "classification_rules": {
+    "clearly benign": "Affected rows have no empty/unresolved result and do not meet the adverse coverage or semantic-hazard rules.",
+    "consequential": "At least one affected row is numerically unresolved.",
+    "potentially consequential": "At least one affected row is empty; the category is a stored numerical barrier/limit/failure; or affected valid coverage is >0.01 below unaffected.",
+    "unknown from stored information": "No affected rows or no stored category."
+  },
+  "definitions": {
+    "iteration_warning": {
+      "column": "iteration_warning_evaluations",
+      "description": "One or more stored alpha-evaluation iteration warnings.",
+      "kind": "count"
+    },
+    "maximum_alpha_evaluations": {
+      "column": "max_alpha_evaluations_hit",
+      "description": "The stored maximum-alpha-evaluations indicator is true.",
+      "kind": "boolean"
+    },
+    "midpoint_probe_limit": {
+      "column": "midpoint_probe_limit_hit",
+      "description": "The stored midpoint-probe limit indicator is true.",
+      "kind": "boolean"
+    },
+    "midpoint_unresolved_barrier": {
+      "column": "midpoint_unresolved_barriers",
+      "description": "One or more stored unresolved midpoint barriers.",
+      "kind": "count"
+    },
+    "rank_deficient_covariance": {
+      "column": "rank_deficient_covariance_failures",
+      "description": "One or more stored rank-deficient covariance failures.",
+      "kind": "count"
+    },
+    "refinement_limit": {
+      "column": "refinement_limit_hit",
+      "description": "The stored refinement-depth limit indicator is true.",
+      "kind": "boolean"
+    },
+    "refinement_unresolved_barrier": {
+      "column": "number_of_unresolved_refinement_barriers",
+      "description": "One or more stored unresolved refinement barriers.",
+      "kind": "count"
+    }
+  },
+  "limitation": "No textual warning reason is stored. Categories describe counters/flags, not the underlying solver message or causal mechanism."
+}

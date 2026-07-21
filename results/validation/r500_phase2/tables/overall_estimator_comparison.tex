@@ -1,0 +1,9 @@
+\begin{tabular}{llllllllllll}
+\hline
+estimator & observations & conditional\_coverage & coverage\_denominator & bias & rmse & mean\_cr\_length & unresolved\_rows & empty\_valid\_rate & classification & diagnostic\_confidence & machine\_readable\_reasons \\
+\hline
+dml & 72000 & 0.9490 & 71957 & 0.0093 & 0.9870 & 2.9591 &  &  & acceptable with caveats & limited & ["failed: relative RMSE <= 1.15","failed: relative CR length <= 1.20","failed: rich diagnostic schema"] \\
+oracle & 72000 & 0.9421 & 71987 & -0.0067 & 0.8357 & 2.4069 & 0.0000 & 0.0002 & acceptable with caveats & high & ["failed: Wilson interval includes 0.95"] \\
+post\_selection & 72000 & 0.9247 & 71957 & -0.0566 & 0.8592 & 2.3813 & 2.0000 & 0.0006 & concerning & high & ["overall coverage gap -0.0253 <= -0.02"] \\
+\hline
+\end{tabular}

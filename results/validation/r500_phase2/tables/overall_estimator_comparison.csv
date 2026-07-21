@@ -1,0 +1,4 @@
+estimator,observations,conditional_coverage,coverage_denominator,bias,rmse,mean_cr_length,unresolved_rows,empty_valid_rate,classification,diagnostic_confidence,machine_readable_reasons
+dml,72000,0.9489834207,71957,0.0093,0.9869705597,2.959140588,,,acceptable with caveats,limited,"[""failed: relative RMSE <= 1.15"",""failed: relative CR length <= 1.20"",""failed: rich diagnostic schema""]"
+oracle,72000,0.9421145485,71987,-0.006741666667,0.835711091,2.40693558,0,0.0001805555556,acceptable with caveats,high,"[""failed: Wilson interval includes 0.95""]"
+post_selection,72000,0.9246772378,71957,-0.05664444444,0.8592278001,2.381302055,2,0.0005694444444,concerning,high,"[""overall coverage gap -0.0253 <= -0.02""]"

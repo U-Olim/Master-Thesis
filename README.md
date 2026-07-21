@@ -457,6 +457,23 @@ written only to `results/validation/r500_audit/`. The historical Post-selection
 results are analyzed with their recorded `selection_lasso_multiplier = 1.0`;
 the current future-run value 1.8 is not applied or inferred retroactively.
 
+Phase 2 adds deeper scientific diagnostics without replacing Phase 1:
+
+```powershell
+pixi run audit_r500_phase2
+```
+
+Phase 1 establishes artifact integrity, design completeness, alignment, and
+baseline summaries. Phase 2 writes warning, exception, paired-comparison,
+coverage-uncertainty, and formal-classification products under
+`results/validation/r500_phase2/`, including thesis-oriented tables and
+figures. Warning categories use only stored counters and flags because textual
+warning reasons are unavailable. Empty, unresolved, and legacy missing-geometry
+rows remain distinct. Paired differences use identical natural keys and seeds
+with the orientation estimator A minus estimator B. The formal classification
+uses disclosed non-compensatory thresholds and assigns lower diagnostic
+confidence when historical fields, notably DML CR diagnostics, are absent.
+
 ## Notes
 
 The DML estimator is a DML-style residualized IVQR implementation. It uses
