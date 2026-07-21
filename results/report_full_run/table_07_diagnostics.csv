@@ -1,0 +1,11 @@
+estimator_label,cr_status_standardized,replications,resolved_replications,covered_resolved,uncovered_resolved,unresolved_replications,empirical_coverage,mean_cr_length,disconnected_region_rate,iteration_warning_rate,rank_failure_rate,refinement_limit_rate,numerical_limit_rate,mean_selected_controls,median_selected_controls,mean_retained_instruments
+DML-IVQR,full_grid_observed_status_unavailable,23825,23825,23825,0,0,1,4,,,,,,,,
+DML-IVQR,missing_status_unavailable,43,0,0,0,43,,,,,,,,,,
+DML-IVQR,observed_status_unavailable,48132,48132,44461,3671,0,0.9237305743,2.443922531,,,,,,,,
+Oracle IVQR,empty_valid,13,13,0,13,0,0,0,0,0.7692307692,0,0,0,,,
+Oracle IVQR,full_grid_valid,13948,13948,13948,0,0,1,4,0,0.7024663034,0,0,0,,,
+Oracle IVQR,valid,58039,58039,53872,4167,0,0.9282034494,2.024088485,0.1979014111,0.6995468564,0,0,0,,,
+Post-selection IVQR,empty_valid,41,41,0,41,0,0,0,0,0.9512195122,0,0,0,25.80487805,22,1
+Post-selection IVQR,full_grid_valid,13115,13115,13115,0,0,1,4,0,0.8950819672,0,0,0,19.05993138,17,1
+Post-selection IVQR,partially_unresolved,2,0,0,0,2,,,1,1,0,0,0,39,39,1
+Post-selection IVQR,valid,58842,58842,53422,5420,0,0.9078889229,2.02050752,0.2016586792,0.8993066177,0,0,0,18.90533972,17,1
