@@ -1,0 +1,20 @@
+{
+  "blocking_for_private_submission": false,
+  "blocking_for_public_release": true,
+  "citation_decision_required": true,
+  "citation_present": false,
+  "license_decision_required": true,
+  "license_present": false,
+  "recommended_next_action": "Obtain owner approval for legal terms and citation fields before public archival release.",
+  "required_owner_inputs": [
+    "license choice or explicit no-public-license decision",
+    "title",
+    "authors and approved name forms",
+    "ORCID if applicable",
+    "institution",
+    "repository URL",
+    "version",
+    "release date",
+    "preferred citation"
+  ]
+}

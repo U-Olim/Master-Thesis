@@ -1,0 +1,29 @@
+{
+  "citation_decision_required": true,
+  "classification": "ready_with_owner_decisions",
+  "cross_platform_checkout": {
+    "all_hashes_preserved": true,
+    "configuration": {
+      "core.autocrlf": true,
+      "core.eol": "native"
+    },
+    "manual_restoration_required": false,
+    "protected_files": 4,
+    "status": "pass"
+  },
+  "experimental_documents_require_owner_review": true,
+  "git_attributes": "pass",
+  "gitignore": "pass",
+  "license_decision_required": true,
+  "manual_byte_restoration_required": false,
+  "phase1_integrity": "pass",
+  "phase2_integrity": "pass",
+  "phase3_integrity": "pass",
+  "phase4_integrity": "pass",
+  "raw_integrity": "pass",
+  "recommended_tag": "thesis-r500-v1.0",
+  "scientific_code_changed": false,
+  "scientific_code_diff_paths": [],
+  "simulation_ran": false,
+  "tag_created": false
+}

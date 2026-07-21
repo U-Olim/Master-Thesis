@@ -12,6 +12,7 @@ __pycache__/
 .pytest_tmp*/
 .ruff_cache/
 .mypy_cache/
+.pyright/
 .coverage
 htmlcov/
 
@@ -31,6 +32,13 @@ results/figures/*
 *.log
 *.tmp
 .DS_Store
+Thumbs.db
+*.aux
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
 
 .venv/
 venv/

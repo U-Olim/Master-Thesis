@@ -543,6 +543,33 @@ Post-selection, and DML runners documented above. The generic
 `scenarios/run_simulation.py` path is retired and must not be used for thesis
 reproduction.
 
+## Final release hygiene
+
+The repository-level `.gitattributes` policy gives source and documentation
+files deterministic LF line endings while excluding `results/raw/*.csv` and
+`results/raw/*.json` from text conversion. PDFs and PNGs are explicitly
+binary. This protects the immutable historical inputs during Windows checkouts;
+do not normalize, re-save, or rewrite files under `results/raw/`.
+
+The canonical SHA-256 hashes are Oracle
+`44ff5b1030e1a80386e62b840be9f842c2229f43e630000cc9e52567ac84be36`,
+Post-selection
+`7c9b914a8d5cf7cc7c3b9bda3458641de4f62bdfcf1644793871555275bfedd8`,
+DML `27d3c514e7a608083647c9485e1ba4d73267cdf80753e3bae8c22a4ee4c5f803`,
+and manifest
+`bb9c0dfddc36e1d44be4749f7d1093313ce12040eab4754d5fa41ad42960b4c5`.
+Run the final non-scientific validation with:
+
+```powershell
+pixi run finalize_r500_release_hygiene
+```
+
+The Phase 5 files under `results/thesis/r500/review/` record the experimental-
+document review and release-metadata status. A license and `CITATION.cff` are
+not currently present; both require owner-approved metadata before a public
+archival release. The proposed final tag is `thesis-r500-v1.0`; it has not been
+created.
+
 ## Notes
 
 The DML estimator is a DML-style residualized IVQR implementation. It uses

@@ -1,0 +1,14 @@
+path,expected_policy,text,eol,binary,diff,merge,status,notes
+results/raw/oracle_ivqr.csv,byte_preserved,unset,unset,unspecified,unspecified,unspecified,pass,effective attributes from git check-attr
+results/raw/post_selection_ivqr.csv,byte_preserved,unset,unset,unspecified,unspecified,unspecified,pass,effective attributes from git check-attr
+results/raw/dml_ivqr.csv,byte_preserved,unset,unset,unspecified,unspecified,unspecified,pass,effective attributes from git check-attr
+results/raw/manifest.json,byte_preserved,unset,unset,unspecified,unspecified,unspecified,pass,effective attributes from git check-attr
+README.md,text_lf,set,lf,unspecified,unspecified,unspecified,pass,effective attributes from git check-attr
+scripts/build_r500_thesis_package.py,text_lf,set,lf,unspecified,unspecified,unspecified,pass,effective attributes from git check-attr
+results/validation/r500_audit/structural_validation.json,text_crlf,set,crlf,unspecified,unspecified,unspecified,pass,effective attributes from git check-attr
+results/validation/r500_phase2/coverage_uncertainty.csv,text_lf,set,lf,unspecified,unspecified,unspecified,pass,effective attributes from git check-attr
+results/thesis/r500/thesis_findings.json,text_crlf,set,crlf,unspecified,unspecified,unspecified,pass,effective attributes from git check-attr
+results/thesis/r500/figures/figure_01_overall_estimator_tradeoff.pdf,binary,unset,unspecified,set,unset,unset,pass,effective attributes from git check-attr
+results/thesis/r500/figures/figure_01_overall_estimator_tradeoff.png,binary,unset,unspecified,set,unset,unset,pass,effective attributes from git check-attr
+*.csv,not_broadly_byte_preserved,not_applicable,not_applicable,not_applicable,not_applicable,not_applicable,pass,only results/raw/*.csv may disable text handling
+*.json,not_broadly_byte_preserved,not_applicable,not_applicable,not_applicable,not_applicable,not_applicable,pass,only results/raw/*.json may disable text handling

@@ -3462,7 +3462,7 @@ packages:
 - pypi: ./
   name: master-thesis-ivqr
   version: 0.1.0
-  sha256: c90642c8c8396b6241d40e33f82601025f95c889b2f636e6c0f555c324fb6be9
+  sha256: 6118957150299ae4fe6bc487a08979b83dd3b956f07a600be594b872ebe5ef55
   requires_python: '>=3.10'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/linux-64/matplotlib-3.11.0-py312h7900ff3_0.conda

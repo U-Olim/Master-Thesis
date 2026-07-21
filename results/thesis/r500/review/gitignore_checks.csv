@@ -1,0 +1,25 @@
+check,expected,actual,status,notes
+required_pattern:__pycache__/,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:.pytest_cache/,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:*.py[cod],present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:.coverage,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:htmlcov/,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:.mypy_cache/,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:.pyright/,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:.ruff_cache/,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:.ipynb_checkpoints/,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:.DS_Store,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:Thumbs.db,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:*.aux,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:*.log,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:*.out,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:*.toc,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:*.fls,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:*.fdb_latexmk,present,present,pass,confirmed local cache or auxiliary pattern
+required_pattern:*.synctex.gz,present,present,pass,confirmed local cache or auxiliary pattern
+forbidden_broad_pattern:results/,absent,absent,pass,broad rule would hide release or provenance artifacts
+forbidden_broad_pattern:documents/,absent,absent,pass,broad rule would hide release or provenance artifacts
+forbidden_broad_pattern:*.csv,absent,absent,pass,broad rule would hide release or provenance artifacts
+forbidden_broad_pattern:*.json,absent,absent,pass,broad rule would hide release or provenance artifacts
+forbidden_broad_pattern:*.pdf,absent,absent,pass,broad rule would hide release or provenance artifacts
+protected_manifest_visible,not_ignored,not_ignored,pass,tracked immutable manifest must remain visible

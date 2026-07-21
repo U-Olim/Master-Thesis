@@ -1,0 +1,28 @@
+* text=auto
+.gitattributes text eol=lf
+.gitignore text eol=lf
+pixi.lock text eol=lf
+
+# Repository source and documentation use deterministic LF line endings.
+*.py text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.tex text eol=lf
+*.qmd text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.csv text eol=lf
+*.json text eol=lf
+
+# These established generated JSON contracts are hash-frozen with CRLF bytes.
+results/validation/r500_audit/*.json text eol=crlf
+results/validation/r500_phase2/*.json text eol=crlf
+results/thesis/r500/*.json text eol=crlf
+
+# Historical R=500 inputs are immutable, byte-frozen artifacts.
+results/raw/*.csv -text -eol
+results/raw/*.json -text -eol
+
+# Rendered documents and figures are binary.
+*.pdf binary
+*.png binary
