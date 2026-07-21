@@ -1,0 +1,16 @@
+{
+  "description": "Production seed characterization for the deterministic reference design.",
+  "git_reference": "pre-refactor-r500",
+  "comparison": "exact integer equality",
+  "design": {
+    "dgp": "dgp1",
+    "n": 100,
+    "p": 20,
+    "pi": 0.5,
+    "tau": 0.5,
+    "rep": 0,
+    "base_seed": 12345
+  },
+  "expected_seed": 8248586238594842791,
+  "rep_1_seed": 5298899951102995268
+}

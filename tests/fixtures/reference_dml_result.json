@@ -1,0 +1,49 @@
+{
+  "description": "DML scientific-result characterization on the deterministic reference design and five-point alpha grid.",
+  "git_reference": "pre-refactor-r500",
+  "comparison": "exact discrete/string equality; floating-point values use rtol=0 and atol=1e-12",
+  "design": {
+    "dgp": "dgp1",
+    "n": 100,
+    "p": 20,
+    "pi": 0.5,
+    "tau": 0.5,
+    "rep": 0,
+    "seed": 8248586238594842791
+  },
+  "alpha_grid": [-1.0, 0.0, 1.0, 2.0, 3.0],
+  "configuration": {
+    "k_folds": 3,
+    "fold_random_state": 2635587106,
+    "quantile_penalty": 0.01,
+    "ridge_alpha": 1.0,
+    "quantile_solver": "highs",
+    "gmm_ridge": 1e-08
+  },
+  "expected": {
+    "alpha_hat": 0.0,
+    "alpha_true": 1.0,
+    "cr_covers_true": true,
+    "cr_lower": -1.0,
+    "cr_upper": 1.4484637644998564,
+    "cr_length": 2.4484637644998566,
+    "cr_n_blocks": 1,
+    "cr_disconnected": false,
+    "cr_status": "not_applicable",
+    "converged": true,
+    "failed": false,
+    "cr_unresolved_count": 0,
+    "failed_alpha_count": 0,
+    "min_test_stat": 0.04124879001186423,
+    "max_test_stat": 9.176188108630928,
+    "test_stat_at_alpha_hat": 0.04124879001186423,
+    "critical_value": 3.841458820694124,
+    "critical_value_adjusted": 3.841458820694124,
+    "dml_quantile_penalty": 0.01,
+    "dml_ridge_alpha": 1.0,
+    "dml_quantile_solver": "highs",
+    "dml_qr_fit_count": 15,
+    "dml_qr_nonzero_mean": 16.8,
+    "dml_z_resid_var_mean": 1.2532810535046444
+  }
+}
