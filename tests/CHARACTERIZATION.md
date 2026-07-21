@@ -39,3 +39,16 @@ Post-selection owns CH inference plus its selection multiplier; DML owns only it
 cross-fitting and nuisance settings. Dedicated parsers compose only the relevant
 argument groups. The generic single-estimator parser remains a compatibility
 layer and preserves its historical CLI, validation, manifest, and resume payload.
+
+## Execution infrastructure ownership
+
+`simulation.seeds` owns the immutable SHA-256 seed mapping, while
+`simulation.designs` owns grid validation, enumeration order, replication blocks,
+and design keys. `simulation.dispatch` owns estimator names and estimator-specific
+argument dispatch. `simulation.execution` owns one-design execution, failure-row
+conversion, worker arguments, serial/parallel execution, and deterministic
+parallel sorting. `simulation.resume` owns completion filtering, and
+`simulation.persistence` owns output projection, append validation, and CSV
+writing. `simulation.runner` remains the stable compatibility facade and
+re-exports established public names. CLI manifest validation and progress
+reporting remain in `scenarios.run_simulation`; block merging remains separate.

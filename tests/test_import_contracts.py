@@ -115,3 +115,51 @@ def test_public_simulation_config_imports_work_in_clean_process() -> None:
         "ExecutionConfig OracleRunConfig DMLRunConfig "
         "build_estimator_run_config"
     )
+
+
+def test_execution_modules_and_runner_facade_import_cleanly() -> None:
+    result = _run_python(
+        "from simulation.seeds import make_design_seed; "
+        "from simulation.designs import make_simulation_grid; "
+        "from simulation.dispatch import normalize_estimator_names; "
+        "from simulation.execution import run_simulation_design, run_simulation_batch; "
+        "from simulation.resume import filter_completed_designs; "
+        "from simulation.persistence import persist_results_frame; "
+        "from simulation.runner import run_single_replication; "
+        "print(make_design_seed.__name__, make_simulation_grid.__name__, "
+        "normalize_estimator_names.__name__, run_simulation_design.__name__, "
+        "run_simulation_batch.__name__, filter_completed_designs.__name__, "
+        "persist_results_frame.__name__, run_single_replication.__name__)"
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == (
+        "make_design_seed make_simulation_grid normalize_estimator_names "
+        "run_simulation_design run_simulation_batch filter_completed_designs "
+        "persist_results_frame run_single_replication"
+    )
+
+
+def test_low_level_execution_modules_do_not_import_cli_scripts() -> None:
+    for module in (
+        "src/simulation/seeds.py",
+        "src/simulation/designs.py",
+        "src/simulation/dispatch.py",
+        "src/simulation/execution.py",
+        "src/simulation/resume.py",
+        "src/simulation/persistence.py",
+    ):
+        imported = _imported_modules(module)
+        assert "scenarios.run_simulation" not in imported
+        assert all(not name.startswith("scenarios.") for name in imported)
+    assert all(
+        "output" not in name
+        for name in _imported_modules("src/simulation/seeds.py")
+    )
+    assert all(
+        "output" not in name
+        for name in _imported_modules("src/simulation/designs.py")
+    )
+    assert all(
+        not name.startswith("estimators")
+        for name in _imported_modules("src/simulation/persistence.py")
+    )

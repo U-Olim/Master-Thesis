@@ -162,6 +162,35 @@ def test_resume_matches_uninterrupted_run(tmp_path: Path) -> None:
     _assert_oracle_science_equal(resumed, clean)
 
 
+def test_batch_size_one_matches_batch_size_two(tmp_path: Path) -> None:
+    designs = _designs(reps=2)
+    one_batch = run_simulation_batch(
+        designs,
+        SMALL_ALPHAS,
+        estimators=("oracle",),
+        n_jobs=1,
+    )
+    output = tmp_path / "two_batches.csv"
+    run_simulation_batch(
+        designs[:1],
+        SMALL_ALPHAS,
+        estimators=("oracle",),
+        output_path=output,
+        n_jobs=1,
+    )
+    run_simulation_batch(
+        designs[1:],
+        SMALL_ALPHAS,
+        estimators=("oracle",),
+        output_path=output,
+        append=True,
+        n_jobs=1,
+    )
+    two_batches = pd.read_csv(output)
+    assert two_batches["rep"].tolist() == [0, 1]
+    _assert_oracle_science_equal(two_batches, one_batch)
+
+
 def test_multi_estimator_batch_cannot_write_union_schema(tmp_path: Path) -> None:
     output = tmp_path / "mixed.csv"
     with pytest.raises(ValueError, match="Multi-estimator full mode has been removed") as exc:
