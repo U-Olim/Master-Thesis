@@ -393,6 +393,7 @@ def format_value(value: object, *, latex: bool = False) -> str:
 def dataframe_to_latex(frame: pd.DataFrame) -> str:
     columns = [latex_escape(column) for column in frame.columns]
     lines = [
+        r"\noindent\resizebox{0.98\linewidth}{!}{",
         rf"\begin{{tabular}}{{{'l' * len(columns)}}}",
         r"\hline",
         " & ".join(columns) + r" \\",
@@ -402,7 +403,7 @@ def dataframe_to_latex(frame: pd.DataFrame) -> str:
         " & ".join(format_value(value, latex=True) for value in row) + r" \\"
         for row in frame.itertuples(index=False, name=None)
     )
-    lines.extend([r"\hline", r"\end{tabular}", ""])
+    lines.extend([r"\hline", r"\end{tabular}", "}", ""])
     return "\n".join(lines)
 
 

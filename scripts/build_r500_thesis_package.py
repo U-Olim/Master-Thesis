@@ -291,7 +291,10 @@ def _coverage_lines(table: pd.DataFrame, dimension: str, family: str) -> list[Pa
     axis.axhline(0.95, color="0.25", linestyle="--", linewidth=1, label="Nominal 0.95")
     axis.set_xlabel("Quantile" if dimension == "tau" else "Instrument strength")
     _base_axis(axis, "Conditional coverage")
-    axis.legend(frameon=False, fontsize=8)
+    if family == "figure_03_coverage_by_instrument_strength":
+        axis.legend(frameon=False, fontsize=8, loc="lower left", ncol=2)
+    else:
+        axis.legend(frameon=False, fontsize=8)
     return _save_figure(figure, family)
 
 
@@ -364,8 +367,9 @@ def _weak_heatmap(uncertainty: pd.DataFrame) -> list[Path]:
         axis.set_title(ESTIMATOR_LABELS[estimator], loc="left", fontsize=9)
     tick_positions = np.linspace(0, len(pivot.index) - 1, 6, dtype=int)
     axes[-1].set_xticks(tick_positions, [pivot.index[index] for index in tick_positions], rotation=25, ha="right", fontsize=7)
-    figure.colorbar(image, ax=axes, label="Coverage gap from 0.95", shrink=0.8)
-    figure.subplots_adjust(left=0.09, right=0.88, bottom=0.20, hspace=0.28)
+    figure.subplots_adjust(left=0.09, right=0.84, bottom=0.20, hspace=0.28)
+    colorbar_axis = figure.add_axes((0.87, 0.22, 0.018, 0.58))
+    figure.colorbar(image, cax=colorbar_axis, label="Coverage gap from 0.95")
     return _save_figure(figure, "figure_07_weak_scenario_structure", tight=False)
 
 
@@ -538,6 +542,21 @@ def _build_findings(
         "Historical Post-selection results use multiplier 1.0; no conclusion about 1.8 follows.",
         "Historical results use multiplier 1.8.",
     ))
+    findings.append(finding(
+        "estimator_roles", "interpretation_boundary",
+        {
+            "oracle_role": "infeasible benchmark",
+            "post_selection_role": "estimated-support uncertainty",
+            "dml_role": "different inferential construction",
+        },
+        "results/validation/r500_phase2/phase2_report.md",
+        hashes["results/validation/r500_phase2/phase2_report.md"],
+        {"scope": "estimator interpretation boundaries"},
+        None,
+        "limitation",
+        "Oracle is an infeasible benchmark; Post-selection reflects estimated-support uncertainty; DML uses a different inferential construction.",
+        "The estimators are universally interchangeable or directly feasible in the same way.",
+    ))
     validate_findings(findings)
     return findings
 
@@ -551,14 +570,20 @@ def _build_report(findings: list[dict[str, object]]) -> str:
             f"The validated design contains {design['design_cells']} cells, {design['replications_per_design_cell']} replications per cell, {design['rows_per_estimator']:,} rows per estimator, and {design['total_estimator_rows']:,} estimator rows overall.",
             ["simulation_design"],
         )]),
-        ("2. Validation basis", [sourced_sentence(
-            "Phase 1 supplies structural provenance and Phase 2 supplies scientific diagnostics; this package introduces no new inferential procedure.",
-            ["simulation_design"],
-        )]),
+        ("2. Validation basis", [
+            sourced_sentence(
+                "Phase 1 supplies structural provenance and Phase 2 supplies scientific diagnostics; this package introduces no new inferential procedure.",
+                ["simulation_design"],
+            ),
+            sourced_sentence(
+                by_id["estimator_roles"]["permitted_wording"],
+                ["estimator_roles"],
+            ),
+        ]),
         ("3. Overall estimator performance", [
             sourced_sentence(
                 "; ".join(
-                    f"{ESTIMATOR_LABELS[name]} coverage {by_id[f'overall_{name}']['values']['coverage']:.4f}, RMSE {by_id[f'overall_{name}']['values']['rmse']:.4f}, mean CR length {by_id[f'overall_{name}']['values']['mean_cr_length']:.4f}"
+                    f"{ESTIMATOR_LABELS[name]} coverage {by_id[f'overall_{name}']['values']['coverage']:.4f}, RMSE {by_id[f'overall_{name}']['values']['rmse']:.4f}, mean confidence-region length {by_id[f'overall_{name}']['values']['mean_cr_length']:.4f}"
                     for name in ESTIMATOR_ORDER
                 ) + ".",
                 [f"overall_{name}" for name in ESTIMATOR_ORDER],
@@ -573,7 +598,7 @@ def _build_report(findings: list[dict[str, object]]) -> str:
             [*[f"bias_{name}" for name in ESTIMATOR_ORDER], *[f"overall_{name}" for name in ESTIMATOR_ORDER]],
         )]),
         ("6. Confidence-region length", [sourced_sentence(
-            f"Mean CR length was {by_id['overall_oracle']['values']['mean_cr_length']:.4f} for Oracle, {by_id['overall_post_selection']['values']['mean_cr_length']:.4f} for Post-selection, and {by_id['overall_dml']['values']['mean_cr_length']:.4f} for DML.",
+            f"Mean confidence-region length was {by_id['overall_oracle']['values']['mean_cr_length']:.4f} for Oracle, {by_id['overall_post_selection']['values']['mean_cr_length']:.4f} for Post-selection, and {by_id['overall_dml']['values']['mean_cr_length']:.4f} for DML.",
             [f"overall_{name}" for name in ESTIMATOR_ORDER],
         )]),
         ("7. Paired estimator comparisons", [
@@ -615,7 +640,7 @@ def _build_report(findings: list[dict[str, object]]) -> str:
             ),
         ]),
         ("15. Defensible conclusions", [sourced_sentence(
-            "DML's higher coverage coincided with longer regions and higher RMSE; Oracle offered the lowest RMSE; Post-selection displayed the largest undercoverage. Coverage, error, and interval length must be interpreted jointly.",
+            "DML's higher coverage coincided with longer confidence regions and higher RMSE; Oracle offered the lowest RMSE; Post-selection displayed the largest undercoverage. Coverage, error, and confidence-region length must be interpreted jointly.",
             [f"overall_{name}" for name in ESTIMATOR_ORDER],
         )]),
     ]
@@ -780,7 +805,7 @@ def _manifest_entry(path: Path, family: str, output_type: str, table: pd.DataFra
         "missing_value_policy": {"csv": "NA", "json": None, "latex": "N/A", "figure": "Unavailable label or omitted mark"},
         "decimal_precision": 4,
         "float_formatting_rule": FLOAT_FORMAT,
-        "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+        "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
         "figure_dimensions": None if output_type not in {"pdf", "png"} else "fixed by family; no secondary axes",
         "generation_timestamp_policy": "omitted",
         "generated_output_sha256": sha256_file(path),
@@ -897,7 +922,7 @@ def main() -> int:
         "missing_value_policy": {"json": None},
         "decimal_precision": 4,
         "float_formatting_rule": FLOAT_FORMAT,
-        "latex_formatting_rule": "explicit escaping and N/A",
+        "latex_formatting_rule": "explicit escaping, N/A, and deterministic scaling to 98% of line width",
         "figure_dimensions": None,
         "generation_timestamp_policy": "omitted",
         "generated_output_sha256": None,

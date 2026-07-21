@@ -1,0 +1,155 @@
+{
+  "entries": [
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "One row summarizes 144 design cells and 500 replications per cell.",
+      "id": "table_01_simulation_design",
+      "interpretation_note": "DGP denotes the data-generating process; n is sample size, p is dimensionality, pi is instrument strength, and tau is quantile.",
+      "recommended_placement": "Main text or methods appendix",
+      "short_title": "Simulation design",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Full-factorial historical R=500 design and validated row totals."
+    },
+    {
+      "availability_note": "Historical DML diagnostics absent from the 15-column schema are N/A, not zero. Use landscape orientation because the table is wide.",
+      "denominator_note": "Coverage denominators count rows with observed coverage.",
+      "id": "table_02_overall_estimator_performance",
+      "interpretation_note": "Historical DML diagnostics absent from the 15-column schema are N/A, not zero. Use landscape orientation because the table is wide.",
+      "recommended_placement": "Landscape results page",
+      "short_title": "Overall estimator performance",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Conditional coverage, Wilson 95% intervals, error, mean confidence-region length, and validated diagnostics by estimator."
+    },
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "Each metric displays its valid paired denominator.",
+      "id": "table_03_estimator_tradeoffs",
+      "interpretation_note": "All differences use estimator A - estimator B; positive values mean estimator A has the larger metric.",
+      "recommended_placement": "Landscape results page",
+      "short_title": "Paired estimator trade-offs",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Paired differences in coverage, squared error, and mean confidence-region length using identical scenario-replication keys."
+    },
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "Coverage denominators count rows with observed coverage.",
+      "id": "table_04_performance_by_quantile",
+      "interpretation_note": "Estimator groups follow Oracle, Post-selection, and DML order.",
+      "recommended_placement": "Results appendix",
+      "short_title": "Performance by quantile",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Conditional coverage with Wilson 95% intervals, error, and mean confidence-region length at quantiles 0.25, 0.50, and 0.75."
+    },
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "Coverage denominators count rows with observed coverage.",
+      "id": "table_05_performance_by_instrument_strength",
+      "interpretation_note": "Instrument strength is ordered numerically, not lexicographically.",
+      "recommended_placement": "Results appendix",
+      "short_title": "Performance by instrument strength",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Conditional coverage with Wilson 95% intervals, RMSE, and mean confidence-region length by numerically ordered instrument strength."
+    },
+    {
+      "availability_note": "Unavailable DML warning and resolution diagnostics remain N/A. Use landscape orientation because the table is wide.",
+      "denominator_note": "Coverage denominators are scenario-specific observed-coverage counts.",
+      "id": "table_06_weakest_scenarios",
+      "interpretation_note": "Unavailable DML warning and resolution diagnostics remain N/A. Use landscape orientation because the table is wide.",
+      "recommended_placement": "Landscape appendix page",
+      "short_title": "Weakest coverage scenarios",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "The five weakest scenarios per estimator from the authoritative Phase 2 ranking, including uncertainty and diagnostics."
+    },
+    {
+      "availability_note": "Associations are descriptive, not causal; unavailable DML warning and resolution diagnostics are N/A.",
+      "denominator_note": "Warning-row frequencies and warning-event counts are distinct.",
+      "id": "table_07_warning_exception_diagnostics",
+      "interpretation_note": "Associations are descriptive, not causal; unavailable DML warning and resolution diagnostics are N/A.",
+      "recommended_placement": "Diagnostics appendix",
+      "short_title": "Warning and exception diagnostics",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Validated warning associations, empty confidence regions, unresolved rows, and missing legacy geometry by estimator."
+    },
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "Coverage uses its observed denominator by estimator.",
+      "id": "figure_01_overall_estimator_tradeoff",
+      "interpretation_note": "The dashed coverage reference is the nominal 0.95 level.",
+      "recommended_placement": "Main results",
+      "short_title": "Overall estimator trade-off",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Conditional coverage, RMSE, and mean confidence-region length in separate panels with independent vertical axes."
+    },
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "Intervals use observed scenario coverage denominators.",
+      "id": "figure_02_coverage_by_quantile",
+      "interpretation_note": "The dashed line is nominal 0.95 coverage.",
+      "recommended_placement": "Main results",
+      "short_title": "Coverage by quantile",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Conditional coverage and Phase 2 Wilson 95% intervals by quantile."
+    },
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "Intervals use observed scenario coverage denominators.",
+      "id": "figure_03_coverage_by_instrument_strength",
+      "interpretation_note": "The dashed line is nominal 0.95 coverage.",
+      "recommended_placement": "Main results",
+      "short_title": "Coverage by instrument strength",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Conditional coverage and Phase 2 Wilson 95% intervals by numerically ordered instrument strength."
+    },
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "Each point aggregates the corresponding validated Phase 2 rows.",
+      "id": "figure_04_rmse_by_instrument_strength",
+      "interpretation_note": "Lower RMSE denotes lower estimation error, not universal superiority.",
+      "recommended_placement": "Main results",
+      "short_title": "RMSE by instrument strength",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Root mean squared error by numerically ordered instrument strength."
+    },
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "Each point uses rows with observed historical confidence-region length.",
+      "id": "figure_05_cr_length_by_instrument_strength",
+      "interpretation_note": "Length is the Phase 2 confidence-region metric and need not equal the hull length for disconnected regions.",
+      "recommended_placement": "Main results",
+      "short_title": "Mean confidence-region length by instrument strength",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Validated mean accepted-set length by instrument strength."
+    },
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "Each comparison uses its displayed valid paired denominator.",
+      "id": "figure_06_paired_estimator_differences",
+      "interpretation_note": "All differences use estimator A - estimator B; the dashed line marks zero.",
+      "recommended_placement": "Main results",
+      "short_title": "Paired estimator differences",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Paired coverage, squared-error, and confidence-region-length differences with Phase 2 confidence intervals."
+    },
+    {
+      "availability_note": "All displayed metrics are available unless explicitly marked N/A.",
+      "denominator_note": "Cells use observed scenario coverage denominators.",
+      "id": "figure_07_weak_scenario_structure",
+      "interpretation_note": "The grayscale palette is suitable for print reproduction.",
+      "recommended_placement": "Results appendix",
+      "short_title": "Weak-scenario structure",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Coverage gaps from nominal 0.95 across deterministically ordered design dimensions, shown without interpolation."
+    },
+    {
+      "availability_note": "DML warning data are explicitly unavailable; its observed legacy geometry missingness is labeled separately and is not a zero warning rate.",
+      "denominator_note": "Frequencies use 72,000 historical rows per estimator.",
+      "id": "figure_08_warning_exception_diagnostics",
+      "interpretation_note": "DML warning data are explicitly unavailable; its observed legacy geometry missingness is labeled separately and is not a zero warning rate.",
+      "recommended_placement": "Diagnostics appendix",
+      "short_title": "Warning and exception diagnostics",
+      "source_note": "Source: validated historical R=500 Phase 1–3 outputs.",
+      "thesis_caption": "Warning-row frequency and validated exception frequency by estimator."
+    }
+  ],
+  "entry_count": 15
+}

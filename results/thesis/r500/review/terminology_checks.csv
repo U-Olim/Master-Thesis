@@ -1,0 +1,17 @@
+location,observed_term,expected_term,severity,occurrences,status
+"Phase 3 report, consistency report, and README",\bpost selection\b,Post-selection,medium,0,pass
+"Phase 3 report, consistency report, and README",\bPost Selection\b,Post-selection,medium,0,pass
+"Phase 3 report, consistency report, and README",\binstrumental strength\b,instrument strength,medium,0,pass
+"Phase 3 report, consistency report, and README",\bzero warnings\b,unavailable DML warning data,high,0,pass
+"Phase 3 report, consistency report, and README",\b(caused|proved|eliminated|guaranteed)\b,non-causal wording,high,0,pass
+"Phase 3 report, consistency report, and README",Oracle,Oracle,low,65,pass
+"Phase 3 report, consistency report, and README",Post-selection,Post-selection,low,41,pass
+"Phase 3 report, consistency report, and README",DML,DML,low,78,pass
+"Phase 3 report, consistency report, and README",conditional coverage,conditional coverage,low,0,review
+"Phase 3 report, consistency report, and README",confidence region,confidence region,low,5,pass
+"Phase 3 report, consistency report, and README",instrument strength,instrument strength,low,1,pass
+"Phase 3 report, consistency report, and README",quantile,quantile,low,8,pass
+"Phase 3 report, consistency report, and README",design cell,design cell,low,2,pass
+"Phase 3 report, consistency report, and README",replication,replication,low,8,pass
+"Phase 3 report, consistency report, and README",paired difference,paired difference,low,1,pass
+"Phase 3 report, consistency report, and README",Wilson,Wilson,low,0,review

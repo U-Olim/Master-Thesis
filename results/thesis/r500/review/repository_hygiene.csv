@@ -1,0 +1,25 @@
+path,category,tracked,referenced,generated,safe_to_remove,recommended_action,reason,confidence
+.pytest_tmp,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_analysis_schema,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_26_final,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_26_focus,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_26_full,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_final,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_full,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_full_2,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_full_3,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_schema,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_schema_2,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_schema_3,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_oracle_warning,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.pytest_tmp_phase4_owned,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+.ruff_cache,tool_cache,False,False,True,True,remove_after_review,Ignored tool cache; reproducible and not part of provenance.,high
+scenarios/__pycache__,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+scripts/__pycache__,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+src/analysis/__pycache__,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+src/dgp/__pycache__,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+src/estimators/__pycache__,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+src/ivqr/__pycache__,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+src/simulation/__pycache__,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+src/utils/__pycache__,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high
+tests/__pycache__,cache_or_test_temporary,False,False,True,True,remove_after_review,Ignored runtime cache or isolated pytest temporary directory.,high

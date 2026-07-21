@@ -49,6 +49,12 @@ tests/          Unit and integration tests for simulation and analysis code.
 
 Pixi is the only project manager used by this repository.
 
+Install the locked environment from the repository root:
+
+```powershell
+pixi install
+```
+
 ```powershell
 pixi run oracle
 pixi run post_selection
@@ -492,6 +498,50 @@ Repeated clean builds are byte-identical. Historical Post-selection results
 retain multiplier `1.0`; no conclusion about `1.8` follows. Missing DML warning,
 resolution, component, and rich geometry diagnostics remain explicitly
 unavailable rather than being displayed as zero.
+
+## Thesis reproduction
+
+Reproducing the committed thesis evidence does not require rerunning the R=500
+simulations. The historical CSV files and their SHA-256 manifest under
+`results/raw/` are immutable inputs. From a fresh checkout, install the locked
+environment and run the validation, presentation, and delivery layers:
+
+```powershell
+pixi install
+pixi run audit_r500
+pixi run audit_r500_phase2
+pixi run build_r500_thesis_package
+pixi run review_r500_thesis_delivery
+```
+
+Phase 1 writes structural validation to `results/validation/r500_audit/`.
+Phase 2 writes scientific diagnostics to
+`results/validation/r500_phase2/`. Phase 3 writes the thesis-facing package to
+`results/thesis/r500/`, and Phase 4 writes the non-scientific delivery review to
+`results/thesis/r500/review/`. The Phase 4 review checks table/figure usability,
+LaTeX compilation when an engine is available, numerical provenance, protected
+artifact hashes, documentation, and repository hygiene. It does not run a
+simulation or change Phase 1–3 scientific definitions.
+
+The historical Post-selection artifact uses multiplier `1.0`; the future-run
+configuration does not apply retroactively. Historical DML data use a 15-column
+schema, so unavailable warning, resolution, exception-status, and rich geometry
+diagnostics are missing evidence rather than zero values. Consult
+`thesis_output_manifest.json`, `thesis_findings.json`, and
+`review/protected_integrity.json` to trace reported numbers and verify SHA-256
+hashes.
+
+Run repository validation from the root with:
+
+```powershell
+pixi run python -m pytest tests -q
+pixi run ruff check .
+```
+
+Simulation development remains available only through the dedicated Oracle,
+Post-selection, and DML runners documented above. The generic
+`scenarios/run_simulation.py` path is retired and must not be used for thesis
+reproduction.
 
 ## Notes
 

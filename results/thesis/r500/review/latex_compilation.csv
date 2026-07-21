@@ -1,0 +1,8 @@
+table_id,tex_file,engine,exit_code,warnings,overfull_boxes,undefined_control_sequences,missing_package_errors,page_count,static_status,status,attempted_engines
+table_01_simulation_design,tables/table_01_simulation_design.tex,latexmk,0,0,0,0,0,1,pass,pass,latexmk
+table_02_overall_estimator_performance,tables/table_02_overall_estimator_performance.tex,latexmk,0,0,0,0,0,1,pass,pass,latexmk
+table_03_estimator_tradeoffs,tables/table_03_estimator_tradeoffs.tex,latexmk,0,0,0,0,0,1,pass,pass,latexmk
+table_04_performance_by_quantile,tables/table_04_performance_by_quantile.tex,latexmk,0,0,0,0,0,1,pass,pass,latexmk
+table_05_performance_by_instrument_strength,tables/table_05_performance_by_instrument_strength.tex,latexmk,0,0,0,0,0,1,pass,pass,latexmk
+table_06_weakest_scenarios,tables/table_06_weakest_scenarios.tex,latexmk,0,0,0,0,0,1,pass,pass,latexmk
+table_07_warning_exception_diagnostics,tables/table_07_warning_exception_diagnostics.tex,latexmk,0,0,0,0,0,1,pass,pass,latexmk

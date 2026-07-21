@@ -1234,6 +1234,25 @@
         "future_value_not_analyzed": 1.8,
         "historical_post_selection_multiplier": 1.0
       }
+    },
+    {
+      "authoritative_source": "results/validation/r500_phase2/phase2_report.md",
+      "availability": "available",
+      "denominator": null,
+      "id": "estimator_roles",
+      "interpretation_strength": "limitation",
+      "permitted_wording": "Oracle is an infeasible benchmark; Post-selection reflects estimated-support uncertainty; DML uses a different inferential construction.",
+      "prohibited_overinterpretation": "The estimators are universally interchangeable or directly feasible in the same way.",
+      "source_hash": "ddd4a77f38dc6cd84003f51208155e45b6d4cd2a7a4b2b7bb5445b90c483ca40",
+      "source_row_or_filter": {
+        "scope": "estimator interpretation boundaries"
+      },
+      "topic": "interpretation_boundary",
+      "values": {
+        "dml_role": "different inferential construction",
+        "oracle_role": "infeasible benchmark",
+        "post_selection_role": "estimated-support uncertainty"
+      }
     }
   ]
 }

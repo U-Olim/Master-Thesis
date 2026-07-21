@@ -8,9 +8,11 @@ The validated design contains 144 cells, 500 replications per cell, 72,000 rows 
 
 Phase 1 supplies structural provenance and Phase 2 supplies scientific diagnostics; this package introduces no new inferential procedure. <!-- findings:simulation_design -->
 
+Oracle is an infeasible benchmark; Post-selection reflects estimated-support uncertainty; DML uses a different inferential construction. <!-- findings:estimator_roles -->
+
 ## 3. Overall estimator performance
 
-Oracle IVQR coverage 0.9421, RMSE 0.8357, mean CR length 2.4069; Post-selection IVQR coverage 0.9247, RMSE 0.8592, mean CR length 2.3813; DML-style IVQR coverage 0.9490, RMSE 0.9870, mean CR length 2.9591. <!-- findings:overall_oracle,overall_post_selection,overall_dml -->
+Oracle IVQR coverage 0.9421, RMSE 0.8357, mean confidence-region length 2.4069; Post-selection IVQR coverage 0.9247, RMSE 0.8592, mean confidence-region length 2.3813; DML-style IVQR coverage 0.9490, RMSE 0.9870, mean confidence-region length 2.9591. <!-- findings:overall_oracle,overall_post_selection,overall_dml -->
 
 ## 4. Coverage
 
@@ -22,7 +24,7 @@ Bias was -0.0067 for Oracle, -0.0566 for Post-selection, and 0.0093 for DML; cor
 
 ## 6. Confidence-region length
 
-Mean CR length was 2.4069 for Oracle, 2.3813 for Post-selection, and 2.9591 for DML. <!-- findings:overall_oracle,overall_post_selection,overall_dml -->
+Mean confidence-region length was 2.4069 for Oracle, 2.3813 for Post-selection, and 2.9591 for DML. <!-- findings:overall_oracle,overall_post_selection,overall_dml -->
 
 ## 7. Paired estimator comparisons
 
@@ -74,4 +76,4 @@ The historical DML schema has 15 columns; unavailable warning, unresolved, and r
 
 ## 15. Defensible conclusions
 
-DML's higher coverage coincided with longer regions and higher RMSE; Oracle offered the lowest RMSE; Post-selection displayed the largest undercoverage. Coverage, error, and interval length must be interpreted jointly. <!-- findings:overall_oracle,overall_post_selection,overall_dml -->
+DML's higher coverage coincided with longer confidence regions and higher RMSE; Oracle offered the lowest RMSE; Post-selection displayed the largest undercoverage. Coverage, error, and confidence-region length must be interpreted jointly. <!-- findings:overall_oracle,overall_post_selection,overall_dml -->

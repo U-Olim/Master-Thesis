@@ -1,0 +1,6 @@
+check_id,command,configured,execution_scope,status
+pixi_install,pixi install,True,validated_in_main_and_temporary_copy,pass
+phase1,pixi run audit_r500,True,validated_in_temporary_copy,pass
+phase2,pixi run audit_r500_phase2,True,validated_in_temporary_copy,pass
+phase3,pixi run build_r500_thesis_package,True,validated_in_main_and_temporary_copy,pass
+phase4,pixi run review_r500_thesis_delivery,True,validated_in_main_and_temporary_copy,pass

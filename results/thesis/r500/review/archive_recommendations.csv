@@ -1,0 +1,4 @@
+path,why_potentially_confusing,tracked,referenced_by_tests_or_documentation,part_of_provenance,removal_affects_reproducibility,recommended_action,confidence
+scenarios/run_simulation.py,Retired generic-runner migration stub retained for migration guidance.,True,True,True,False,keep,high
+documents/Experiments.pdf,Tracked experimental document may be mistaken for the thesis-ready report.,True,True,False,False,investigate,medium
+documents/Experiments.qmd,Tracked experimental source may be mistaken for the authoritative Phase 3 package.,True,True,False,False,investigate,medium

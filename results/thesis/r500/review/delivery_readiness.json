@@ -1,0 +1,104 @@
+{
+  "archive_recommendation_count": 3,
+  "classifications": {
+    "artifact_integrity": "pass",
+    "documentation": "pass",
+    "figure_readiness": "pass",
+    "latex_readiness": "pass",
+    "overall": "ready_with_minor_corrections",
+    "release_readiness": "pass_with_caveat",
+    "repository_hygiene": "pass_with_caveat",
+    "reproducibility": "pass_with_caveat",
+    "scientific_integrity": "pass",
+    "table_readiness": "pass"
+  },
+  "dependency_review": {
+    "declared_python": ">=3.10,<3.13",
+    "latex_available": true,
+    "latex_optional": true,
+    "pdf_renderer_available": true,
+    "pyright_installed": false,
+    "status": "pass"
+  },
+  "empirical_report_review": {
+    "causal_wording": true,
+    "dml_limitations": true,
+    "dml_tradeoff": true,
+    "historical_multiplier_1_0": true,
+    "no_historical_1_8_claim": true,
+    "numerical_provenance": true,
+    "oracle_infeasible": true,
+    "post_selection_undercoverage": true,
+    "required_sections": true,
+    "status": "pass",
+    "technical_not_final_prose": true
+  },
+  "fresh_copy_reproduction": {
+    "caveat": "Windows Git checkout converted the tracked raw manifest line endings; exact immutable bytes were restored before the successful pipeline run.",
+    "phase1_files": 8,
+    "phase2_files": 36,
+    "phase3_files": 35,
+    "sha256_differences": 0,
+    "status": "pass_with_caveat"
+  },
+  "inventory": {
+    "expected_phase3_files": 35,
+    "reviewed_phase3_files": 35,
+    "status": "pass",
+    "unexpected_files": []
+  },
+  "numerical_consistency": {
+    "all_checks_pass": true,
+    "all_findings_sourced": true,
+    "check_count": 190,
+    "status": "pass"
+  },
+  "readme_review": {
+    "passed": 20,
+    "requirements": {
+      "dedicated_runners": true,
+      "dml_limitation": true,
+      "environment_setup": true,
+      "generic_cli_retirement": true,
+      "hash_verification": true,
+      "historical_immutability": true,
+      "historical_location": true,
+      "historical_multiplier": true,
+      "no_r500_rerun": true,
+      "output_locations": true,
+      "phase1_command": true,
+      "phase2_command": true,
+      "phase3_command": true,
+      "phase4_command": true,
+      "project_purpose": true,
+      "ruff": true,
+      "tests": true,
+      "thesis_reproduction": true,
+      "three_estimators": true,
+      "unavailable_diagnostics": true
+    },
+    "status": "pass",
+    "total": 20
+  },
+  "release": {
+    "future_tag_command": "git tag -a thesis-r500-v1.0 -m \"Final thesis R=500 release\"",
+    "recommended_tag": "thesis-r500-v1.0",
+    "tag_created": false
+  },
+  "review_output_filenames": [
+    "delivery_readiness.json",
+    "delivery_readiness_report.md",
+    "artifact_inventory.csv",
+    "table_review.csv",
+    "figure_review.csv",
+    "latex_compilation.csv",
+    "terminology_checks.csv",
+    "reproduction_checks.csv",
+    "repository_hygiene.csv",
+    "archive_recommendations.csv",
+    "protected_integrity.json",
+    "caption_registry.json"
+  ],
+  "scientific_changes": false,
+  "simulation_ran": false
+}

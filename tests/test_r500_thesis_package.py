@@ -276,7 +276,7 @@ def test_generated_package_has_exact_families_and_complete_manifest() -> None:
     actual = {
         path.relative_to(PACKAGE_DIR).as_posix()
         for path in PACKAGE_DIR.rglob("*")
-        if path.is_file()
+        if path.is_file() and "review" not in path.relative_to(PACKAGE_DIR).parts
     }
     recorded = {entry["output_filename"] for entry in manifest["outputs"]}
     assert actual == recorded

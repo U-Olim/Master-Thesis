@@ -22,7 +22,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "e5190eef3470201c850750b671d6e2c4745179a18f6e71daa9f6555400239f52",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -87,9 +87,9 @@
       "figure_dimensions": null,
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "f390b5f570e2bbaf1691c42bf11bb94f1e2f9849d4188f9fdf1c32aa97558ee6",
+      "generated_output_sha256": "37264c6e3e541f79076cb8121621333d0e80465db8f4cbe20e43f04eeefe3b47",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -156,7 +156,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "b9265bebc0202d235d3adba7963451c94e09407351099a92c15b2f8cee613b29",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -230,9 +230,9 @@
       "figure_dimensions": null,
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "24cc9932c49e95a33f1b6e0aa343edff2b484f544e93f0d10e61a27fc2157f3c",
+      "generated_output_sha256": "0dce07d211def371dd31870d37f69d0227a6635838c09bff6f0c07be6c69a0a6",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -307,7 +307,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "18d2f34886eb308b3af22d7127985d4f67918f43b80807866d4f486e6f542ec3",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -372,9 +372,9 @@
       "figure_dimensions": null,
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "842a42dc83879219dd601ef9c3924975b8c633e802386ab6f4d35de85b8248bf",
+      "generated_output_sha256": "968fb38cc44002ec94945d2bbf881da63529f80fc0d170cd726bd60429fb7446",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -442,7 +442,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "55fcd5a11436275c731732a93e1407805f94609d583e1646c410b9ecae65ed1e",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -509,9 +509,9 @@
       "figure_dimensions": null,
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "7e333fd2aaa2b9a56900a38b92917dd0ebb677b0d01c12b30c54944dd5511e82",
+      "generated_output_sha256": "41b2bcbfbcdab125e969b7606b4ef1410a96dc65de24a8c59c403c4e4aa33c79",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -580,7 +580,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "e2f5b06afda1b20d4af19384eb12cfe1a413127c8d6ad918f1dcf270ca83c60e",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -647,9 +647,9 @@
       "figure_dimensions": null,
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "60fdb228284b33e4da258a89e1a06b877d0e59b892e9322c71d3f0175bb7aec9",
+      "generated_output_sha256": "2b9bc25111576c77b25801d468f0278f8a36291a3ce22e09ff6c6eaaef700c7e",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -720,7 +720,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "dd4adc5e2912055ed33ebe846fb420f99c244557c0d46c4d3e9dd8618c6c4c44",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -810,9 +810,9 @@
       "figure_dimensions": null,
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "47e2cd5ae1289bd866d6707e5ca4684e76218875ceb2663960c4eb18faadb745",
+      "generated_output_sha256": "8aa48e798b1682e75733d5c00c36c282aa0fd6fd3ff9fb68d47d476628ee0781",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -902,7 +902,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "252d09056f8fa3e327fccabfc14d909417cffe5abf3acf521a58d6401b0a4b04",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -968,9 +968,9 @@
       "figure_dimensions": null,
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "13c36e4170a563641b57c7489c8b75353065201a7e6b7c9d499f9fe0791ba5cf",
+      "generated_output_sha256": "c0c315a6b915f758c5c4a12131cd7c083be2e66a7bba36073d16040ee5ab8ba2",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1038,7 +1038,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "8d25ba31dd526c9c1090dff2edfd9591c078cd7e5721259cb6edceb2c32ecc22",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1114,7 +1114,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "8000d44dd349e6f002022bfe60a28709c9f0382f06aaccf69b8936c1879c521d",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1190,7 +1190,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "43dc67202fedb2739b9dc8ba217935687e7052c7ad84662b9f128e7c72e5a2ed",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1259,7 +1259,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "170b6e8b0c0224803793d5c15327e0afed94878d6625c8f228b1375f282064d8",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1326,9 +1326,9 @@
       "figure_dimensions": "fixed by family; no secondary axes",
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "f4a45b47707104def7e71ae93689c7ac364aa4084842635ecaef92a84edef94c",
+      "generated_output_sha256": "1531353e571960be63bc71563e52c77e2ea48f836fe333937969c82ad0a03111",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1395,9 +1395,9 @@
       "figure_dimensions": "fixed by family; no secondary axes",
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "b4b9c6449b968c989c5c5752a50ef75920fc581ebf42c80b00f5eba0c91ceda2",
+      "generated_output_sha256": "795e8b754741969501254b5d4bae72fa96c2ee9448813f56afef19cb01ede6cc",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1466,7 +1466,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "7e3f81c2538a486119e6b39e0d04133f184ee35e708ba40075fc5c37ef44805b",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1529,7 +1529,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "449ffe2ba2da72d703d3c116d749b7d1a7b5eb95a5cb17a1231bc0beecb1c4b5",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1592,7 +1592,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "e9ef8309a91582b0a4321188671aa94656cb2c59ac50e8f8354bb1514c2e45b1",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1655,7 +1655,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "9d85a5a1edb4463f5f1dfb735097084c3a6b0dce6c0441aa78f898c0aacc7b1d",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1717,7 +1717,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "2f7bde277e59f6c844cf5871740779550bcf51540ca2a0a003fe6d4052315e6e",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1784,7 +1784,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "4093f507615ce71f59665a5138f32fde1b3f39aeb8567603d2b03120ba728cd9",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1849,9 +1849,9 @@
       "figure_dimensions": "fixed by family; no secondary axes",
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "2b3554eb151df7558294e3ba2415ac32a5a23ee0ed4e9942835d06a7084d16af",
+      "generated_output_sha256": "4b6d83a8e6e4262dd194187072ec42a01b18554c64e31f117713ae6f53a9d17b",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1908,9 +1908,9 @@
       "figure_dimensions": "fixed by family; no secondary axes",
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "634010dcf9c78ac7155666555ee3bb2733917b37b9c173aaedc5ff7fb21a65db",
+      "generated_output_sha256": "53be6128b1b97b3b87d84777ec9d4e59686c859c1f91569f16a7325619693aad",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -1970,7 +1970,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "8133b4958366996d70f640745c6f24bfed23dbe32cdcc9327687929577097ca7",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -2038,7 +2038,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "8fd9c2e79dec95179ff2ccb513430354b9e088eb14cb21bb974e9211b0aa1ddc",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -2114,9 +2114,9 @@
       "figure_dimensions": null,
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "c7db8bf390ecfe30a585ccbb9644eebbda372e51b15d201d29bfaf6bddf63e52",
+      "generated_output_sha256": "e3b719d78fcb5628e8663a38fdca39833b87d29f72e0eaddc9a4e7656b22f01b",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -2214,9 +2214,9 @@
       "figure_dimensions": null,
       "filters": "family-specific deterministic selection recorded in source inventory",
       "float_formatting_rule": "%.10g",
-      "generated_output_sha256": "78624c1375ecf0cc4f27a604979ad1dcfa9655fba1d9298271e136f316127257",
+      "generated_output_sha256": "228dd227f4d2f334eed473bad5299622ac66a8ff15dbbaa032423d64676f347c",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -2316,7 +2316,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "26f7c9accc3e5a1666c37093a864620e920d10ad213deb2ebcd5a7098a913bfe",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -2425,7 +2425,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": "e52290f0d93ebbe385b2d4d65d52d4b91b4b92752324c387f1ea12b4d19c30ff",
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values",
+      "latex_formatting_rule": "Explicit escaping; four decimals; N/A for missing values; deterministic scaling to 98% of line width",
       "metric_denominator": "actual validated denominator; N/A where diagnostic unavailable",
       "missing_value_policy": {
         "csv": "NA",
@@ -2525,7 +2525,7 @@
       "float_formatting_rule": "%.10g",
       "generated_output_sha256": null,
       "generation_timestamp_policy": "omitted",
-      "latex_formatting_rule": "explicit escaping and N/A",
+      "latex_formatting_rule": "explicit escaping, N/A, and deterministic scaling to 98% of line width",
       "metric_denominator": "not applicable",
       "missing_value_policy": {
         "json": null
