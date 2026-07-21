@@ -51,6 +51,7 @@ final_dry_run = "python scenarios/run_oracle_ivqr.py --reps 500 --alpha-min -1 -
 import_check = "python -c \"import analysis; import dgp; import estimators; import ivqr; import simulation\""
 lint = "ruff check src tests scenarios scripts"
 results = "python scripts/make_results.py"
+audit_r500 = "python scripts/audit_r500_results.py"
 raw_manifest = "python scripts/update_raw_manifest.py"
 test = "pytest tests -m 'not slow'"
 test_slow = "pytest tests -m slow"

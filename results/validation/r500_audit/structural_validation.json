@@ -1,0 +1,223 @@
+{
+  "alignment": {
+    "aligned_keys": 72000,
+    "alpha_true_conflicts": 0,
+    "only_in_dml": 0,
+    "only_in_oracle": 0,
+    "only_in_post_selection": 0,
+    "seed_conflicts": 0
+  },
+  "artifacts": {
+    "dml": {
+      "column_count": 15,
+      "columns": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "rep",
+        "seed",
+        "estimator",
+        "alpha_hat",
+        "alpha_true",
+        "cr_lower",
+        "cr_upper",
+        "cr_length",
+        "covered",
+        "converged"
+      ],
+      "modified_ns": 1783951813506603600,
+      "modified_utc": "2026-07-13T14:10:13.506604+00:00",
+      "path": "results/raw/dml_ivqr.csv",
+      "row_count": 72000,
+      "sha256": "27d3c514e7a608083647c9485e1ba4d73267cdf80753e3bae8c22a4ee4c5f803",
+      "size_bytes": 9160449
+    },
+    "manifest": {
+      "column_count": null,
+      "columns": [],
+      "modified_ns": 1784633790983154100,
+      "modified_utc": "2026-07-21T11:36:30.983154+00:00",
+      "path": "results/raw/manifest.json",
+      "row_count": null,
+      "sha256": "bb9c0dfddc36e1d44be4749f7d1093313ce12040eab4754d5fa41ad42960b4c5",
+      "size_bytes": 7340
+    },
+    "oracle": {
+      "column_count": 43,
+      "columns": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "rep",
+        "seed",
+        "result_schema_version",
+        "estimator",
+        "alpha_hat",
+        "alpha_true",
+        "cr_lower",
+        "cr_upper",
+        "cr_length",
+        "covered",
+        "converged",
+        "cr_components",
+        "cr_n_blocks",
+        "cr_disconnected",
+        "cr_status",
+        "cr_is_numerically_resolved",
+        "cr_unresolved_count",
+        "cr_unresolved_alphas",
+        "grid_strategy",
+        "adaptive_midpoint_probe",
+        "alpha_hat_grid",
+        "midpoint_intervals_considered",
+        "midpoint_evaluations_added",
+        "midpoint_unresolved_barriers",
+        "midpoint_probe_limit_hit",
+        "initial_alpha_grid_size",
+        "final_alpha_evaluations",
+        "refinement_tolerance",
+        "refinement_depth_reached",
+        "refinement_limit_hit",
+        "max_alpha_evaluations_hit",
+        "number_of_refined_intervals",
+        "number_of_unresolved_refinement_barriers",
+        "minimum_final_grid_spacing",
+        "median_final_grid_spacing",
+        "maximum_final_grid_spacing",
+        "iteration_warning_evaluations",
+        "rank_deficient_covariance_failures"
+      ],
+      "modified_ns": 1784623467612480000,
+      "modified_utc": "2026-07-21T08:44:27.612480+00:00",
+      "path": "results/raw/oracle_ivqr.csv",
+      "row_count": 72000,
+      "sha256": "44ff5b1030e1a80386e62b840be9f842c2229f43e630000cc9e52567ac84be36",
+      "size_bytes": 22624466
+    },
+    "post_selection": {
+      "column_count": 52,
+      "columns": [
+        "dgp",
+        "n",
+        "p",
+        "pi",
+        "tau",
+        "rep",
+        "seed",
+        "result_schema_version",
+        "estimator",
+        "alpha_hat",
+        "alpha_true",
+        "cr_lower",
+        "cr_upper",
+        "cr_length",
+        "covered",
+        "converged",
+        "cr_components",
+        "cr_n_blocks",
+        "cr_disconnected",
+        "cr_status",
+        "cr_is_numerically_resolved",
+        "cr_unresolved_count",
+        "cr_unresolved_alphas",
+        "grid_strategy",
+        "adaptive_midpoint_probe",
+        "alpha_hat_grid",
+        "midpoint_intervals_considered",
+        "midpoint_evaluations_added",
+        "midpoint_unresolved_barriers",
+        "midpoint_probe_limit_hit",
+        "initial_alpha_grid_size",
+        "final_alpha_evaluations",
+        "refinement_tolerance",
+        "refinement_depth_reached",
+        "refinement_limit_hit",
+        "max_alpha_evaluations_hit",
+        "number_of_refined_intervals",
+        "number_of_unresolved_refinement_barriers",
+        "minimum_final_grid_spacing",
+        "median_final_grid_spacing",
+        "maximum_final_grid_spacing",
+        "iteration_warning_evaluations",
+        "rank_deficient_covariance_failures",
+        "n_selected_controls",
+        "selection_lasso_multiplier",
+        "selection_method",
+        "selection_target_y",
+        "selection_target_d",
+        "selection_quantile_specific",
+        "instrument_selection_method",
+        "post_selection_inference_adjustment",
+        "n_retained_instruments"
+      ],
+      "modified_ns": 1784624968858644500,
+      "modified_utc": "2026-07-21T09:09:28.858644+00:00",
+      "path": "results/raw/post_selection_ivqr.csv",
+      "row_count": 72000,
+      "sha256": "7c9b914a8d5cf7cc7c3b9bda3458641de4f62bdfcf1644793871555275bfedd8",
+      "size_bytes": 30818201
+    }
+  },
+  "component_validation": {
+    "oracle": {
+      "coverage_component_mismatches": 0,
+      "rows_checked": 72000
+    },
+    "post_selection": {
+      "coverage_component_mismatches": 0,
+      "rows_checked": 72000
+    }
+  },
+  "estimator_summary_rows": 3,
+  "historical_post_selection_multiplier": {
+    "1.0": 72000
+  },
+  "nominal_coverage": 0.95,
+  "nominal_source": "Estimator confidence_level defaults in production code",
+  "scenario_summary_rows": 432,
+  "structure": {
+    "dml": {
+      "columns": 15,
+      "design_cells": 144,
+      "duplicate_natural_keys": 0,
+      "naturally_sorted": false,
+      "replication_max": 499,
+      "replication_min": 0,
+      "rows": 72000,
+      "rows_per_replication": [
+        144
+      ],
+      "unique_replications": 500
+    },
+    "oracle": {
+      "columns": 43,
+      "design_cells": 144,
+      "duplicate_natural_keys": 0,
+      "naturally_sorted": true,
+      "replication_max": 499,
+      "replication_min": 0,
+      "rows": 72000,
+      "rows_per_replication": [
+        144
+      ],
+      "unique_replications": 500
+    },
+    "post_selection": {
+      "columns": 52,
+      "design_cells": 144,
+      "duplicate_natural_keys": 0,
+      "naturally_sorted": false,
+      "replication_max": 499,
+      "replication_min": 0,
+      "rows": 72000,
+      "rows_per_replication": [
+        144
+      ],
+      "unique_replications": 500
+    }
+  }
+}

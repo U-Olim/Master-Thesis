@@ -442,6 +442,21 @@ contains `n_selected_controls` and `selection_lasso_multiplier`.
 Aggregate metrics such as bias, MAE, RMSE, and coverage probability are
 computed by the final analysis workflow rather than stored as raw columns.
 
+## R=500 Scientific Audit
+
+Run the reproducible joint validation audit with:
+
+```powershell
+pixi run audit_r500
+```
+
+The command reads and manifest-validates the three immutable historical files
+under `results/raw/`; it never rewrites them or runs simulations. Deterministic
+audit tables, diagnostics, structural metadata, and the scientific report are
+written only to `results/validation/r500_audit/`. The historical Post-selection
+results are analyzed with their recorded `selection_lasso_multiplier = 1.0`;
+the current future-run value 1.8 is not applied or inferred retroactively.
+
 ## Notes
 
 The DML estimator is a DML-style residualized IVQR implementation. It uses
