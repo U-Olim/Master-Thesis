@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
+import tomllib
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -18,6 +20,7 @@ from scenarios import (  # noqa: E402
     run_post_selection_ivqr,
     run_simulation,
 )
+from dgp.generators import generate_data  # noqa: E402
 from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_GRID_SIZE,
     DEFAULT_ALPHA_MAX,
@@ -37,6 +40,7 @@ from simulation.oracle_output import ORACLE_OUTPUT_COLUMNS  # noqa: E402
 from simulation.post_selection_output import (  # noqa: E402
     REQUIRED_POST_SELECTION_COLUMNS,
 )
+from simulation.runner import make_simulation_grid  # noqa: E402
 
 
 RUNNERS = {
@@ -204,3 +208,92 @@ def test_dedicated_runner_modules_are_import_safe() -> None:
     for runner in RUNNERS.values():
         assert callable(runner.main)
         assert callable(runner._parser)
+
+
+def test_separate_estimator_runs_use_identical_seed_and_dgp() -> None:
+    designs = [
+        make_simulation_grid(
+            dgps=("dgp1",),
+            n_values=(100,),
+            p_values=(20,),
+            pi_values=(0.5,),
+            taus=(0.5,),
+            reps=1,
+            base_seed=12345,
+        )[0]
+        for _estimator in RUNNERS
+    ]
+    assert len({design.seed for design in designs}) == 1
+    generated = [generate_data(design) for design in designs]
+    for candidate in generated[1:]:
+        np.testing.assert_array_equal(candidate.y, generated[0].y)
+        np.testing.assert_array_equal(candidate.d, generated[0].d)
+        np.testing.assert_array_equal(candidate.z, generated[0].z)
+        np.testing.assert_array_equal(candidate.x, generated[0].x)
+
+
+@pytest.mark.parametrize("estimator", RUNNERS)
+def test_dedicated_runner_resume_completes_single_estimator_output(
+    tmp_path: Path,
+    estimator: str,
+) -> None:
+    output = tmp_path / f"{estimator}.csv"
+    manifest = tmp_path / f"{estimator}.json"
+    common = [
+        "--reps",
+        "2",
+        "--dgps",
+        "dgp1",
+        "--n-values",
+        "40",
+        "--p-values",
+        "5",
+        "--pi-values",
+        "0.5",
+        "--taus",
+        "0.5",
+        "--n-jobs",
+        "1",
+        "--batch-size",
+        "1",
+        "--alpha-grid-size",
+        "3",
+        "--max-designs",
+        "1",
+        "--output",
+        str(output),
+        "--manifest",
+        str(manifest),
+    ]
+    if estimator == "dml":
+        common.extend(["--dml-k-folds", "2"])
+    RUNNERS[estimator].main(common)
+    RUNNERS[estimator].main([*common, "--resume"])
+    resumed = pd.read_csv(output)
+    assert resumed["rep"].tolist() == [0, 1]
+    assert tuple(resumed.columns) == SCHEMAS[estimator]
+
+
+def test_pixi_simulation_tasks_use_only_dedicated_runners() -> None:
+    payload = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    tasks = payload["tool"]["pixi"]["tasks"]
+    assert "fast" not in tasks
+    assert "full" not in tasks
+    simulation_tasks = {
+        name: command
+        for name, command in tasks.items()
+        if name in {
+            "oracle",
+            "post_selection",
+            "dml",
+            "final_oracle",
+            "final_post_selection",
+            "final_dml",
+            "final_dry_run",
+        }
+    }
+    assert len(simulation_tasks) == 7
+    for command in simulation_tasks.values():
+        assert "scenarios/run_simulation.py" not in command
+        assert "--mode full" not in command
+        assert "--estimators" not in command

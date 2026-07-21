@@ -13,10 +13,10 @@ and serialized structure use exact equality.
 | Adaptive midpoint/refinement ordering and limits | `test_ivqr.py` | Adequate | Reused without duplication |
 | Warning and hard-failure policies | `test_ivqr.py`, `test_estimators.py` | Adequate | Reused without duplication |
 | Exact serializer schemas | estimator output tests | Adequate for synthetic rows | Added real internal-row preservation check |
-| Serial/parallel equivalence | None | Missing | Tiny multi-design, three-estimator comparison |
+| Serial/parallel equivalence | None | Missing | Tiny single-estimator comparisons for all three estimators |
 | Block/uninterrupted equivalence | Synthetic merge tests only | Partial | Production-run Oracle blocks compared with uninterrupted output |
 | Resume/uninterrupted equivalence | Manifest and append mechanics only | Partial | Scientific output comparison after resume |
 | Runner/direct-estimator equivalence | Oracle support propagation only | Partial | All three estimators on the reference design |
-| Full-mode union behavior and shared DGP | Single-estimator full-mode schema only | Missing | Three rows, one DGP draw, 150-column union schema |
+| Removed full-mode behavior | Full mode previously shared one DGP draw across three estimators and emitted a 150-column union CSV | Replaced intentionally | Generic/full and internal multi-estimator execution are rejected before output; separate runners retain the same seed-to-DGP mapping |
 
 The large historical R=500 CSVs are deliberately not fixtures for this layer.

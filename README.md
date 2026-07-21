@@ -10,16 +10,21 @@ The project compares three estimators:
 - Post-selection IVQR (mean-Lasso union followed by CH inverse-IVQR)
 - DML-style residualized IVQR
 
-The generic simulation entry point is:
+The primary simulation entry points are:
 
 ```powershell
-pixi run fast
+pixi run oracle
+pixi run post_selection
+pixi run dml
 ```
 
 ## Structure
 
 ```text
 scenarios/
+  run_oracle_ivqr.py
+  run_post_selection_ivqr.py
+  run_dml_ivqr.py
   run_simulation.py
 
 src/
@@ -45,8 +50,9 @@ tests/          Unit and integration tests for simulation and analysis code.
 Pixi is the only project manager used by this repository.
 
 ```powershell
-pixi run fast
-pixi run full
+pixi run oracle
+pixi run post_selection
+pixi run dml
 pixi run import_check
 pixi run results
 pixi run test
@@ -56,12 +62,10 @@ pixi run test_slow
 `pixi run test` runs the fast suite and deselects tests marked `slow`.
 `pixi run test_slow` runs only tests marked `slow`.
 
-## Simulation Modes
+## Simulation execution
 
-- `fast`: `R = 10`
-- `full`: `R = 500`
-
-Default estimators are `oracle post_selection dml`.
+Each supported command runs exactly one estimator. Dedicated runners default to
+`R = 10`; production tasks set `R = 500` explicitly.
 
 ## Design Grid
 
@@ -79,38 +83,35 @@ still controlled by `pi`.
 
 ### Development commands
 
-Fast default:
+Oracle development run:
 
 ```powershell
-pixi run fast
+pixi run oracle
 ```
 
-Full default:
+Post-selection development run:
 
 ```powershell
-pixi run full
+pixi run post_selection
 ```
 
-Fast all estimators:
+DML development run:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post_selection dml --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_all.csv --manifest results/raw/fast_all_manifest.json
+pixi run dml
 ```
 
-Full default with explicit output:
+The generic runner remains temporarily available for single-estimator
+compatibility:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode full --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/full_results.csv --manifest results/raw/full_manifest.json
+pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_oracle.csv --manifest results/raw/fast_oracle_manifest.json
 ```
 
-`pixi run fast` and `pixi run full` retain the generic project defaults. In
-particular, their DML defaults are not the tuned settings used for the final
-thesis results.
-
-Generic dry run:
+Generic commands must name exactly one estimator. A generic dry run is:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --dry-run
+pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --dry-run
 ```
 
 ### Dedicated estimator runners
@@ -125,9 +126,14 @@ pixi run python scenarios/run_post_selection_ivqr.py --reps 10 --output results/
 pixi run python scenarios/run_dml_ivqr.py --reps 10 --output results/raw/dml_fast.csv
 ```
 
-The generic `scenarios/run_simulation.py` runner remains available temporarily.
-The dedicated runners are behaviorally equivalent to its single-estimator mode;
-generic `full` mode remains available and has not yet been removed.
+The former multi-estimator full mode was removed. Run Oracle, Post-selection and
+DML separately through their dedicated entry points. All runners retain the
+same deterministic design-seed mapping, so corresponding designs use the same
+simulated data. The generic `scenarios/run_simulation.py` runner remains
+temporarily available only for single-estimator compatibility.
+
+Dedicated output contracts are fixed at 26 columns for Oracle, 52 columns for
+Post-selection, and 43 columns for DML.
 
 ### Canonical final thesis production commands
 
@@ -140,8 +146,8 @@ pixi run final_post_selection
 pixi run final_dml
 ```
 
-These are expensive production simulations. They use full mode, 500
-replications, the 21-point alpha grid on `[-1, 3]`, critical-value multiplier
+These are expensive production simulations. They use 500 replications, the
+21-point alpha grid on `[-1, 3]`, critical-value multiplier
 `1.0`, and base seed `12345`. The post-selection task additionally uses Lasso
 multiplier `1.8`; the DML task uses three folds, quantile penalty `0.07`, solver
 `highs-ipm`, and ridge alpha `1.0`.
@@ -169,25 +175,25 @@ Each block should use a separate output and manifest file.
 Oracle R500 block 0-99:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --reps 500 --rep-start 0 --rep-end 99 --alpha-min -2 --alpha-max 4 --alpha-grid-size 41 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/oracle_R500_grid41_block000_099.csv --manifest results/raw/oracle_R500_grid41_block000_099_manifest.json
+pixi run python scenarios/run_oracle_ivqr.py --reps 500 --rep-start 0 --rep-end 99 --alpha-min -2 --alpha-max 4 --alpha-grid-size 41 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/oracle_R500_grid41_block000_099.csv --manifest results/raw/oracle_R500_grid41_block000_099_manifest.json
 ```
 
 Post-selection R500 block 0-99:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators post_selection --reps 500 --rep-start 0 --rep-end 99 --selection-lasso-multiplier 1.8 --alpha-min -2 --alpha-max 4 --alpha-grid-size 41 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/post_selection_R500_lasso180_grid41_block000_099.csv --manifest results/raw/post_selection_R500_lasso180_grid41_block000_099_manifest.json
+pixi run python scenarios/run_post_selection_ivqr.py --reps 500 --rep-start 0 --rep-end 99 --selection-lasso-multiplier 1.8 --alpha-min -2 --alpha-max 4 --alpha-grid-size 41 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/post_selection_R500_lasso180_grid41_block000_099.csv --manifest results/raw/post_selection_R500_lasso180_grid41_block000_099_manifest.json
 ```
 
 Fast DML only:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators dml --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
+pixi run python scenarios/run_dml_ivqr.py --n-jobs 4 --batch-size 10 --alpha-grid-size 21 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
 ```
 
 DML chosen experimental setting:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators dml --reps 5 --dml-k-folds 3 --dml-quantile-penalty 0.07 --dml-quantile-solver highs-ipm --alpha-min -1 --alpha-max 3 --alpha-grid-size 21 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/dml_R5_penalty007_solver_highsipm.csv --manifest results/raw/dml_R5_penalty007_solver_highsipm_manifest.json
+pixi run python scenarios/run_dml_ivqr.py --reps 5 --dml-k-folds 3 --dml-quantile-penalty 0.07 --dml-quantile-solver highs-ipm --alpha-min -1 --alpha-max 3 --alpha-grid-size 21 --base-seed 12345 --n-jobs 8 --batch-size 10 --output results/raw/dml_R5_penalty007_solver_highsipm.csv --manifest results/raw/dml_R5_penalty007_solver_highsipm_manifest.json
 ```
 
 For parallel DML batches, cap numerical-library threads to avoid process/thread
@@ -203,7 +209,7 @@ $env:NUMEXPR_NUM_THREADS = "1"
 Baseline post-selection:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators post_selection --base-seed 12345 --output results/raw/fast_post_selection.csv --manifest results/raw/fast_post_selection_manifest.json
+pixi run python scenarios/run_post_selection_ivqr.py --base-seed 12345 --output results/raw/fast_post_selection.csv --manifest results/raw/fast_post_selection_manifest.json
 ```
 
 ## Post-selection Lasso Multiplier
@@ -220,7 +226,7 @@ large values can under-select controls and introduce omitted-control bias.
 Post-selection with a 1.2 multiplier:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators post_selection --selection-lasso-multiplier 1.2 --base-seed 12345 --output results/raw/fast_post_selection_lasso120.csv --manifest results/raw/fast_post_selection_lasso120_manifest.json
+pixi run python scenarios/run_post_selection_ivqr.py --selection-lasso-multiplier 1.2 --base-seed 12345 --output results/raw/fast_post_selection_lasso120.csv --manifest results/raw/fast_post_selection_lasso120_manifest.json
 ```
 
 ## QuantReg Iteration-Warning Policy
@@ -318,13 +324,13 @@ deterministic seed derived from `base_seed`, `dgp`, `n`, `p`, `pi`, `tau`, and
 
 The design seed does not depend on estimator name, estimator order, number of
 workers, or batch size. Therefore, estimators can be run separately on different
-PCs and later merged, as long as they use the same mode, design settings, and
+PCs and later merged, as long as they use the same design settings and
 base seed. These runs generate identical data for matching design cells.
 
 Oracle only:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators oracle --base-seed 12345 --output results/raw/fast_oracle.csv --manifest results/raw/fast_oracle_manifest.json
+pixi run python scenarios/run_oracle_ivqr.py --base-seed 12345 --output results/raw/fast_oracle.csv --manifest results/raw/fast_oracle_manifest.json
 ```
 
 Oracle-only simulation CSVs intentionally contain exactly these 26 fields, in
@@ -345,13 +351,13 @@ this schema. Post-selection and DML CSV schemas are unchanged.
 DML only:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators dml --base-seed 12345 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
+pixi run python scenarios/run_dml_ivqr.py --base-seed 12345 --output results/raw/fast_dml.csv --manifest results/raw/fast_dml_manifest.json
 ```
 
-All estimators:
+Post-selection only:
 
 ```powershell
-pixi run python scenarios/run_simulation.py --mode fast --estimators oracle post_selection dml --base-seed 12345 --output results/raw/fast_all.csv --manifest results/raw/fast_all_manifest.json
+pixi run python scenarios/run_post_selection_ivqr.py --base-seed 12345 --output results/raw/fast_post_selection.csv --manifest results/raw/fast_post_selection_manifest.json
 ```
 
 ## Output Folders

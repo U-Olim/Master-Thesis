@@ -140,11 +140,15 @@ def _direct_reference_results(design: Design) -> dict[str, object]:
 def reference_context() -> dict[str, Any]:
     design = _reference_design()
     direct_results = _direct_reference_results(design)
-    runner_rows = run_simulation_design(
-        design,
-        REFERENCE_ALPHAS,
-        estimators=("oracle", "post_selection", "dml"),
-    )
+    runner_rows = [
+        row
+        for estimator in ("oracle", "post_selection", "dml")
+        for row in run_simulation_design(
+            design,
+            REFERENCE_ALPHAS,
+            estimators=(estimator,),
+        )
+    ]
     return {
         "design": design,
         "data": generate_data(design),

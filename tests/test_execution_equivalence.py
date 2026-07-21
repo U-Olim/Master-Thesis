@@ -6,16 +6,16 @@ import sys
 
 import numpy as np
 import pandas as pd
+import pytest
 
-import simulation.runner as simulation_runner
 from simulation.oracle_output import ORACLE_OUTPUT_COLUMNS
-from simulation.results import RESULT_COLUMNS, RESULT_SCHEMA_VERSION
+from simulation.results import RESULT_SCHEMA_VERSION
 from simulation.runner import (
+    MULTI_ESTIMATOR_REMOVAL_MESSAGE,
     filter_completed_designs,
     make_simulation_grid,
     run_simulation_batch,
 )
-from utils.timing import RUNTIME_COLUMNS
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -30,8 +30,6 @@ MERGE_SPEC.loader.exec_module(MERGE_MODULE)
 merge_simulation_blocks = MERGE_MODULE.merge_simulation_blocks
 
 SMALL_ALPHAS = np.array([-1.0, 1.0, 3.0])
-SORT_COLUMNS = ["dgp", "n", "p", "pi", "tau", "rep", "seed", "estimator"]
-NONDETERMINISTIC_COLUMNS = {"runtime_seconds", *RUNTIME_COLUMNS}
 
 
 def _designs(*, reps: int, rep_start: int = 0, rep_end: int | None = None):
@@ -45,19 +43,6 @@ def _designs(*, reps: int, rep_start: int = 0, rep_end: int | None = None):
         base_seed=12345,
         rep_start=rep_start,
         rep_end=rep_end,
-    )
-
-
-def _canonical_internal(frame: pd.DataFrame) -> pd.DataFrame:
-    retained = [
-        column
-        for column in frame.columns
-        if column not in NONDETERMINISTIC_COLUMNS and "runtime" not in column
-    ]
-    return (
-        frame.sort_values(SORT_COLUMNS, kind="mergesort")
-        .reset_index(drop=True)
-        .loc[:, retained]
     )
 
 
@@ -78,10 +63,11 @@ def _assert_oracle_science_equal(left: pd.DataFrame, right: pd.DataFrame) -> Non
     )
 
 
-def test_parallel_execution_matches_serial_execution() -> None:
+@pytest.mark.parametrize("estimator", ["oracle", "post_selection", "dml"])
+def test_parallel_execution_matches_serial_execution(estimator: str) -> None:
     designs = _designs(reps=2)
     kwargs = {
-        "estimators": ("oracle", "post_selection", "dml"),
+        "estimators": (estimator,),
         "quantreg_max_iter": 1000,
         "dml_k_folds": 2,
         "dml_quantile_penalty": 0.01,
@@ -89,14 +75,10 @@ def test_parallel_execution_matches_serial_execution() -> None:
     serial = run_simulation_batch(designs, SMALL_ALPHAS, n_jobs=1, **kwargs)
     parallel = run_simulation_batch(designs, SMALL_ALPHAS, n_jobs=2, **kwargs)
 
-    assert len(serial) == len(parallel) == 6
-    expected_parallel_order = parallel.sort_values(
-        SORT_COLUMNS, kind="mergesort"
-    ).reset_index(drop=True)
-    pd.testing.assert_frame_equal(parallel, expected_parallel_order, check_exact=True)
+    assert len(serial) == len(parallel) == 2
     pd.testing.assert_frame_equal(
-        _canonical_internal(serial),
-        _canonical_internal(parallel),
+        serial.reset_index(drop=True),
+        parallel.reset_index(drop=True),
         check_dtype=False,
         check_exact=True,
     )
@@ -180,33 +162,16 @@ def test_resume_matches_uninterrupted_run(tmp_path: Path) -> None:
     _assert_oracle_science_equal(resumed, clean)
 
 
-def test_full_mode_uses_union_schema_and_one_shared_dataset(monkeypatch) -> None:
-    calls = 0
-    production_generate_data = simulation_runner.generate_data
-
-    def counted_generate_data(design):
-        nonlocal calls
-        calls += 1
-        return production_generate_data(design)
-
-    monkeypatch.setattr(simulation_runner, "generate_data", counted_generate_data)
-    output = run_simulation_batch(
-        _designs(reps=1),
-        SMALL_ALPHAS,
-        estimators=("oracle", "post_selection", "dml"),
-        dml_k_folds=2,
-        n_jobs=1,
-    )
-
-    assert calls == 1
-    assert len(output) == 3
-    assert tuple(output.columns) == RESULT_COLUMNS
-    assert len(output.columns) == 150
-    assert output["estimator"].tolist() == [
-        "oracle",
-        "post_selection_ivqr",
-        "dml_ivqr",
-    ]
-    assert "bias" in output.columns
-    assert "runtime_seconds" in output.columns
-    assert tuple(output.columns) != ORACLE_OUTPUT_COLUMNS
+def test_multi_estimator_batch_cannot_write_union_schema(tmp_path: Path) -> None:
+    output = tmp_path / "mixed.csv"
+    with pytest.raises(ValueError, match="Multi-estimator full mode has been removed") as exc:
+        run_simulation_batch(
+            _designs(reps=1),
+            SMALL_ALPHAS,
+            estimators=("oracle", "post_selection", "dml"),
+            output_path=output,
+            dml_k_folds=2,
+            n_jobs=1,
+        )
+    assert str(exc.value) == MULTI_ESTIMATOR_REMOVAL_MESSAGE
+    assert not output.exists()

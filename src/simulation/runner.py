@@ -103,6 +103,10 @@ SEED_RULE_TEXT = (
     "seed = sha256(base_seed, dgp, n, p, pi, tau, rep), "
     "independent of estimator and execution order"
 )
+MULTI_ESTIMATOR_REMOVAL_MESSAGE = """Multi-estimator full mode has been removed. Run each estimator separately with:
+  scenarios/run_oracle_ivqr.py
+  scenarios/run_post_selection_ivqr.py
+  scenarios/run_dml_ivqr.py"""
 
 
 __all__ = [
@@ -110,6 +114,7 @@ __all__ = [
     "DESIGN_KEY_COLUMNS",
     "ESTIMATOR_ALIASES",
     "ESTIMATOR_OUTPUT_NAMES",
+    "MULTI_ESTIMATOR_REMOVAL_MESSAGE",
     "RESULT_COLUMNS",
     "VALID_DGPS",
     "VALID_ESTIMATORS",
@@ -201,6 +206,8 @@ def _validate_estimators(estimators: Sequence[str]) -> tuple[str, ...]:
     if invalid:
         valid = ", ".join(VALID_ESTIMATORS)
         raise ValueError(f"Unknown estimator(s): {invalid}. Valid estimators: {valid}")
+    if len(estimators) != 1:
+        raise ValueError(MULTI_ESTIMATOR_REMOVAL_MESSAGE)
     return estimators
 
 

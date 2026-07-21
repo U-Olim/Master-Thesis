@@ -41,15 +41,14 @@ from simulation.config import (  # noqa: E402
     DEFAULT_ALPHA_HAT_GRID,
     DGPS,
     FAST_OUTPUT,
-    FULL_OUTPUT,
     N_VALUES,
     PI_VALUES,
     P_VALUES,
     R_FAST,
-    R_FULL,
     TAUS,
 )
 from simulation.runner import (  # noqa: E402
+    MULTI_ESTIMATOR_REMOVAL_MESSAGE,
     SEED_RULE_TEXT,
     filter_completed_designs,
     make_simulation_grid,
@@ -59,7 +58,7 @@ from simulation.runner import (  # noqa: E402
 from simulation.results import RESULT_SCHEMA_VERSION  # noqa: E402
 
 
-VALID_MODES = ("fast", "full")
+VALID_MODES = ("fast",)
 
 
 def _git_metadata() -> dict[str, object | None]:
@@ -90,8 +89,6 @@ def _git_metadata() -> dict[str, object | None]:
 def _default_output_for_mode(mode: str) -> Path:
     if mode == "fast":
         return Path(FAST_OUTPUT)
-    if mode == "full":
-        return Path(FULL_OUTPUT)
     raise ValueError(f"Unknown mode: {mode}")
 
 
@@ -199,7 +196,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--rerun-failed", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--show-quantreg-warnings", action="store_true")
-    return parser.parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    full_mode_requested = "--mode=full" in arguments or any(
+        token == "--mode" and index + 1 < len(arguments) and arguments[index + 1] == "full"
+        for index, token in enumerate(arguments)
+    )
+    if full_mode_requested:
+        parser.error(MULTI_ESTIMATOR_REMOVAL_MESSAGE)
+    return parser.parse_args(arguments)
 
 
 def _apply_defaults(args: argparse.Namespace) -> None:
@@ -209,13 +213,15 @@ def _apply_defaults(args: argparse.Namespace) -> None:
     args.p_values = list(P_VALUES) if args.p_values is None else args.p_values
     args.pi_values = list(PI_VALUES) if args.pi_values is None else args.pi_values
     args.taus = list(TAUS) if args.taus is None else args.taus
-    args.reps = (R_FAST if args.mode == "fast" else R_FULL) if args.reps is None else args.reps
+    args.reps = R_FAST if args.reps is None else args.reps
     args.rep_end = args.reps - 1 if args.rep_end is None else args.rep_end
     args.output = _default_output_for_mode(args.mode) if args.output is None else Path(args.output)
     args.manifest = None if args.manifest is None else Path(args.manifest)
 
 
 def _validate_args(args: argparse.Namespace) -> None:
+    if len(args.estimators) != 1:
+        raise ValueError(MULTI_ESTIMATOR_REMOVAL_MESSAGE)
     if args.reps < 1:
         raise ValueError("--reps must be at least 1")
     if args.rep_start < 0:
@@ -257,11 +263,6 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--selection-lasso-multiplier must be positive")
     if args.resume and args.manifest is None:
         raise ValueError("--resume requires --manifest")
-    if args.resume and args.rerun_failed and len(args.estimators) > 1:
-        raise ValueError(
-            "--rerun-failed with multiple estimators can duplicate successful rows; "
-            "rerun one estimator at a time or choose a new output file"
-        )
 
 
 def _resume_signature(args: argparse.Namespace) -> dict[str, object]:
@@ -304,6 +305,14 @@ def _validate_resume_manifest(args: argparse.Namespace) -> None:
         raise FileNotFoundError("--resume requires an existing --manifest file")
     payload = json.loads(args.manifest.read_text(encoding="utf-8"))
     previous = payload.get("resume_signature")
+    parameters = payload.get("parameters")
+    previous_mode = previous.get("mode") if isinstance(previous, dict) else None
+    if previous_mode is None and isinstance(parameters, dict):
+        previous_mode = parameters.get("mode")
+    if previous_mode == "full":
+        raise ValueError(
+            f"Full-mode resume is no longer supported.\n{MULTI_ESTIMATOR_REMOVAL_MESSAGE}"
+        )
     if previous is not None and previous != _resume_signature(args):
         raise ValueError("Manifest resume signature does not match current run settings")
 

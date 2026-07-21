@@ -10,7 +10,6 @@ ESTIMATORS: tuple[str, ...] = ("oracle", "post_selection", "dml")
 DEFAULT_ESTIMATORS: tuple[str, ...] = ("oracle", "post_selection", "dml")
 
 R_FAST: int = 10
-R_FULL: int = 500
 
 DEFAULT_ALPHA_MIN: float = -1.0
 DEFAULT_ALPHA_MAX: float = 3.0
@@ -41,7 +40,6 @@ RHO_UV: float = 0.5
 DF_T: int = 5
 
 FAST_OUTPUT: str = "results/raw/fast_results.csv"
-FULL_OUTPUT: str = "results/raw/full_results.csv"
 
 
 __all__ = [
@@ -70,12 +68,10 @@ __all__ = [
     "DGPS",
     "ESTIMATORS",
     "FAST_OUTPUT",
-    "FULL_OUTPUT",
     "N_VALUES",
     "PI_VALUES",
     "P_VALUES",
     "R_FAST",
-    "R_FULL",
     "RHO_UV",
     "RHO_X",
     "TAUS",

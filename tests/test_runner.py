@@ -135,13 +135,19 @@ def test_git_metadata_unavailable_is_nonfatal(monkeypatch) -> None:
 
 
 def _signature(*extra_args: str) -> dict[str, object]:
-    args = RUN_SIMULATION._parse_args(["--mode", "fast", *extra_args])
+    estimator_args = () if "--estimators" in extra_args else ("--estimators", "oracle")
+    args = RUN_SIMULATION._parse_args(
+        ["--mode", "fast", *estimator_args, *extra_args]
+    )
     RUN_SIMULATION._apply_defaults(args)
     return RUN_SIMULATION._resume_signature(args)
 
 
 def _validated_args(*extra_args: str):
-    args = RUN_SIMULATION._parse_args(["--mode", "fast", *extra_args])
+    estimator_args = () if "--estimators" in extra_args else ("--estimators", "oracle")
+    args = RUN_SIMULATION._parse_args(
+        ["--mode", "fast", *estimator_args, *extra_args]
+    )
     RUN_SIMULATION._apply_defaults(args)
     RUN_SIMULATION._validate_args(args)
     return args
@@ -177,7 +183,8 @@ def _cell_str(df: pd.DataFrame, column: str, row: int = 0) -> str:
 def test_help_works(tmp_path: Path) -> None:
     result = _run_cli(tmp_path, "--help")
     assert result.returncode == 0
-    assert "--mode {fast,full}" in result.stdout
+    assert "--mode {fast}" in result.stdout
+    assert "full" not in result.stdout
 
 
 def test_default_estimators_and_aliases() -> None:
@@ -361,8 +368,8 @@ def test_cli_rejects_invalid_replication_blocks(rep_start: int, rep_end: int) ->
         )
 
 
-def test_cli_rejects_multi_estimator_rerun_failed_resume(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="can duplicate successful rows"):
+def test_cli_rejects_multiple_estimators_before_execution(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="Multi-estimator full mode has been removed") as exc:
         _validated_args(
             "--resume",
             "--rerun-failed",
@@ -372,6 +379,12 @@ def test_cli_rejects_multi_estimator_rerun_failed_resume(tmp_path: Path) -> None
             "oracle",
             "dml",
         )
+    for script in (
+        "scenarios/run_oracle_ivqr.py",
+        "scenarios/run_post_selection_ivqr.py",
+        "scenarios/run_dml_ivqr.py",
+    ):
+        assert script in str(exc.value)
 
 
 def test_resume_manifest_mismatch_is_rejected(tmp_path: Path) -> None:
@@ -393,11 +406,27 @@ def test_resume_manifest_mismatch_is_rejected(tmp_path: Path) -> None:
         RUN_SIMULATION._validate_resume_manifest(changed_args)
 
 
+@pytest.mark.parametrize("legacy_key", ["resume_signature", "parameters"])
+def test_old_full_mode_manifest_is_rejected_with_migration_message(
+    tmp_path: Path, legacy_key: str,
+) -> None:
+    manifest = tmp_path / "full_manifest.json"
+    args = _validated_args("--resume", "--manifest", str(manifest))
+    previous = RUN_SIMULATION._resume_signature(args)
+    previous["mode"] = "full"
+    manifest.write_text(json.dumps({legacy_key: previous}), encoding="utf-8")
+    with pytest.raises(ValueError, match="Full-mode resume is no longer supported") as exc:
+        RUN_SIMULATION._validate_resume_manifest(args)
+    assert "scenarios/run_oracle_ivqr.py" in str(exc.value)
+    assert "scenarios/run_post_selection_ivqr.py" in str(exc.value)
+    assert "scenarios/run_dml_ivqr.py" in str(exc.value)
+
+
 def test_resume_signature_seed_and_execution_invariance() -> None:
     base = _signature("--n-jobs", "1", "--batch-size", "1")
     changed_execution = _signature("--n-jobs", "4", "--batch-size", "10")
     changed_seed = _signature("--base-seed", "54321")
-    changed_estimators = _signature("--estimators", "oracle")
+    changed_estimators = _signature("--estimators", "dml")
     changed_selection_lasso = _signature("--selection-lasso-multiplier", "1.2")
     assert base == changed_execution
     assert base != changed_seed
@@ -456,17 +485,24 @@ def test_seed_uses_global_replication_index_inside_block() -> None:
     assert single_rep_block[0].seed == full_rep_5.seed
 
 
-def test_dry_run_uses_default_estimators(tmp_path: Path) -> None:
+def test_generic_dry_run_requires_exactly_one_estimator(tmp_path: Path) -> None:
     result = _run_cli(tmp_path, "--mode", "fast", "--dry-run")
-    assert result.returncode == 0
-    assert "Replications per design: 10" in result.stdout
-    assert "Replication block: 0 to 9" in result.stdout
-    assert f"Base seed: {DEFAULT_BASE_SEED}" in result.stdout
-    assert "Seed rule: deterministic by design cell, independent of estimator/order" in result.stdout
-    assert "First design seed:" in result.stdout
-    assert "Estimators: oracle, post_selection, dml" in result.stdout
-    assert "Post-selection Lasso multiplier: 1.0" in result.stdout
-    assert "Expected design rows:" in result.stdout
+    assert result.returncode != 0
+    assert "Multi-estimator full mode has been removed" in result.stderr
+    assert "scenarios/run_oracle_ivqr.py" in result.stderr
+    assert "scenarios/run_post_selection_ivqr.py" in result.stderr
+    assert "scenarios/run_dml_ivqr.py" in result.stderr
+
+
+def test_generic_full_mode_is_rejected_with_migration_message(tmp_path: Path) -> None:
+    result = _run_cli(
+        tmp_path, "--mode", "full", "--estimators", "oracle", "--dry-run"
+    )
+    assert result.returncode != 0
+    assert "Multi-estimator full mode has been removed" in result.stderr
+    assert "scenarios/run_oracle_ivqr.py" in result.stderr
+    assert "scenarios/run_post_selection_ivqr.py" in result.stderr
+    assert "scenarios/run_dml_ivqr.py" in result.stderr
 
 
 def test_dry_run_accepts_selection_lasso_multiplier(tmp_path: Path) -> None:
@@ -490,6 +526,8 @@ def test_selection_lasso_multiplier_rejects_nonpositive_values(tmp_path: Path) -
         tmp_path,
         "--mode",
         "fast",
+        "--estimators",
+        "post_selection",
         "--selection-lasso-multiplier",
         "0",
         "--dry-run",
@@ -601,30 +639,6 @@ def test_tiny_oracle_run_writes_clean_common_schema(tmp_path: Path) -> None:
     written = pd.read_csv(output)
     assert tuple(written.columns) == ORACLE_OUTPUT_COLUMNS
     assert not any("runtime" in column for column in written.columns)
-
-
-@pytest.mark.slow
-def test_full_mode_oracle_run_writes_exact_output_schema(tmp_path: Path) -> None:
-    output = tmp_path / "raw" / "full_mode_oracle.csv"
-    result = _run_cli(
-        tmp_path,
-        "--mode", "full",
-        "--estimators", "oracle",
-        "--reps", "1",
-        "--dgps", "dgp1",
-        "--n-values", "40",
-        "--p-values", "3",
-        "--pi-values", "1.0",
-        "--taus", "0.5",
-        "--max-designs", "1",
-        "--n-jobs", "1",
-        "--alpha-grid-size", "3",
-        "--output", str(output),
-    )
-    assert result.returncode == 0, result.stderr
-    written = pd.read_csv(output)
-    assert tuple(written.columns) == ORACLE_OUTPUT_COLUMNS
-    assert len(written.columns) == 26
 
 
 @pytest.mark.slow

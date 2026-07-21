@@ -17,7 +17,12 @@ if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
 from ivqr.confidence_regions import parse_cr_components, validate_cr_geometry  # noqa: E402
-from simulation.runner import make_simulation_grid, run_simulation_batch  # noqa: E402
+from simulation.oracle_output import clean_oracle_results_frame  # noqa: E402
+from simulation.post_selection_output import (  # noqa: E402
+    clean_post_selection_results_frame,
+)
+from simulation.results import RESULT_COLUMNS  # noqa: E402
+from simulation.runner import make_simulation_grid, run_simulation_design  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
@@ -93,24 +98,37 @@ def main() -> None:
         reps=args.reps,
         base_seed=12345,
     )
-    raw_path = args.output_dir / "preflight_rows.csv"
-    frame = run_simulation_batch(
-        designs,
-        np.linspace(-1.0, 3.0, 21),
-        estimators=("oracle", "post_selection"),
-        output_path=raw_path,
-        n_jobs=1,
-        iteration_warning_policy="use_if_valid",
-        hard_failure_policy="unresolved",
-        grid_strategy="adaptive",
-        adaptive_midpoint_probe=True,
-        refinement_tolerance=0.025,
-        max_refinement_depth=10,
-        max_alpha_evaluations=201,
-        alpha_hat_grid="initial",
-    )
-    _validate_components(frame)
-    summary = _summarize(frame)
+    alphas = np.linspace(-1.0, 3.0, 21)
+    internal_frames: list[pd.DataFrame] = []
+    output_paths: dict[str, str] = {}
+    for estimator, cleaner in (
+        ("oracle", clean_oracle_results_frame),
+        ("post_selection", clean_post_selection_results_frame),
+    ):
+        rows = [
+            row
+            for design in designs
+            for row in run_simulation_design(
+                design,
+                alphas,
+                estimators=(estimator,),
+                iteration_warning_policy="use_if_valid",
+                hard_failure_policy="unresolved",
+                grid_strategy="adaptive",
+                adaptive_midpoint_probe=True,
+                refinement_tolerance=0.025,
+                max_refinement_depth=10,
+                max_alpha_evaluations=201,
+                alpha_hat_grid="initial",
+            )
+        ]
+        internal = pd.DataFrame(rows, columns=RESULT_COLUMNS)
+        _validate_components(internal)
+        internal_frames.append(internal)
+        output_path = args.output_dir / f"{estimator}_rows.csv"
+        cleaner(internal).to_csv(output_path, index=False)
+        output_paths[estimator] = output_path.name
+    summary = _summarize(pd.concat(internal_frames, ignore_index=True))
     summary.to_csv(args.output_dir / "preflight_summary.csv", index=False)
     (args.output_dir / "preflight_config.json").write_text(
         json.dumps(
@@ -122,6 +140,7 @@ def main() -> None:
                 "tau": [0.25, 0.5, 0.75],
                 "reps": args.reps,
                 "estimators": ["oracle", "post_selection"],
+                "estimator_outputs": output_paths,
                 "n_jobs": 1,
             },
             indent=2,
