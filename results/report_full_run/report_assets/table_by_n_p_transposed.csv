@@ -1,4 +1,4 @@
-Design and measure,DML-style IVQR,Oracle IVQR,Mean-Lasso Post-selection IVQR
+Design and measure,DML-style IVQR,Oracle IVQR,Post-selection IVQR
 "n=500, p=200: Coverage",94.72%,94.17%,92.46%
 "n=500, p=200: Bias",0.022,-0.004,-0.049
 "n=500, p=200: RMSE",1.034,0.897,0.921

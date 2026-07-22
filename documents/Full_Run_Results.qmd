@@ -10,7 +10,7 @@ format:
     fontsize: 10.5pt
 ---
 
-# Overall Results
+# Results
 
 Table~\ref{tbl-overall-performance} compares the main finite-sample criteria with
 estimators shown across columns.
@@ -23,18 +23,23 @@ estimators shown across columns.
 
 1. **Oracle IVQR** knows the true active support and isolates the cost of nuisance
    estimation and selection, but is infeasible outside simulation.
-2. **Mean-Lasso Post-selection IVQR** selects controls from the data and then
-   applies IVQR, providing a repository-specific feasible sparse comparison.
+2. **Post-selection IVQR** first selects controls using the union of variables
+   retained by mean-Lasso models for the outcome and endogenous treatment, and
+   then applies IVQR using the selected controls. The procedure does not
+   automatically account for model-selection uncertainty. The term
+   **Post-selection IVQR** refers specifically to this repository implementation
+   and should not be interpreted as a general post-selection-valid inference
+   procedure.
 3. **DML-style IVQR** uses cross-fitted nuisance estimation and residualized scores to
    reduce first-order sensitivity to nuisance-learning error.
 
-## Overall-results discussion
+## Discussion
 
 {{< include ../results/report_full_run/report_assets/overall_findings.md >}}
 
 The ranking changes with the criterion. Oracle performs best for point accuracy;
 the DML-style procedure performs closest to nominal average coverage in these
-simulations; Mean-Lasso Post-selection IVQR is slightly more compact than Oracle
+simulations; Post-selection IVQR is slightly more compact than Oracle
 but inferentially less reliable.
 
 # Monte Carlo Design
@@ -150,8 +155,8 @@ falls on a boundary. It is a point-estimation diagnostic, not a coverage measure
 
 ![Boundary-estimate rate by estimator. Rates are based on the validated overall summary and are shown on a 0--100% axis.](../results/report_full_run/report_assets/figure_boundary_estimates.pdf){#fig-boundary-estimates width=94%}
 
-The selected-control variable is available for Mean-Lasso Post-selection IVQR.
+The selected-control variable is available for Post-selection IVQR.
 @fig-selected-controls presents it only as a descriptive diagnostic;
 variation in selection size is confounded with the underlying design dimensions.
 
-![Mean-Lasso post-selection design-cell coverage versus the mean number of selected controls. Color denotes the structural quantile. The relationship is descriptive and does not identify a causal effect of selection size on coverage.](../results/report_full_run/report_assets/figure_post_selection_controls_vs_coverage.pdf){#fig-selected-controls width=94%}
+![Post-selection IVQR design-cell coverage versus the mean number of selected controls. Controls are selected by the repository's mean-Lasso union rule. Color denotes the structural quantile. The relationship is descriptive and does not identify a causal effect of selection size on coverage.](../results/report_full_run/report_assets/figure_post_selection_controls_vs_coverage.pdf){#fig-selected-controls width=94%}

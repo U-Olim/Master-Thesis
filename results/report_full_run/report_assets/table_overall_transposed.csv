@@ -1,4 +1,4 @@
-Measure,DML-style IVQR,Oracle IVQR,Mean-Lasso Post-selection IVQR
+Measure,DML-style IVQR,Oracle IVQR,Post-selection IVQR
 Coverage,94.90%,94.19%,92.42%
 Bias,0.009,-0.007,-0.057
 MAE,0.760,0.602,0.624

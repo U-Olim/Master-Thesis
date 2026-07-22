@@ -1,4 +1,4 @@
-Diagnostic,DML-style IVQR,Oracle IVQR,Mean-Lasso Post-selection IVQR
+Diagnostic,DML-style IVQR,Oracle IVQR,Post-selection IVQR
 Resolved replications,"71,957","72,000","71,998"
 Unresolved rate,0.06%,0.00%,0.00%
 Empty-region rate,NA,0.02%,0.06%

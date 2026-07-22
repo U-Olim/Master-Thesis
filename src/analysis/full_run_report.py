@@ -39,11 +39,11 @@ ESTIMATOR_ORDER = ["DML-IVQR", "Oracle IVQR", "Post-selection IVQR"]
 ESTIMATOR_DISPLAY_LABELS = {
     "DML-IVQR": "DML-style IVQR",
     "Oracle IVQR": "Oracle IVQR",
-    "Post-selection IVQR": "Mean-Lasso Post-selection IVQR",
+    "Post-selection IVQR": "Post-selection IVQR",
 }
 ESTIMATOR_LEGEND_LABELS = {
     **ESTIMATOR_DISPLAY_LABELS,
-    "Post-selection IVQR": "Mean-Lasso PS-IVQR",
+    "Post-selection IVQR": "Post-selection IVQR",
 }
 ESTIMATOR_COLORS = {
     "DML-IVQR": "#009E73",
@@ -795,7 +795,7 @@ def _design_table(validation: Mapping[str, Any]) -> pd.DataFrame:
             (
                 "Estimators",
                 "DML-style residualized IVQR; true-support Oracle IVQR; "
-                "Mean-Lasso Post-selection IVQR",
+                "Post-selection IVQR",
             ),
         ],
         columns=["Component", "Validated/configured value"],
@@ -982,10 +982,10 @@ def _narrative_assets(tables: Mapping[str, Any], output_dir: Path) -> list[Path]
 The implemented DML-style IVQR procedure attains **{format_percentage(dml['empirical_coverage'])}** coverage on
 resolved replications, compared with **{format_percentage(oracle['empirical_coverage'])}**
 for Oracle IVQR and **{format_percentage(post['empirical_coverage'])}** for
-Mean-Lasso Post-selection IVQR. The DML-style procedure's stronger calibration comes with a mean confidence-region
+Post-selection IVQR. The DML-style procedure's stronger calibration comes with a mean confidence-region
 length of {format_number(dml['mean_cr_length'])} and a
 {format_percentage(dml['full_grid_rate'])} full-grid rate. The central concern is
-Mean-Lasso Post-selection IVQR: its coverage falls to **{format_percentage(post_upper['empirical_coverage'])}**
+Post-selection IVQR: its coverage falls to **{format_percentage(post_upper['empirical_coverage'])}**
 at $\\tau=0.75$, and the worst reported cell covers only
 **{format_percentage(worst_row['empirical_coverage'], 1)}**.
 """,
@@ -993,7 +993,7 @@ at $\\tau=0.75$, and the worst reported cell covers only
 ({format_percentage(dml['empirical_coverage'])}), but also the longest mean region
 ({format_number(dml['mean_cr_length'])}). Oracle IVQR has the smallest MAE
 ({format_number(oracle['mae'])}) and RMSE ({format_number(oracle['rmse'])}), making it
-the strongest point-estimation benchmark. Mean-Lasso Post-selection IVQR produces a slightly shorter
+the strongest point-estimation benchmark. Post-selection IVQR produces a slightly shorter
 mean region than Oracle ({format_number(post['mean_cr_length'])} versus
 {format_number(oracle['mean_cr_length'])}) but covers only
 {format_percentage(post['empirical_coverage'])}. The shorter set is therefore not
@@ -1005,13 +1005,13 @@ coverage of {format_percentage(dml_dispersion['p10_coverage'])}, and
 {format_percentage(dml_dispersion['share_below_90'])} of its cells fall below 90%.
 Oracle IVQR shows mild finite-sample undercoverage in its lower tail, with a
 10th percentile of {format_percentage(oracle_dispersion['p10_coverage'])}.
-Mean-Lasso Post-selection IVQR has both frequent and severe undercoverage:
+Post-selection IVQR has both frequent and severe undercoverage:
 {format_percentage(post_dispersion['share_below_90'])} of cells fall below 90%,
 and its minimum is {format_percentage(post_dispersion['minimum_coverage'], 1)}.
 Average calibration must therefore be assessed alongside lower-tail cell performance.
 """,
         "quantile_findings.md": f"""The main instability is concentrated in the
-upper quantile. Mean-Lasso Post-selection IVQR coverage is
+upper quantile. Post-selection IVQR coverage is
 {format_percentage(post_upper['empirical_coverage'])} at $\\tau=0.75$, with bias
 {format_number(post_upper['bias'])}; its coverage is
 {format_percentage(quantile.loc[(quantile['estimator_label'].eq('Post-selection IVQR')) & np.isclose(quantile['tau'], 0.25), 'empirical_coverage'].iloc[0])}
@@ -1023,11 +1023,11 @@ quantile bias is consistent with, but does not by itself prove, a selection mech
 instrument-strength index increases. For $\\pi=0.1$, mean CR lengths are
 {format_number(weak_lengths['DML-IVQR'])} (DML-style),
 {format_number(weak_lengths['Oracle IVQR'])} (Oracle), and
-{format_number(weak_lengths['Post-selection IVQR'])} (Mean-Lasso post-selection). At $\\pi=1$,
+{format_number(weak_lengths['Post-selection IVQR'])} (Post-selection IVQR). At $\\pi=1$,
 the corresponding lengths fall to {format_number(strong_lengths['DML-IVQR'])},
 {format_number(strong_lengths['Oracle IVQR'])}, and
 {format_number(strong_lengths['Post-selection IVQR'])}. This is the expected
-informativeness response to stronger identification. Mean-Lasso post-selection undercoverage,
+informativeness response to stronger identification. Post-selection IVQR undercoverage,
 however, persists—and is most visible at $\\pi=1$—so weak identification is not its
 only plausible source.
 """,
@@ -1043,11 +1043,11 @@ approximately [{format_percentage(worst_row['coverage_mc95_lower'], 1)},
 noise from 500 replications cannot plausibly explain that gap.
 """,
         "diagnostic_findings.md": f"""The resolved denominator excludes 43 DML rows
-({format_percentage(dml['unresolved_rate'], 3)}) and two Mean-Lasso post-selection rows
+({format_percentage(dml['unresolved_rate'], 3)}) and two Post-selection IVQR rows
 ({format_percentage(post['unresolved_rate'], 3)}); Oracle has no unresolved rows.
 DML's legacy file contains no explicit CR status, component, iteration-warning,
 rank-failure, or refinement metadata. Those entries are intentionally reported as
-**NA**, not zero. Oracle and Mean-Lasso post-selection record zero rank failures and zero
+**NA**, not zero. Oracle and Post-selection IVQR record zero rank failures and zero
 refinement-limit hits in these validated summaries.
 """,
     }

@@ -160,12 +160,10 @@ def test_estimator_order_is_deterministic() -> None:
 
 def test_display_label_mapping_is_precise() -> None:
     assert display_estimator_label("DML-IVQR") == "DML-style IVQR"
+    assert display_estimator_label("Post-selection IVQR") == "Post-selection IVQR"
     assert (
-        display_estimator_label("Post-selection IVQR")
-        == "Mean-Lasso Post-selection IVQR"
-    )
-    assert display_estimator_label("Post-selection IVQR", short=True) == (
-        "Mean-Lasso PS-IVQR"
+        display_estimator_label("Post-selection IVQR", short=True)
+        == "Post-selection IVQR"
     )
 
 
@@ -201,7 +199,7 @@ def test_overall_table_places_estimators_in_columns() -> None:
         "Measure",
         "DML-style IVQR",
         "Oracle IVQR",
-        "Mean-Lasso Post-selection IVQR",
+        "Post-selection IVQR",
     ]
     assert display["Measure"].tolist() == [
         "Coverage",
@@ -311,7 +309,6 @@ def test_single_report_integrates_transposed_tables_and_figures() -> None:
         "table_by_quantile_transposed.tex",
         "table_by_strength_transposed.tex",
         "table_by_n_p_transposed.tex",
-        "table_diagnostics_transposed.tex",
         "figure_boundary_estimates.pdf",
         "figure_coverage_by_n_p.pdf",
     ):
@@ -324,5 +321,12 @@ def test_report_preserves_existing_estimator_descriptions() -> None:
     ).read_text(encoding="utf-8")
     assert "# Estimators" in report
     assert "Oracle IVQR" in report
-    assert "Mean-Lasso Post-selection IVQR" in report
+    assert "Post-selection IVQR" in report
+    assert "mean-Lasso models" in report
+    assert "union of variables" in report
+    assert "model-selection uncertainty" in report
+    assert "general post-selection-valid inference" in report
+    assert "Mean-Lasso" not in report
+    assert "PS-IVQR" not in report
+    assert "Lasso Post-selection" not in report
     assert "DML-style IVQR" in report

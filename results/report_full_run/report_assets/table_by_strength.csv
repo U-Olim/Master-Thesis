@@ -1,4 +1,4 @@
-Strength and measure,DML-style IVQR,Oracle IVQR,Mean-Lasso Post-selection IVQR
+Strength and measure,DML-style IVQR,Oracle IVQR,Post-selection IVQR
 \(\pi=0.10\): Coverage,95.41%,94.72%,93.31%
 \(\pi=0.10\): Bias,0.123,0.026,0.011
 \(\pi=0.10\): RMSE,1.315,1.281,1.290

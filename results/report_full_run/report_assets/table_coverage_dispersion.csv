@@ -1,4 +1,4 @@
-Coverage-dispersion measure,DML-style IVQR,Oracle IVQR,Mean-Lasso Post-selection IVQR
+Coverage-dispersion measure,DML-style IVQR,Oracle IVQR,Post-selection IVQR
 Number of design cells,144,144,144
 Minimum coverage,91.80%,91.00%,83.80%
 10th percentile,93.60%,92.40%,89.66%

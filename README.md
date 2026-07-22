@@ -256,15 +256,18 @@ receive the CH refinement options.
 
 ## Post-selection methodology
 
-The feasible benchmark is **mean-Lasso union selection followed by CH
-inverse-IVQR**. It fits ordinary mean LassoCV models for Y on X and D on X,
-uses the union of selected controls, retains all instruments, and then applies
-CH inversion. Canonical metadata records `selection_method="mean_lasso_union"`,
+**Post-selection IVQR** is the feasible benchmark. It fits ordinary mean-Lasso
+(`LassoCV`) models for the outcome and endogenous treatment, uses the union of
+the selected controls, retains all instruments, and then applies CH
+inverse-IVQR. Canonical metadata records `selection_method="mean_lasso_union"`,
 conditional-mean targets, `selection_quantile_specific=False`,
 `instrument_selection_method="retain_all"`, and no post-selection inference
 adjustment. It is not quantile-Lasso or alpha-specific selection, is not
-cross-fitted or orthogonal-score DML, and does not provide formally
-selection-adjusted inference.
+cross-fitted or orthogonal-score DML, and does not automatically account for
+model-selection uncertainty or provide formally selection-adjusted inference.
+The label **Post-selection IVQR** refers specifically to this repository
+implementation and is not a general claim about all post-selection IVQR
+methods or a general post-selection-valid inference procedure.
 
 `selection_random_state` remains accepted as deprecated compatibility metadata.
 The cyclic LassoCV/default-CV configuration is deterministic, so the value does

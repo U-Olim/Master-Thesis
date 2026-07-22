@@ -1,5 +1,5 @@
 The main instability is concentrated in the
-upper quantile. Mean-Lasso Post-selection IVQR coverage is
+upper quantile. Post-selection IVQR coverage is
 90.42% at $\tau=0.75$, with bias
 -0.230; its coverage is
 93.07%
