@@ -10,464 +10,148 @@ format:
     fontsize: 10.5pt
 ---
 
-# Executive Summary {.unnumbered}
+# Overall Results
 
-This report compares the finite-sample behavior of three instrumental-variable
-quantile-regression (IVQR) implementations for the thesis: a feasible
-DML-style IVQR procedure, an infeasible Oracle IVQR benchmark, and a feasible
-Mean-Lasso Post-selection IVQR procedure. All numerical evidence comes from the completed
-$R=500$ full-run outputs in `results/report_full_run/`. Historical $R=10$,
-$R=20$, and $R=100$ calibration experiments are intentionally excluded from the
-evidentiary base.
+Table~\ref{tbl-overall-performance} compares the main finite-sample criteria with
+estimators shown across columns.
 
-{{< include ../results/report_full_run/report_assets/headline_values.md >}}
+```{=latex}
+\input{../results/report_full_run/report_assets/table_overall_transposed.tex}
+```
 
-The provisional assessment is:
-
-- **DML-style IVQR -- the most defensible implemented feasible procedure.** The
-  implemented DML-style IVQR procedure is the most defensible feasible estimator
-  among the three implementations considered, subject to its limited
-  informativeness and implementation-specific nature. Its aggregate coverage is
-  closest to 95%, but its regions are widest and frequently accept the full grid.
-- **Oracle IVQR -- retain as an infeasible benchmark.** It has the best
-  point-estimation performance and useful confidence-region length, but knowing
-  the true support cannot manufacture identifying variation. Its coverage is
-  mildly below nominal overall and weaker in some cells.
-- **Mean-Lasso Post-selection IVQR -- not supported as a uniformly reliable 95%
-  procedure.** It
-  produces Oracle-like region lengths but systematically undercovers,
-  particularly at the upper quantile. It remains informative as a comparison
-  estimator, a negative result, and evidence on the cost of imperfect selection.
-
-These classifications are implementation-specific. The simulations do not
-establish general validity for DML-IVQR or generic post-selection inference.
-
-\begin{tcolorbox}[colback=blue!3,colframe=reportblue,title={Questions for discussion}]
-\begin{enumerate}
-\item Is the implemented DML-style IVQR procedure sufficiently informative for
-the thesis, given its near-nominal average coverage but frequent wide and
-full-grid confidence regions?
-\item Should Mean-Lasso Post-selection IVQR remain as a documented comparison or
-negative result, or should it be redesigned before final thesis inclusion?
-\item Should point estimation be refined beyond the initial 0.2-spaced alpha
-grid before final thesis reporting?
-\item Should the final thesis emphasize average performance or require a stronger
-design-level criterion, such as minimum or lower-tail coverage thresholds?
-\end{enumerate}
-\end{tcolorbox}
-
-\newpage
-
-# Research Objective
-
-The target is the structural quantile treatment coefficient
-$\alpha_0(\tau)$ in a nonseparable outcome model. At quantile $\tau$, the
-structural restriction can be written schematically as
-
-$$
-P\!\left\{Y \leq D\alpha_0(\tau)+g_\tau(X)\mid X,Z\right\}=\tau,
-$$
-
-where $D$ is endogenous, $Z$ is an excluded instrument, and $X$ is a
-high-dimensional vector of controls. Ordinary quantile regression conditions on
-the endogenous treatment and therefore does not generally recover the causal
-structural quantile effect. IVQR instead uses instrument exogeneity and relevance
-to identify quantile-specific causal effects [@chernozhukov-hansen-2005;
-@chernozhukov-hansen-2006].
-
-High-dimensional controls create a nuisance-estimation problem. Directly fitting
-hundreds of controls can be unstable; selecting a sparse subset can introduce
-selection bias; and flexible nuisance learning may overfit. The simulation
-therefore compares three roles:
+## Estimators
 
 1. **Oracle IVQR** knows the true active support and isolates the cost of nuisance
    estimation and selection, but is infeasible outside simulation.
 2. **Mean-Lasso Post-selection IVQR** selects controls from the data and then
    applies IVQR, providing a repository-specific feasible sparse comparison.
-   The label refers to the repository implementation and should not be
-   interpreted as a general post-selection-valid IVQR procedure.
 3. **DML-style IVQR** uses cross-fitted nuisance estimation and residualized scores to
    reduce first-order sensitivity to nuisance-learning error.
 
-Good finite-sample behavior is multidimensional. The primary inferential
-criterion is empirical coverage near the nominal 95%, but a procedure that
-always reports the entire grid can cover without being informative. Assessment
-therefore also requires low bias and RMSE, reasonably short confidence regions,
-few unresolved replications, and robustness across $\tau$, instrument strength,
-sample size, dimension, and DGP. No single scalar ranking is sufficient.
-
-# Confidence Regions and Coverage
-
-## Point estimates and set estimates
-
-A point estimate $\widehat\alpha$ selects one candidate value. A confidence set
-reports all candidate values not rejected by an inferential procedure. In a
-regular, strongly identified problem the set is often a connected interval.
-Here the test is inverted over an alpha grid, and the accepted set can be
-disconnected. **Confidence region** is therefore the default term: calling every
-set an interval would misdescribe unions of separated accepted components.
-
-The nominal 95% level is a property of the procedure under repeated sampling.
-Empirical Monte Carlo coverage is the observed fraction of simulation
-replications in which the reported region contains the known true value. For a
-group of simulation rows $\mathcal R$, the report uses
-
-$$
-\widehat{\operatorname{Cov}}
-=
-\frac{\sum_{r\in\mathcal R}
-  1\{\text{CR}_r\ \text{resolved}\}
-  1\{\alpha_{0,r}\in\text{CR}_r\}}
- {\sum_{r\in\mathcal R}1\{\text{CR}_r\ \text{resolved}\}}.
-$$
-
-Unresolved cases are reported separately. They are neither silently counted as
-covered nor silently counted as uncovered. An explicitly `empty_valid` region is
-different: it is numerically resolved, contains no accepted value, has analysis
-length zero, and is uncovered. The legacy DML schema cannot distinguish a valid
-empty region from other causes of missing geometry, so missing DML CR triplets
-remain unresolved and status-unavailable.
-
-## Monte Carlo uncertainty
-
-For $R_{\mathrm{resolved}}$ resolved replications and coverage estimate
-$\widehat p$, the Monte Carlo standard error is
-
-$$
-\operatorname{MCSE}(\widehat p)
-=\sqrt{\frac{\widehat p(1-\widehat p)}{R_{\mathrm{resolved}}}}.
-$$
-
-At the design-cell level, $R_{\mathrm{resolved}}\approx500$ and
-$\widehat p\approx0.95$, giving an MCSE of about 0.98 percentage points. A rough
-95% Monte Carlo interval is therefore about plus or minus two percentage points.
-Small deviations such as 94% versus 95% may be simulation noise in an individual
-cell; coverage near 84% is not.
-
-Aggregated Monte Carlo intervals quantify simulation uncertainty around an
-average over heterogeneous design cells. They do not establish uniform coverage
-across designs.
-
-## Nonstandard confidence-region states
-
-- A **disconnected region** contains multiple accepted blocks. It signals a
-  nonstandard objective or weak/irregular identification, not a formatting error.
-- An **empty region** rejects every candidate after a resolved evaluation. It is
-  valid numerical output and counts as noncoverage.
-- A **full-grid region** accepts every candidate in $[-1,3]$. It covers the truth
-  when the truth is on that grid, but offers little localization.
-- An **unresolved region** has a numerical ambiguity that prevents a definitive
-  covered/uncovered classification.
-
-Coverage and informativeness must be read together. Wide or full-grid regions can
-be honest consequences of weak information; narrow regions are useful only if
-their calibration is credible. Test inversion and finite-sample pivotal methods
-motivate this set-valued perspective [@chernozhukov-hansen-2008;
-@chernozhukov-hansen-jansson-2009].
-
-# Weak Instruments and Weak Identification
-
-An instrument must be **valid** (excluded from the structural disturbance in the
-relevant sense) and **relevant** (informative about endogenous treatment
-variation). Identification strength is not exhausted by the raw correlation
-between $Z$ and $D$. It depends on the conditional model, the score's local
-sensitivity to $\alpha$, nuisance adjustment, and the quantile under study.
-Consequently, an instrument can be informative for one structural quantile and
-weak for another [@jun-2008].
-
-Conventional Wald approximations expand an estimator around a well-identified
-point and divide by an estimated local slope. When that slope is weak or unstable,
-normal approximations can be poor and standard errors can conceal the problem.
-Weak-identification-robust procedures instead test each candidate $\alpha$ and
-invert the test. The resulting region may be wide, disconnected, or the entire
-grid. Such a region is not automatically a failed estimator: it can be an honest
-statement that the sample does not localize the parameter [@chernozhukov-hansen-2008].
-
-This distinction matters directly here. The DML-style procedure's near-nominal
-coverage comes with wider regions and more full-grid outcomes. Orthogonalization
-and cross-fitting can reduce sensitivity to nuisance estimation error, but they
-do not strengthen the instrument. Near-nominal coverage can therefore coexist
-with wide or full-grid confidence regions. Their width reflects the combined
-effect of identification strength, the score, and the implemented inferential
-procedure; it is not mechanically caused by DML itself. Oracle knowledge of the true support
-cannot remove weak identification because support knowledge creates no new
-instrument variation. Mean-Lasso post-selection can look precise while under-covering if
-selection error or unaccounted selection uncertainty narrows the accepted set.
-Weak instruments are therefore part of the explanation, but not a universal
-explanation for all Mean-Lasso post-selection failures.
-
-# Estimator Definitions
-
-## Oracle IVQR
-
-Oracle IVQR supplies the true union of active outcome and first-stage controls to
-the shared Chernozhukov--Hansen inverse-IVQR routine. It is infeasible in an
-empirical application because the true support is unknown. Its purpose is to
-benchmark the cost of learning nuisance structure. Oracle performance is not a
-theoretical upper bound: finite samples, grid point estimation, and weak
-identification remain even with the correct support.
-
-## Mean-Lasso Post-selection IVQR
-
-The repository implementation fits mean-Lasso models for $Y$ on $X$ and $D$ on
-$X$, takes the union of the selected controls, and applies the same inverse-IVQR
-routine. Selection is not quantile-specific, alpha-specific, cross-fitted,
-orthogonal, or formally selection-adjusted. It is therefore a heuristic sparse
-comparison specific to this repository rather than an implementation of a generic
-post-selection-valid procedure. It does not automatically account for
-model-selection uncertainty, so undercoverage is scientifically plausible.
-It is not an implementation of a uniformly valid post-selection
-theory. General post-selection results emphasize that regularization must be
-paired with orthogonalization or other protections for target inference
-[@chernozhukov-hansen-spindler-2015]. A short region after naive selection is not
-evidence that selection uncertainty has been handled.
-
-## DML-style IVQR
-
-For each candidate $\alpha$, the implementation cross-fits a penalized quantile
-regression of $Y-D\alpha$ on $X$ and residualizes the excluded instrument $Z$ on
-$X$ using Ridge regression. It evaluates the cross-fitted scalar score
-
-$$
-\psi_i(\alpha)=
-\left[\tau-1\{Y_i-D_i\alpha-\widehat q_\alpha(X_i)\leq0\}\right]
-\widetilde Z_i
-$$
-
-and inverts a weighted score statistic. Cross-fitting separates nuisance training
-from score evaluation, while residualization aims to reduce first-order
-sensitivity to nuisance error—the central DML logic [@chernozhukov-et-al-2018].
-
-The label **DML-style IVQR** is important. The code explicitly states that this is
-not the exact density-weighted procedure of @chen-huang-tien-2021. The report
-therefore interprets the results as evidence for this repository's cross-fitted,
-residualized implementation, not as a generic validation of every DML-IVQR
-estimator.
-
-# Monte Carlo Design
-
-{{< include ../results/report_full_run/report_assets/table_design.tex >}}
-
-The outcome has a binary endogenous treatment generated from a latent index. DGP1
-is a sparse Gaussian baseline; DGP2 is a denser sparse selection-stress design;
-DGP3 uses heavy-tailed, variance-normalized Student-$t_5$ structural shocks. The
-true structural effect varies with $\tau$, so bias and coverage are evaluated
-against the appropriate DGP--quantile truth rather than a single constant.
-
-All estimators use the same design-replication keys and seeds. There are
-$3\times2\times2\times4\times3=144$ cells and 500 replications per cell for each
-estimator. The reconciled panel contains 72,000 rows per estimator and 216,000 in
-total, with no duplicate design-replication keys.
-
-Pooled estimator results therefore use approximately 72,000 resolved
-replications, while a pooled estimator--quantile result uses approximately
-24,000. These large effective counts make simulation error around the pooled
-average small, but the underlying design cells remain heterogeneous. Aggregated
-Monte Carlo intervals quantify simulation uncertainty around an average over
-heterogeneous design cells. They do not establish uniform coverage across designs.
-
-# Overall Results
-
-{{< include ../results/report_full_run/report_assets/table_overall.tex >}}
+## Overall-results discussion
 
 {{< include ../results/report_full_run/report_assets/overall_findings.md >}}
 
 The ranking changes with the criterion. Oracle performs best for point accuracy;
 the DML-style procedure performs closest to nominal average coverage in these
 simulations; Mean-Lasso Post-selection IVQR is slightly more compact than Oracle
-but inferentially less reliable. Coverage must not be confused with
-precision, and precision must not be confused with validity.
+but inferentially less reliable.
 
-# Design-Level Coverage Dispersion
+# Monte Carlo Design
 
-{{< include ../results/report_full_run/report_assets/table_coverage_dispersion.tex >}}
+Table~\ref{tbl-design} records the validated design grid and the implementation
+settings used by the completed full run.
+
+```{=latex}
+\input{../results/report_full_run/report_assets/table_design.tex}
+```
+
+{{< include ../results/report_full_run/report_assets/design_summary.md >}}
+
+# Coverage Across Design Cells
+
+Aggregate coverage can conceal heterogeneous cell-level performance.
+Table~\ref{tbl-coverage-dispersion} therefore summarizes the distribution of the validated
+coverage values across design cells before the subgroup comparisons.
+
+```{=latex}
+\input{../results/report_full_run/report_assets/table_coverage_dispersion_transposed.tex}
+```
 
 {{< include ../results/report_full_run/report_assets/coverage_dispersion_findings.md >}}
 
-This table uses the resolved-cell coverage values in
-`table_05_by_design_cell.csv` directly. Overall averages can hide severe
-cell-level failures: DML-style IVQR must be assessed by both average coverage and
-lower-tail cell performance, Oracle by its mild finite-sample undercoverage, and
-Mean-Lasso Post-selection IVQR by both the frequency and severity of its
-undercoverage.
-
 # Results by Quantile
 
-![Resolved-replication coverage by structural quantile. Each estimator--quantile point pools approximately 24,000 replications over heterogeneous designs. Bars are normal 95% Monte Carlo intervals around the pooled average; they do not establish uniform coverage across design cells.](../results/report_full_run/report_assets/figure_coverage_by_quantile.pdf){#fig-coverage-quantile width=94%}
+@fig-coverage-quantile compares empirical coverage by structural quantile.
+The vertical bars show 95% Monte Carlo uncertainty around each pooled coverage
+estimate, while the dashed line marks the nominal 95% level.
 
-![Bias by structural quantile. The upper-quantile Mean-Lasso post-selection result is distinguished by a materially more negative bias.](../results/report_full_run/report_assets/figure_bias_by_quantile.pdf){#fig-bias-quantile width=94%}
+![Empirical coverage by structural quantile. Error bars are normal 95% Monte Carlo intervals around pooled resolved-replication coverage; they do not establish uniform coverage across design cells.](../results/report_full_run/report_assets/figure_coverage_by_quantile.pdf){#fig-coverage-quantile width=94%}
 
-![RMSE by structural quantile. RMSE combines variance and bias and should be read alongside coverage rather than as a substitute for it.](../results/report_full_run/report_assets/figure_rmse_by_quantile.pdf){#fig-rmse-quantile width=94%}
+@fig-bias-quantile and @fig-rmse-quantile show the corresponding point-
+estimation behavior. Bias records direction, whereas RMSE combines dispersion
+and bias and should not be interpreted as an inferential-validity measure.
+
+![Bias by structural quantile. Values are computed from the validated quantile-level summary.](../results/report_full_run/report_assets/figure_bias_by_quantile.pdf){#fig-bias-quantile width=94%}
+
+![RMSE by structural quantile. Lower RMSE indicates stronger point-estimation performance but does not guarantee calibrated confidence regions.](../results/report_full_run/report_assets/figure_rmse_by_quantile.pdf){#fig-rmse-quantile width=94%}
+
+Table~\ref{tbl-quantile} reports the underlying quantile-specific metrics with
+estimators arranged horizontally.
+
+```{=latex}
+\input{../results/report_full_run/report_assets/table_by_quantile_transposed.tex}
+```
 
 {{< include ../results/report_full_run/report_assets/quantile_findings.md >}}
 
-The aggregate error bars in @fig-coverage-quantile are narrow because each point
-pools roughly 24,000 replications. Aggregated Monte Carlo intervals quantify
-simulation uncertainty around an average over heterogeneous design cells. They do
-not establish uniform coverage across designs. The upper-quantile Mean-Lasso
-post-selection gap is far larger than that simulation uncertainty.
-
 # Results by Instrument Strength
 
-![Coverage by the instrument-strength index. The vertical scale is explicitly restricted to 80--100% to show calibration differences; the nominal 95% line remains visible.](../results/report_full_run/report_assets/figure_coverage_by_strength.pdf){#fig-coverage-strength width=94%}
+@fig-coverage-strength shows coverage across the four instrument-strength
+settings with Monte Carlo uncertainty and the nominal reference line.
 
-![Mean confidence-region length by instrument strength. Falling length with stronger instruments reflects improved localization, not automatically improved calibration.](../results/report_full_run/report_assets/figure_cr_length_by_strength.pdf){#fig-length-strength width=94%}
+![Empirical coverage by instrument-strength index. Error bars are normal 95% Monte Carlo intervals around pooled resolved-replication coverage; the coverage axis spans 0--100%.](../results/report_full_run/report_assets/figure_coverage_by_strength.pdf){#fig-coverage-strength width=94%}
 
-![Full-grid rate by instrument strength. Full-grid outcomes are most common when the instrument-strength index is smallest.](../results/report_full_run/report_assets/figure_full_grid_by_strength.pdf){#fig-full-grid-strength width=94%}
+@fig-length-strength and @fig-full-grid-strength separate localization
+from calibration: shorter regions indicate more localization, while the full-grid
+rate shows how often the reported region accepts the entire parameter grid.
+
+![Mean confidence-region length by instrument-strength index. Region length is shown in parameter units, not percentages.](../results/report_full_run/report_assets/figure_cr_length_by_strength.pdf){#fig-length-strength width=94%}
+
+![Percentage of replications with full-grid confidence regions by instrument-strength index.](../results/report_full_run/report_assets/figure_full_grid_by_strength.pdf){#fig-full-grid-strength width=94%}
+
+Table~\ref{tbl-strength} reports the validated strength-specific metrics with
+estimators as columns.
+
+```{=latex}
+\input{../results/report_full_run/report_assets/table_by_strength_transposed.tex}
+```
 
 {{< include ../results/report_full_run/report_assets/strength_findings.md >}}
 
-The Oracle and Mean-Lasso post-selection length curves are close, whereas the
-DML-style procedure is wider,
-especially for weak designs. Stronger instruments reduce full-grid rates sharply.
-Yet Mean-Lasso post-selection coverage declines as $\pi$ rises from 0.1 to 1.0. This pattern
-is consistent with selection-related bias becoming visible when confidence regions
-narrow; it is not evidence that instrument strength causes the bias.
+# Results by Sample Size and Dimension
 
-# Coverage--Length Trade-off
+Table~\ref{tbl-n-p} compares the four sample-size and control-dimension combinations.
 
-![Overall coverage versus mean confidence-region length. Vertical bars show 95% Monte Carlo uncertainty for coverage. Moving left is attractive only if coverage remains calibrated.](../results/report_full_run/report_assets/figure_coverage_length_tradeoff.pdf){#fig-tradeoff width=94%}
+```{=latex}
+\input{../results/report_full_run/report_assets/table_by_n_p_transposed.tex}
+```
 
-The trade-off in @fig-tradeoff is not a conventional efficiency frontier because
-the estimators do not all satisfy the same coverage constraint. The DML-style procedure occupies the
-high-coverage, low-informativeness position. Oracle gives the strongest balance
-of point accuracy and region length, though it is infeasible. Mean-Lasso post-selection's
-length is attractive in isolation but its coverage is inadequate.
+@fig-coverage-n-p adds Monte Carlo uncertainty to the same coverage
+comparison without introducing another performance metric.
 
-> **Decision rule:** A shorter confidence region is not preferable if it fails to
-> achieve nominal coverage.
+![Empirical coverage by sample size and control dimension. Error bars are normal 95% Monte Carlo intervals around pooled resolved-replication coverage; the coverage axis spans 0--100%.](../results/report_full_run/report_assets/figure_coverage_by_n_p.pdf){#fig-coverage-n-p width=94%}
 
-Full-grid DML-style regions should not be hidden as failures: under weak identification,
-they can be the correct statement that the candidate grid cannot be narrowed.
-They do, however, limit the estimator's substantive usefulness. The supervisor
-decision must therefore balance honest uncertainty against the thesis's need for
-informative empirical conclusions.
+# Coverage--Informativeness Trade-off
 
-# Worst-Performing Designs
+@fig-coverage-length compares coverage and mean confidence-region length at each
+estimator--quantile aggregation. Within each estimator series, the connected
+points follow the quantiles from 0.25 through 0.75; the dashed line marks nominal
+coverage.
 
-{{< include ../results/report_full_run/report_assets/table_worst_cells.tex >}}
+![Coverage versus mean confidence-region length by estimator and structural quantile. Vertical bars show normal 95% Monte Carlo intervals. Shorter regions are preferable only when calibration remains credible.](../results/report_full_run/report_assets/figure_coverage_length_tradeoff.pdf){#fig-coverage-length width=94%}
+
+# Worst-Performing Design Cells
+
+Tables~\ref{tbl-worst-cells-a} and~\ref{tbl-worst-cells-b} retain the ordinary row-oriented
+layout because every row is a distinct design cell. The two panels use identical
+row ordering to keep all requested fields readable.
+
+```{=latex}
+\input{../results/report_full_run/report_assets/table_worst_cells.tex}
+```
 
 {{< include ../results/report_full_run/report_assets/worst_findings.md >}}
 
-The worst ten cells are all Mean-Lasso post-selection cells and heavily concentrated at
-$\tau=0.75$. Several occur with $\pi=0.5$ or $1$, so the tail failures cannot be
-attributed solely to the weakest-instrument configuration. They also occur across
-DGPs and both control dimensions. This is evidence of systematic heterogeneity in
-inferential performance, not one anomalous simulation cell.
 
-# Compact Numerical Diagnostics
 
-{{< include ../results/report_full_run/report_assets/table_diagnostics.tex >}}
+@fig-boundary-estimates shows how often the initial-grid point estimate
+falls on a boundary. It is a point-estimation diagnostic, not a coverage measure.
 
-{{< include ../results/report_full_run/report_assets/diagnostic_findings.md >}}
+![Boundary-estimate rate by estimator. Rates are based on the validated overall summary and are shown on a 0--100% axis.](../results/report_full_run/report_assets/figure_boundary_estimates.pdf){#fig-boundary-estimates width=94%}
 
-Iteration warnings are common in the richer Oracle and Mean-Lasso post-selection schemas,
-but the production policy retains warning fits when their numerical output is
-otherwise usable. Rank-failure and refinement-limit rates are zero in these
-validated results. DML lacks the metadata needed to make the same statements;
-reporting zero would fabricate information.
+The selected-control variable is available for Mean-Lasso Post-selection IVQR.
+@fig-selected-controls presents it only as a descriptive diagnostic;
+variation in selection size is confounded with the underlying design dimensions.
 
-## Initial-grid point estimation
-
-The point estimate $\widehat\alpha$ is selected from the initial 21-point grid
-$[-1,3]$, whose spacing is 0.2. Adaptive midpoint probing and refinement improve
-confidence-region topology and boundary location, but the production setting
-`alpha_hat_grid="initial"` does not use those added evaluations to refine the
-point estimate. Boundary-estimate rates are therefore reported as a diagnostic.
-
-This discrete point-estimation rule can affect bias, RMSE, and boundary mass. It
-does not by itself show that inverted-region inference is invalid: point selection
-and test inversion use related but distinct features of the evaluated objective.
-Nevertheless, a refined-point robustness analysis is a sensible candidate before
-final thesis submission.
-
-# Interpretation and Supervisor Decision Questions
-
-## DML-style IVQR: most defensible implemented feasible procedure
-
-The implemented DML-style IVQR procedure is approximately nominal overall,
-remains close to 95% across quantiles, and
-has very few status-unavailable rows. Its limitation is informativeness: weak
-designs often generate long or full-grid regions. The appropriate thesis claim is
-not that DML-IVQR is uniformly precise or generally validated. The implemented
-DML-style IVQR procedure is the most defensible feasible estimator among the
-three implementations considered, subject to its limited informativeness and
-implementation-specific nature. Aggregated Monte Carlo intervals quantify
-simulation uncertainty around an average over heterogeneous design cells. They do
-not establish uniform coverage across designs.
-
-## Oracle IVQR: benchmark, not empirical procedure
-
-Oracle has the strongest point accuracy and a useful coverage--length balance. It is
-mildly below nominal overall and weaker in some upper-quantile designs, confirming
-that nuisance support is not the only finite-sample difficulty. **Provisional
-decision:** retain as the infeasible benchmark for interpreting nuisance-learning
-costs; do not present it as an available empirical estimator.
-
-## Mean-Lasso Post-selection IVQR: comparison or redesign
-
-Mean-Lasso Post-selection IVQR produces Oracle-like confidence-region lengths but systematic
-undercoverage, with a pronounced upper-quantile problem and severe worst-cell
-failures. Its current mean-Lasso union step does not implement formal
-selection-adjusted inference. **Decision implication:** do not present it as a
-uniformly reliable 95% procedure. It can remain as a comparison estimator, a
-negative result, and evidence about the cost of imperfect variable selection. If
-the thesis requires it as a positive feasible method, redesign and fresh
-validation would be necessary; this report does not authorize or perform that
-simulation work.
-
-These findings establish finite-sample performance only for the repository
-implementation and the simulated designs considered here. They do not constitute
-a general validity result for DML-IVQR.
-
-## Questions for the Supervisor
-
-\begin{tcolorbox}[colback=blue!3,colframe=reportblue,title={Decision questions}]
-\begin{enumerate}
-\item \textbf{DML informativeness.} Is the implemented DML-style IVQR procedure
-sufficiently informative for the thesis, given its near-nominal average coverage
-but frequent wide and full-grid confidence regions?
-\item \textbf{Role of Mean-Lasso post-selection.} Should Mean-Lasso
-Post-selection IVQR remain as a documented comparison or negative result, or
-should it be redesigned before final thesis inclusion?
-\item \textbf{Point-estimate grid.} Should point estimation be refined beyond the
-initial 0.2-spaced alpha grid before final thesis reporting?
-\item \textbf{Design-level criterion.} Should the final thesis emphasize average
-performance or require a stronger design-level criterion, such as minimum or
-lower-tail coverage thresholds?
-\end{enumerate}
-\end{tcolorbox}
-
-\clearpage
-\appendix
-
-# Short Reproducibility Appendix
-
-From the repository root, run the exact one-line Windows PowerShell command:
-
-```powershell
-pixi run build_full_run_report
-```
-
-The task first regenerates all assets from the reconciled summary tables and then
-renders this document. The asset module does not read raw simulation files and
-does not recompute coverage. Its manifest explicitly records the validated
-summary source. To run the stages separately:
-
-```powershell
-pixi run python -m analysis.full_run_report
-quarto render documents\Full_Run_Results.qmd --to pdf
-```
-
-Paths containing parentheses must be quoted in PowerShell, although this report
-does not require an alternate raw Oracle path.
-
-The principal data limitation is the legacy DML schema. Forty-three DML rows have
-missing CR triplets but no status field that can distinguish an empty valid region
-from numerical failure or another cause. DML also lacks components,
-disconnectedness, iteration-warning, rank-failure, and refinement-limit metadata.
-These fields remain **NA**. Oracle and Mean-Lasso post-selection have richer versioned CR
-schemas. Finally, the current summary outputs do not prove that every historical
-command-line tuning label matches the file-generation environment; the report
-therefore describes implementation behavior and validated outputs without using
-old calibration tables as final evidence.
+![Mean-Lasso post-selection design-cell coverage versus the mean number of selected controls. Color denotes the structural quantile. The relationship is descriptive and does not identify a causal effect of selection size on coverage.](../results/report_full_run/report_assets/figure_post_selection_controls_vs_coverage.pdf){#fig-selected-controls width=94%}

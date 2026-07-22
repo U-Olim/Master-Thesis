@@ -167,6 +167,12 @@ def format_number(value: object, digits: int = 3) -> str:
     return f"{float(value):.{digits}f}"
 
 
+def format_integer(value: object) -> str:
+    if pd.isna(value):
+        return "NA"
+    return f"{int(value):,}"
+
+
 def load_validated_tables(report_dir: Path = DEFAULT_REPORT_DIR) -> dict[str, pd.DataFrame]:
     """Load and cross-check the authoritative full-run summary tables."""
     source_dir = report_dir.expanduser().resolve()
@@ -316,6 +322,178 @@ def prepare_coverage_dispersion_display(dispersion: pd.DataFrame) -> pd.DataFram
     )
 
 
+def _format_display_metric(value: object, kind: str) -> str:
+    if kind == "percentage":
+        return format_percentage(value)
+    if kind == "number":
+        return format_number(value)
+    if kind == "integer":
+        return format_integer(value)
+    raise ValueError(f"Unknown display metric kind: {kind}")
+
+
+def _transposed_metric_display(
+    frame: pd.DataFrame,
+    *,
+    metrics: Sequence[tuple[str, str, str]],
+    first_column: str,
+    group_columns: Sequence[str] = (),
+    group_label: Any | None = None,
+) -> pd.DataFrame:
+    """Put estimator names in columns without altering validated metric values."""
+    ordered = order_estimators(frame)
+    if group_columns:
+        groups = (
+            ordered[list(group_columns)]
+            .drop_duplicates()
+            .sort_values(list(group_columns), kind="stable")
+            .itertuples(index=False, name=None)
+        )
+    else:
+        groups = [tuple()]
+
+    rows: list[dict[str, str]] = []
+    for group in groups:
+        subset = ordered
+        for column, value in zip(group_columns, group, strict=True):
+            subset = subset.loc[subset[column].eq(value)]
+        if set(subset["estimator_label"]) != set(ESTIMATOR_ORDER):
+            raise ReportInputError(
+                f"Comparison group {group!r} does not contain every estimator"
+            )
+        prefix = "" if group_label is None else f"{group_label(group)}: "
+        for measure, source_column, kind in metrics:
+            row = {first_column: prefix + measure}
+            for estimator in ESTIMATOR_ORDER:
+                values = subset.loc[
+                    subset["estimator_label"].eq(estimator), source_column
+                ]
+                if len(values) != 1:
+                    raise ReportInputError(
+                        f"Comparison group {group!r} does not uniquely identify "
+                        f"{estimator}"
+                    )
+                row[display_estimator_label(estimator)] = _format_display_metric(
+                    values.iloc[0], kind
+                )
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def prepare_overall_transposed_display(overall: pd.DataFrame) -> pd.DataFrame:
+    return _transposed_metric_display(
+        overall,
+        first_column="Measure",
+        metrics=[
+            ("Coverage", "empirical_coverage", "percentage"),
+            ("Bias", "bias", "number"),
+            ("MAE", "mae", "number"),
+            ("RMSE", "rmse", "number"),
+            ("Estimate SD", "estimate_sd", "number"),
+            ("Mean CR length", "mean_cr_length", "number"),
+            ("Median CR length", "median_cr_length", "number"),
+            ("Full-grid rate", "full_grid_rate", "percentage"),
+            ("Unresolved rate", "unresolved_rate", "percentage"),
+        ],
+    )
+
+
+def prepare_quantile_transposed_display(quantile: pd.DataFrame) -> pd.DataFrame:
+    return _transposed_metric_display(
+        quantile,
+        first_column="Quantile and measure",
+        group_columns=("tau",),
+        group_label=lambda group: rf"\(\tau={group[0]:.2f}\)",
+        metrics=[
+            ("Coverage", "empirical_coverage", "percentage"),
+            ("Bias", "bias", "number"),
+            ("MAE", "mae", "number"),
+            ("RMSE", "rmse", "number"),
+            ("Mean CR length", "mean_cr_length", "number"),
+            ("Full-grid rate", "full_grid_rate", "percentage"),
+            ("Unresolved rate", "unresolved_rate", "percentage"),
+        ],
+    )
+
+
+def prepare_strength_transposed_display(strength: pd.DataFrame) -> pd.DataFrame:
+    return _transposed_metric_display(
+        strength,
+        first_column="Strength and measure",
+        group_columns=("pi",),
+        group_label=lambda group: rf"\(\pi={group[0]:.2f}\)",
+        metrics=[
+            ("Coverage", "empirical_coverage", "percentage"),
+            ("Bias", "bias", "number"),
+            ("RMSE", "rmse", "number"),
+            ("Mean CR length", "mean_cr_length", "number"),
+            ("Full-grid rate", "full_grid_rate", "percentage"),
+            ("Unresolved rate", "unresolved_rate", "percentage"),
+        ],
+    )
+
+
+def prepare_n_p_transposed_display(n_p: pd.DataFrame) -> pd.DataFrame:
+    return _transposed_metric_display(
+        n_p,
+        first_column="Design and measure",
+        group_columns=("n", "p"),
+        group_label=lambda group: f"n={int(group[0])}, p={int(group[1])}",
+        metrics=[
+            ("Coverage", "empirical_coverage", "percentage"),
+            ("Bias", "bias", "number"),
+            ("RMSE", "rmse", "number"),
+            ("Mean CR length", "mean_cr_length", "number"),
+            ("Full-grid rate", "full_grid_rate", "percentage"),
+        ],
+    )
+
+
+def prepare_diagnostics_transposed_display(overall: pd.DataFrame) -> pd.DataFrame:
+    return _transposed_metric_display(
+        overall,
+        first_column="Diagnostic",
+        metrics=[
+            ("Resolved replications", "resolved_replications", "integer"),
+            ("Unresolved rate", "unresolved_rate", "percentage"),
+            ("Empty-region rate", "empty_region_rate", "percentage"),
+            ("Disconnected-region rate", "disconnected_region_rate", "percentage"),
+            ("Boundary-estimate rate", "boundary_estimate_rate", "percentage"),
+            ("Iteration-warning rate", "iteration_warning_rate", "percentage"),
+            ("Rank-failure rate", "rank_failure_rate", "percentage"),
+            ("Refinement-limit rate", "refinement_limit_rate", "percentage"),
+        ],
+    )
+
+
+def prepare_coverage_dispersion_transposed_display(
+    dispersion: pd.DataFrame,
+) -> pd.DataFrame:
+    raw_labels = {value: key for key, value in ESTIMATOR_DISPLAY_LABELS.items()}
+    source = dispersion.copy()
+    source["estimator_label"] = source["estimator_label"].map(raw_labels)
+    if source["estimator_label"].isna().any():
+        raise ReportInputError("Coverage-dispersion table has unknown estimator labels")
+    return _transposed_metric_display(
+        source,
+        first_column="Coverage-dispersion measure",
+        metrics=[
+            ("Number of design cells", "design_cells", "integer"),
+            ("Minimum coverage", "minimum_coverage", "percentage"),
+            ("10th percentile", "p10_coverage", "percentage"),
+            ("25th percentile", "p25_coverage", "percentage"),
+            ("Median", "median_coverage", "percentage"),
+            ("75th percentile", "p75_coverage", "percentage"),
+            ("90th percentile", "p90_coverage", "percentage"),
+            ("Maximum", "maximum_coverage", "percentage"),
+            ("Share below 90%", "share_below_90", "percentage"),
+            ("Share below 92.5%", "share_below_92_5", "percentage"),
+            ("Share below 95%", "share_below_95", "percentage"),
+            ("Share at or above 95%", "share_at_or_above_95", "percentage"),
+        ],
+    )
+
+
 def _latex_escape(value: object) -> str:
     text = str(value)
     replacements = {
@@ -336,14 +514,15 @@ def _tabular_tex(
     align: str,
     caption: str,
     label: str,
-    note: str,
     font_size: str = r"\small",
+    row_breaks: Sequence[int] = (),
 ) -> str:
     headers = " & ".join(_latex_escape(column) for column in frame.columns)
-    rows = [
-        " & ".join(_latex_escape(value) for value in row) + r" \\"
-        for row in frame.itertuples(index=False, name=None)
-    ]
+    rows: list[str] = []
+    for index, row in enumerate(frame.itertuples(index=False, name=None)):
+        if index in row_breaks:
+            rows.extend([r"\addlinespace[0.35em]", r"\midrule", r"\addlinespace[0.2em]"])
+        rows.append(" & ".join(_latex_escape(value) for value in row) + r" \\")
     body = "\n".join(rows)
     return f"""\\begin{{table}}[H]
 \\centering
@@ -359,11 +538,6 @@ def _tabular_tex(
 \\bottomrule
 \\end{{tabular}}%
 }}
-\\vspace{{0.4em}}
-
-\\begin{{minipage}}{{0.98\\textwidth}}
-\\footnotesize \\textit{{Note:}} {note}
-\\end{{minipage}}
 \\end{{table}}
 """
 
@@ -402,6 +576,7 @@ def _line_figure(
     ylabel: str,
     output_path: Path,
     coverage: bool = False,
+    percentage: bool = False,
 ) -> Path:
     figure, axis = plt.subplots(figsize=(6.5, 3.8))
     for label in ESTIMATOR_ORDER:
@@ -435,46 +610,112 @@ def _line_figure(
             )
     if coverage:
         axis.axhline(0.95, color="0.25", linestyle="--", linewidth=1.1)
-        axis.set_ylim(0.80, 1.00)
+        percentage = True
+    if percentage:
+        axis.set_ylim(0.00, 1.00)
         axis.yaxis.set_major_formatter(lambda value, _position: f"{100 * value:.0f}%")
     _style_axis(axis, xlabel=xlabel, ylabel=ylabel)
     axis.legend(frameon=False, fontsize=8.5, ncol=1)
     return _save_figure(figure, output_path)
 
 
-def _coverage_length_tradeoff(overall: pd.DataFrame, output_path: Path) -> Path:
+def _coverage_length_tradeoff(summary: pd.DataFrame, output_path: Path) -> Path:
     figure, axis = plt.subplots(figsize=(6.5, 3.8))
     for label in ESTIMATOR_ORDER:
-        row = overall.loc[overall["estimator_label"].eq(label)]
-        if len(row) != 1:
-            raise ReportInputError(f"Overall table does not uniquely identify {label}")
-        x_value = float(row["mean_cr_length"].iloc[0])
-        y_value = float(row["empirical_coverage"].iloc[0])
-        error = 1.96 * float(row["coverage_mcse"].iloc[0])
+        values = summary.loc[summary["estimator_label"].eq(label)].sort_values(
+            "tau"
+        )
+        if values.empty:
+            raise ReportInputError(f"Trade-off data are missing estimator {label}")
+        x_values = values["mean_cr_length"].to_numpy(dtype=float)
+        y_values = values["empirical_coverage"].to_numpy(dtype=float)
+        errors = 1.96 * values["coverage_mcse"].to_numpy(dtype=float)
         axis.errorbar(
-            [x_value],
-            [y_value],
-            yerr=[error],
+            x_values,
+            y_values,
+            yerr=errors,
             color=ESTIMATOR_COLORS[label],
             marker=ESTIMATOR_MARKERS[label],
-            markersize=7,
+            linewidth=1.4,
+            markersize=6,
             capsize=3,
-        )
-        axis.annotate(
-            display_estimator_label(label, short=True),
-            (x_value, y_value),
-            xytext=(6, 5),
-            textcoords="offset points",
-            fontsize=8.5,
+            label=display_estimator_label(label, short=True),
         )
     axis.axhline(0.95, color="0.25", linestyle="--", linewidth=1.1)
-    axis.set_ylim(0.90, 0.96)
+    axis.set_ylim(0.00, 1.00)
     axis.yaxis.set_major_formatter(lambda value, _position: f"{100 * value:.0f}%")
     _style_axis(
         axis,
         xlabel="Mean confidence-region length",
         ylabel="Resolved-replication coverage",
     )
+    axis.legend(frameon=False, fontsize=8.5)
+    return _save_figure(figure, output_path)
+
+
+def _boundary_estimate_figure(overall: pd.DataFrame, output_path: Path) -> Path:
+    ordered = order_estimators(overall)
+    figure, axis = plt.subplots(figsize=(6.5, 3.8))
+    positions = np.arange(len(ordered))
+    values = ordered["boundary_estimate_rate"].to_numpy(dtype=float)
+    colors = [ESTIMATOR_COLORS[label] for label in ordered["estimator_label"]]
+    axis.bar(positions, values, color=colors, width=0.62)
+    axis.set_xticks(
+        positions,
+        [display_estimator_label(label, short=True) for label in ordered["estimator_label"]],
+    )
+    axis.set_ylim(0.00, 1.00)
+    axis.yaxis.set_major_formatter(lambda value, _position: f"{100 * value:.0f}%")
+    _style_axis(
+        axis,
+        xlabel="Estimator",
+        ylabel="Boundary-estimate rate",
+    )
+    return _save_figure(figure, output_path)
+
+
+def _coverage_by_n_p_figure(n_p: pd.DataFrame, output_path: Path) -> Path:
+    combinations = (
+        n_p[["n", "p"]]
+        .drop_duplicates()
+        .sort_values(["n", "p"], kind="stable")
+        .reset_index(drop=True)
+    )
+    figure, axis = plt.subplots(figsize=(6.5, 3.8))
+    positions = np.arange(len(combinations))
+    for label in ESTIMATOR_ORDER:
+        values = n_p.loc[n_p["estimator_label"].eq(label)].sort_values(
+            ["n", "p"], kind="stable"
+        )
+        if len(values) != len(combinations):
+            raise ReportInputError(f"n,p figure is missing estimator {label}")
+        axis.errorbar(
+            positions,
+            values["empirical_coverage"],
+            yerr=1.96 * values["coverage_mcse"],
+            color=ESTIMATOR_COLORS[label],
+            marker=ESTIMATOR_MARKERS[label],
+            linewidth=1.7,
+            markersize=5,
+            capsize=2.5,
+            label=display_estimator_label(label, short=True),
+        )
+    axis.axhline(0.95, color="0.25", linestyle="--", linewidth=1.1)
+    axis.set_xticks(
+        positions,
+        [
+            f"n={int(row.n)}\np={int(row.p)}"
+            for row in combinations.itertuples(index=False)
+        ],
+    )
+    axis.set_ylim(0.00, 1.00)
+    axis.yaxis.set_major_formatter(lambda value, _position: f"{100 * value:.0f}%")
+    _style_axis(
+        axis,
+        xlabel="Sample size and control dimension",
+        ylabel="Resolved-replication coverage",
+    )
+    axis.legend(frameon=False, fontsize=8.5)
     return _save_figure(figure, output_path)
 
 
@@ -494,7 +735,7 @@ def _selected_controls_figure(cell: pd.DataFrame, output_path: Path) -> Path:
         edgecolors="none",
     )
     axis.axhline(0.95, color="0.25", linestyle="--", linewidth=1.1)
-    axis.set_ylim(0.80, 1.00)
+    axis.set_ylim(0.00, 1.00)
     axis.yaxis.set_major_formatter(lambda value, _position: f"{100 * value:.0f}%")
     _style_axis(
         axis,
@@ -600,10 +841,6 @@ def _worst_table_tex(display: pd.DataFrame) -> str:
         align="llrrrrrrr",
         caption="Ten lowest-coverage design cells: design and coverage",
         label="tbl-worst-cells-a",
-        note=(
-            "Cells are ranked by resolved-replication coverage. MCSE is the "
-            "Monte Carlo standard error of coverage."
-        ),
         font_size=r"\footnotesize",
     )
     panel_b = _tabular_tex(
@@ -611,10 +848,6 @@ def _worst_table_tex(display: pd.DataFrame) -> str:
         align="llrrrrrrrrr",
         caption="Ten lowest-coverage design cells: performance and diagnostics",
         label="tbl-worst-cells-b",
-        note=(
-            "Rows correspond exactly to the cells in the preceding table. "
-            "The split avoids compressing fourteen columns into one table."
-        ),
         font_size=r"\footnotesize",
     )
     return panel_a + "\n" + panel_b
@@ -731,8 +964,20 @@ def _narrative_assets(tables: Mapping[str, Any], output_dir: Path) -> list[Path]
     post_dispersion = dispersion.loc[
         ESTIMATOR_DISPLAY_LABELS["Post-selection IVQR"]
     ]
+    panel = tables["validation"]["panel"]["DML-IVQR"]
+    design_values = panel["design_values"]
+    rows_per_estimator = int(overall["replications"].iloc[0])
+    rows_overall = int(overall["replications"].sum())
 
     texts = {
+        "design_summary.md": f"""The validated design contains {len(design_values['dgp'])} DGPs,
+{len(design_values['n'])} sample sizes, {len(design_values['p'])} control dimensions,
+{len(design_values['pi'])} instrument-strength settings, and
+{len(design_values['tau'])} quantiles. Their Cartesian product gives
+{int(panel['design_cells'])} design cells with
+{int(panel['replications_per_design_min'])} replications per cell,
+{rows_per_estimator:,} replications per estimator, and {rows_overall:,} rows overall.
+""",
         "headline_values.md": f"""The completed full run contains 500 replications in each of 144 design cells.
 The implemented DML-style IVQR procedure attains **{format_percentage(dml['empirical_coverage'])}** coverage on
 resolved replications, compared with **{format_percentage(oracle['empirical_coverage'])}**
@@ -828,53 +1073,30 @@ def generate_report_assets(
         }
     )
 
-    overall_display = prepare_overall_display(tables["overall"])
-    diagnostics_display = prepare_diagnostics_display(tables["overall"])
+    overall_display = prepare_overall_transposed_display(tables["overall"])
+    diagnostics_display = prepare_diagnostics_transposed_display(tables["overall"])
     coverage_dispersion = compute_coverage_dispersion(tables["cell"])
-    coverage_dispersion_display = prepare_coverage_dispersion_display(
+    coverage_dispersion_display = prepare_coverage_dispersion_transposed_display(
         coverage_dispersion
     )
-    quantile_display = pd.DataFrame(
-        {
-            "Estimator": tables["quantile"]["estimator_label"].map(
-                display_estimator_label
-            ),
-            "tau": tables["quantile"]["tau"].map(lambda value: f"{value:g}"),
-            "Coverage": tables["quantile"]["empirical_coverage"].map(
-                format_percentage
-            ),
-            "Bias": tables["quantile"]["bias"].map(format_number),
-            "RMSE": tables["quantile"]["rmse"].map(format_number),
-            "Mean CR length": tables["quantile"]["mean_cr_length"].map(
-                format_number
-            ),
-        }
-    )
-    strength_display = pd.DataFrame(
-        {
-            "Estimator": tables["strength"]["estimator_label"].map(
-                display_estimator_label
-            ),
-            "pi": tables["strength"]["pi"].map(lambda value: f"{value:g}"),
-            "Coverage": tables["strength"]["empirical_coverage"].map(
-                format_percentage
-            ),
-            "Mean CR length": tables["strength"]["mean_cr_length"].map(
-                format_number
-            ),
-            "Full grid": tables["strength"]["full_grid_rate"].map(
-                format_percentage
-            ),
-        }
-    )
+    quantile_display = prepare_quantile_transposed_display(tables["quantile"])
+    strength_display = prepare_strength_transposed_display(tables["strength"])
+    n_p_display = prepare_n_p_transposed_display(tables["n_p"])
 
     csv_displays = {
         "table_overall.csv": overall_display,
-        "table_coverage_dispersion.csv": coverage_dispersion,
+        "table_overall_transposed.csv": overall_display,
+        "table_coverage_dispersion.csv": coverage_dispersion_display,
+        "table_coverage_dispersion_transposed.csv": coverage_dispersion_display,
         "table_by_quantile.csv": quantile_display,
+        "table_by_quantile_transposed.csv": quantile_display,
         "table_by_strength.csv": strength_display,
+        "table_by_strength_transposed.csv": strength_display,
+        "table_by_n_p.csv": n_p_display,
+        "table_by_n_p_transposed.csv": n_p_display,
         "table_worst_cells.csv": _worst_display(tables["worst"]),
         "table_diagnostics.csv": diagnostics_display,
+        "table_diagnostics_transposed.csv": diagnostics_display,
     }
     outputs: list[Path] = []
     for filename, frame in csv_displays.items():
@@ -882,81 +1104,78 @@ def generate_report_assets(
         frame.to_csv(path, index=False, lineterminator="\n")
         outputs.append(path)
 
-    tex_assets = {
-        "table_overall.tex": _tabular_tex(
+    comparison_align = (
+        r"p{0.31\textwidth}p{0.20\textwidth}"
+        r"p{0.16\textwidth}p{0.25\textwidth}"
+    )
+    overall_tex = _tabular_tex(
             overall_display,
-            align="lrrrrrrrrr",
+            align=comparison_align,
             caption="Overall finite-sample performance",
-            label="tbl-overall",
-            note=(
-                "Coverage is conditional on resolved replications. CR denotes "
-                "confidence region. Percentages use the authoritative validated summaries."
-            ),
-        ),
-        "table_coverage_dispersion.tex": _tabular_tex(
+            label="tbl-overall-performance",
+        )
+    dispersion_tex = _tabular_tex(
             coverage_dispersion_display,
-            align="lrrrrrrrrrrrr",
+            align=comparison_align,
             caption="Distribution of resolved-replication coverage across design cells",
             label="tbl-coverage-dispersion",
-            note=(
-                "Each estimator has 144 design cells. Quantiles and threshold shares "
-                "use empirical coverage already reported in the authoritative "
-                "design-cell summary; no row-level denominator is recomputed."
-            ),
-            font_size=r"\scriptsize",
-        ),
-        "table_by_quantile.tex": _tabular_tex(
+            font_size=r"\footnotesize",
+        )
+    quantile_tex = _tabular_tex(
             quantile_display,
-            align="lrrrrr",
+            align=comparison_align,
             caption="Performance by structural quantile",
             label="tbl-quantile",
-            note="Coverage excludes unresolved cases; these are reported separately.",
-        ),
-        "table_by_strength.tex": _tabular_tex(
+            font_size=r"\footnotesize",
+            row_breaks=(7, 14),
+        )
+    strength_tex = _tabular_tex(
             strength_display,
-            align="lrrrr",
+            align=comparison_align,
             caption="Coverage and informativeness by instrument-strength index",
             label="tbl-strength",
-            note="A full-grid CR accepts the entire reported parameter grid.",
-        ),
-        "table_worst_cells.tex": _worst_table_tex(_worst_display(tables["worst"])),
-        "table_diagnostics.tex": _tabular_tex(
+            font_size=r"\footnotesize",
+            row_breaks=(6, 12, 18),
+        )
+    diagnostics_tex = _tabular_tex(
             diagnostics_display,
-            align="lrrrrrrr",
+            align=comparison_align,
             caption="Numerical and confidence-region diagnostics",
             label="tbl-diagnostics",
-            note=(
-                "NA means the source schema does not provide that diagnostic. "
-                "It must not be interpreted as zero."
-            ),
-        ),
+        )
+    n_p_tex = _tabular_tex(
+            n_p_display,
+            align=comparison_align,
+            caption="Performance by sample size and control dimension",
+            label="tbl-n-p",
+            font_size=r"\footnotesize",
+            row_breaks=(5, 10, 15),
+        )
+    tex_assets = {
+        "table_overall.tex": overall_tex,
+        "table_overall_transposed.tex": overall_tex,
+        "table_coverage_dispersion.tex": dispersion_tex,
+        "table_coverage_dispersion_transposed.tex": dispersion_tex,
+        "table_by_quantile.tex": quantile_tex,
+        "table_by_quantile_transposed.tex": quantile_tex,
+        "table_by_strength.tex": strength_tex,
+        "table_by_strength_transposed.tex": strength_tex,
+        "table_worst_cells.tex": _worst_table_tex(_worst_display(tables["worst"])),
+        "table_diagnostics.tex": diagnostics_tex,
+        "table_diagnostics_transposed.tex": diagnostics_tex,
         "table_design.tex": _tabular_tex(
             _design_table(tables["validation"]),
             align=r"p{0.28\textwidth}p{0.66\textwidth}",
             caption="Validated Monte Carlo design",
             label="tbl-design",
-            note=(
-                "Configured values are cross-checked against validation.json and "
-                "the current simulation code."
-            ),
         ),
-        "table_by_n_p.tex": _tabular_tex(
-            _n_p_display(tables["n_p"]),
-            align="lrrrrrrrr",
-            caption="Performance by sample size and control dimension",
-            label="tbl-n-p",
-            note="Coverage uses resolved replications only.",
-            font_size=r"\footnotesize",
-        ),
+        "table_by_n_p.tex": n_p_tex,
+        "table_by_n_p_transposed.tex": n_p_tex,
         "table_status_detail.tex": _tabular_tex(
             _status_display(tables["diagnostics"]),
             align="llrrrrrr",
             caption="Detailed standardized confidence-region statuses",
             label="tbl-status-detail",
-            note=(
-                "DML status labels explicitly state that detailed legacy status "
-                "metadata are unavailable."
-            ),
             font_size=r"\footnotesize",
         ),
         "table_design_cells.tex": _long_design_cell_tex(tables["cell"]),
@@ -1031,11 +1250,20 @@ def generate_report_assets(
                 xlabel=r"Instrument-strength index $\pi$",
                 ylabel="Full-grid rate",
                 output_path=path,
+                percentage=True,
             ),
         ),
         (
             "figure_coverage_length_tradeoff.pdf",
-            lambda path: _coverage_length_tradeoff(tables["overall"], path),
+            lambda path: _coverage_length_tradeoff(tables["quantile"], path),
+        ),
+        (
+            "figure_boundary_estimates.pdf",
+            lambda path: _boundary_estimate_figure(tables["overall"], path),
+        ),
+        (
+            "figure_coverage_by_n_p.pdf",
+            lambda path: _coverage_by_n_p_figure(tables["n_p"], path),
         ),
         (
             "figure_post_selection_controls_vs_coverage.pdf",

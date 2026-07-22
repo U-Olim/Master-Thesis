@@ -16,7 +16,9 @@ from analysis.full_run_report import (
     format_percentage,
     generate_report_assets,
     order_estimators,
+    prepare_diagnostics_transposed_display,
     prepare_diagnostics_display,
+    prepare_overall_transposed_display,
     validate_required_columns,
 )
 
@@ -71,14 +73,18 @@ def _write_fixture(report_dir: Path) -> None:
         report_dir / "table_02_by_quantile.csv", index=False
     )
     pd.concat(
-        [overall.assign(pi=pi) for pi in (0.1, 0.5, 1.0)],
+        [overall.assign(pi=pi) for pi in (0.1, 0.25, 0.5, 1.0)],
         ignore_index=True,
     ).to_csv(
         report_dir / "table_03_by_strength.csv", index=False
     )
-    overall.assign(n=[500, 500, 500], p=[200, 200, 200]).to_csv(
-        report_dir / "table_04_by_n_p.csv", index=False
-    )
+    pd.concat(
+        [
+            overall.assign(n=n, p=p)
+            for n, p in ((500, 200), (500, 500), (1000, 200), (1000, 500))
+        ],
+        ignore_index=True,
+    ).to_csv(report_dir / "table_04_by_n_p.csv", index=False)
     cells = overall.assign(
         dgp=["dgp1", "dgp1", "dgp1"],
         n=[500, 500, 500],
@@ -178,6 +184,37 @@ def test_dml_unavailable_diagnostics_do_not_become_zero() -> None:
     assert dml["Rank failure"] == "NA"
     assert dml["Refinement limit"] == "NA"
 
+    transposed = prepare_diagnostics_transposed_display(_metric_rows())
+    dml_column = transposed["DML-style IVQR"]
+    assert dml_column.loc[transposed["Diagnostic"].eq("Empty-region rate")].item() == "NA"
+    assert (
+        dml_column.loc[
+            transposed["Diagnostic"].eq("Disconnected-region rate")
+        ].item()
+        == "NA"
+    )
+
+
+def test_overall_table_places_estimators_in_columns() -> None:
+    display = prepare_overall_transposed_display(_metric_rows())
+    assert display.columns.tolist() == [
+        "Measure",
+        "DML-style IVQR",
+        "Oracle IVQR",
+        "Mean-Lasso Post-selection IVQR",
+    ]
+    assert display["Measure"].tolist() == [
+        "Coverage",
+        "Bias",
+        "MAE",
+        "RMSE",
+        "Estimate SD",
+        "Mean CR length",
+        "Median CR length",
+        "Full-grid rate",
+        "Unresolved rate",
+    ]
+
 
 def test_small_fixture_generates_tables_and_figures_without_recomputing_coverage(
     tmp_path: Path,
@@ -191,15 +228,38 @@ def test_small_fixture_generates_tables_and_figures_without_recomputing_coverage
 
     assert output_dir / "figure_coverage_by_quantile.pdf" in outputs
     assert (output_dir / "figure_coverage_by_quantile.pdf").stat().st_size > 0
-    assert (output_dir / "table_overall.tex").is_file()
+    assert (output_dir / "figure_boundary_estimates.pdf").is_file()
+    assert (output_dir / "figure_coverage_by_n_p.pdf").is_file()
+    assert (output_dir / "table_overall_transposed.tex").is_file()
+    overall_tex = (output_dir / "table_overall_transposed.tex").read_text(
+        encoding="utf-8"
+    )
+    assert r"\textit{Note:}" not in overall_tex
+    quantile_tex = (output_dir / "table_by_quantile_transposed.tex").read_text(
+        encoding="utf-8"
+    )
+    assert quantile_tex.count(r"\addlinespace[0.35em]") == 2
+    assert quantile_tex.count(r"\midrule") == 3
+    strength_tex = (output_dir / "table_by_strength_transposed.tex").read_text(
+        encoding="utf-8"
+    )
+    assert strength_tex.count(r"\addlinespace[0.35em]") == 3
+    assert strength_tex.count(r"\midrule") == 4
+    n_p_tex = (output_dir / "table_by_n_p_transposed.tex").read_text(
+        encoding="utf-8"
+    )
+    assert n_p_tex.count(r"\addlinespace[0.35em]") == 3
+    assert n_p_tex.count(r"\midrule") == 4
     displayed = pd.read_csv(output_dir / "table_overall.csv", keep_default_na=False)
     # The authoritative 0.91 is retained even though a one-row Bernoulli
     # recomputation could only produce zero or one.
-    assert displayed.loc[0, "Coverage"] == "91.00%"
+    assert displayed.loc[0, "Measure"] == "Coverage"
+    assert displayed.loc[0, "DML-style IVQR"] == "91.00%"
     dispersion = pd.read_csv(output_dir / "table_coverage_dispersion.csv")
-    assert dispersion["estimator_label"].tolist() == list(
-        ESTIMATOR_DISPLAY_LABELS.values()
-    )
+    assert dispersion.columns.tolist() == [
+        "Coverage-dispersion measure",
+        *ESTIMATOR_DISPLAY_LABELS.values(),
+    ]
 
 
 def test_coverage_dispersion_uses_validated_cell_values_and_thresholds() -> None:
@@ -237,22 +297,32 @@ def test_coverage_dispersion_uses_validated_cell_values_and_thresholds() -> None
     assert dml["share_at_or_above_95"] == pytest.approx(0.50)
 
 
-def test_single_report_excludes_archival_material_and_front_matter() -> None:
+def test_single_report_integrates_transposed_tables_and_figures() -> None:
     repository = Path(__file__).resolve().parents[1]
     report = (repository / "documents/Full_Run_Results.qmd").read_text(
         encoding="utf-8"
     )
     assert not (repository / "documents/Full_Run_Results_Meeting.qmd").exists()
     assert not (repository / "documents/meeting-version.lua").exists()
-    assert "# Executive Summary" in report
     assert "toc: false" in report
-    assert "table_design_cells.tex" not in report
-    assert "::: {.archival-only}" not in report
-    assert "meeting-version: true" not in report
+    for asset in (
+        "table_overall_transposed.tex",
+        "table_coverage_dispersion_transposed.tex",
+        "table_by_quantile_transposed.tex",
+        "table_by_strength_transposed.tex",
+        "table_by_n_p_transposed.tex",
+        "table_diagnostics_transposed.tex",
+        "figure_boundary_estimates.pdf",
+        "figure_coverage_by_n_p.pdf",
+    ):
+        assert asset in report
 
 
-def test_report_contains_implementation_specific_dml_limitation() -> None:
+def test_report_preserves_existing_estimator_descriptions() -> None:
     report = (
         Path(__file__).resolve().parents[1] / "documents/Full_Run_Results.qmd"
     ).read_text(encoding="utf-8")
-    assert "They do not constitute\na general validity result for DML-IVQR." in report
+    assert "# Estimators" in report
+    assert "Oracle IVQR" in report
+    assert "Mean-Lasso Post-selection IVQR" in report
+    assert "DML-style IVQR" in report
