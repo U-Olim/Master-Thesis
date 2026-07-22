@@ -5,9 +5,6 @@ date: "July 2026"
 bibliography: references.bib
 reference-section-title: References
 lang: en
-meeting-version: false
-filters:
-  - meeting-version.lua
 format:
   pdf:
     pdf-engine: lualatex

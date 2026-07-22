@@ -1,4 +1,14 @@
-\newpage
+---
+title: ""
+subtitle: ""
+author: ""
+date: ""
+format:
+  pdf:
+    toc: false
+    keep-tex: false
+    fontsize: 10.5pt
+---
 
 # Executive Summary {.unnumbered}
 
@@ -86,7 +96,7 @@ therefore also requires low bias and RMSE, reasonably short confidence regions,
 few unresolved replications, and robustness across $\tau$, instrument strength,
 sample size, dimension, and DGP. No single scalar ranking is sufficient.
 
-# Confidence Intervals, Confidence Regions, and Coverage
+# Confidence Regions and Coverage
 
 ## Point estimates and set estimates
 
@@ -186,7 +196,7 @@ selection error or unaccounted selection uncertainty narrows the accepted set.
 Weak instruments are therefore part of the explanation, but not a universal
 explanation for all Mean-Lasso post-selection failures.
 
-# Estimators
+# Estimator Definitions
 
 ## Oracle IVQR
 
@@ -314,7 +324,7 @@ Yet Mean-Lasso post-selection coverage declines as $\pi$ rises from 0.1 to 1.0. 
 is consistent with selection-related bias becoming visible when confidence regions
 narrow; it is not evidence that instrument strength causes the bias.
 
-# Precision and Informativeness
+# Coverage--Length Trade-off
 
 ![Overall coverage versus mean confidence-region length. Vertical bars show 95% Monte Carlo uncertainty for coverage. Moving left is attractive only if coverage remains calibrated.](../results/report_full_run/report_assets/figure_coverage_length_tradeoff.pdf){#fig-tradeoff width=94%}
 
@@ -371,7 +381,7 @@ and test inversion use related but distinct features of the evaluated objective.
 Nevertheless, a refined-point robustness analysis is a sensible candidate before
 final thesis submission.
 
-# Interpretation and Thesis Decision
+# Interpretation and Supervisor Decision Questions
 
 ## DML-style IVQR: most defensible implemented feasible procedure
 
@@ -410,21 +420,7 @@ These findings establish finite-sample performance only for the repository
 implementation and the simulated designs considered here. They do not constitute
 a general validity result for DML-IVQR.
 
-# Conclusion
-
-Among the implemented feasible procedures, DML-style IVQR performs closest to
-nominal average coverage, but frequent wide and full-grid regions materially
-limit its informativeness. Oracle remains an infeasible point-estimation
-benchmark and exhibits mild finite-sample undercoverage. Mean-Lasso
-Mean-Lasso Post-selection IVQR shows severe, systematic design-level undercoverage and is
-best treated as a repository-specific comparison or negative result unless it is
-redesigned and evaluated in new simulations. These conclusions concern only the
-repository implementation and the simulated designs, not DML-IVQR or
-post-selection inference in general.
-
-\newpage
-
-# Questions for the Supervisor
+## Questions for the Supervisor
 
 \begin{tcolorbox}[colback=blue!3,colframe=reportblue,title={Decision questions}]
 \begin{enumerate}
@@ -445,71 +441,12 @@ lower-tail coverage thresholds?
 \clearpage
 \appendix
 
-::: {.archival-only}
-
-# Results by Sample Size and Dimension
-
-{{< include ../results/report_full_run/report_assets/table_by_n_p.tex >}}
-
-This aggregation checks whether the headline rankings are driven by a single
-$(n,p)$ configuration. It should be interpreted jointly with the complete cell
-table, because aggregation over DGP, $\pi$, and $\tau$ can conceal difficult
-subdesigns.
-
-# Confidence-Region Status Definitions
-
-| Standardized status | Meaning | Coverage treatment |
-|---|---|---|
-| `valid` | Resolved nonempty region that is not the full grid | Included |
-| `full_grid_valid` | Resolved region accepts the entire grid | Included |
-| `empty_valid` | Resolved accepted set is empty | Included as uncovered |
-| `partially_unresolved` | Some evaluations prevent definitive topology/coverage | Excluded |
-| `fully_unresolved` | No definitive numerical region | Excluded |
-| `observed_status_unavailable` | Legacy DML geometry observed, detailed status absent | Included using the documented complete-triplet proxy |
-| `missing_status_unavailable` | Legacy DML CR geometry missing and cause unknown | Excluded and reported separately |
-
-{{< include ../results/report_full_run/report_assets/table_status_detail.tex >}}
-
-# Selected-Control Diagnostic
-
-![Mean-Lasso post-selection design-cell coverage versus the mean number of selected controls. Color denotes the structural quantile. This descriptive plot does not identify a causal effect of selection size on coverage.](../results/report_full_run/report_assets/figure_post_selection_controls_vs_coverage.pdf){#fig-selection-diagnostic width=94%}
-
-Selected-control counts are genuinely available for Mean-Lasso post-selection and are shown
-only as a descriptive diagnostic. The relationship mixes DGP, sample size,
-dimension, instrument strength, and quantile. It cannot establish that selecting
-more or fewer controls causes a particular coverage outcome.
-
-# Estimator-Specific Implementation Notes
-
-- **Shared inversion.** Oracle and Mean-Lasso post-selection use a
-  Chernozhukov--Hansen-style inverse-IVQR grid routine with midpoint-assisted
-  adaptive refinement of confidence-region boundaries.
-- **Oracle support.** The active support is the exact union of nonzero outcome and
-  first-stage coefficients: five controls in DGP1/DGP3 and ten in DGP2.
-- **Mean-Lasso post-selection.** Mean-Lasso control sets from $Y\sim X$ and $D\sim X$ are
-  unioned. All excluded instruments are retained. The method is not
-  quantile-specific or formally selection-adjusted.
-- **DML-style procedure.** Candidate-specific penalized quantile nuisance models
-  and Ridge instrument residualization are cross-fitted. The score is scalar
-  because the implementation supports one excluded instrument. It is not the
-  exact published density-weighted DML-IVQR algorithm.
-- **Point versus region grid.** Point estimates use the initial grid; adaptive
-  evaluations refine the confidence region.
-
-:::
-
-# Reproducibility and Data Limitations
+# Short Reproducibility Appendix
 
 From the repository root, run the exact one-line Windows PowerShell command:
 
 ```powershell
 pixi run build_full_run_report
-```
-
-For the shorter meeting version, run:
-
-```powershell
-pixi run build_full_run_meeting_report
 ```
 
 The task first regenerates all assets from the reconciled summary tables and then
@@ -534,15 +471,3 @@ schemas. Finally, the current summary outputs do not prove that every historical
 command-line tuning label matches the file-generation environment; the report
 therefore describes implementation behavior and validated outputs without using
 old calibration tables as final evidence.
-
-::: {.archival-only}
-
-# Complete Design-Cell Results
-
-The following long table reproduces all 432 estimator--design cells from the
-validated `table_05_by_design_cell.csv`. It is included for auditability rather
-than main-text interpretation.
-
-{{< include ../results/report_full_run/report_assets/table_design_cells.tex >}}
-
-:::

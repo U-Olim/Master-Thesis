@@ -237,19 +237,18 @@ def test_coverage_dispersion_uses_validated_cell_values_and_thresholds() -> None
     assert dml["share_at_or_above_95"] == pytest.approx(0.50)
 
 
-def test_meeting_report_uses_shared_source_and_excludes_archival_cells() -> None:
+def test_single_report_excludes_archival_material_and_front_matter() -> None:
     repository = Path(__file__).resolve().parents[1]
-    meeting = (repository / "documents/Full_Run_Results_Meeting.qmd").read_text(
+    report = (repository / "documents/Full_Run_Results.qmd").read_text(
         encoding="utf-8"
     )
-    common = (repository / "documents/Full_Run_Results.qmd").read_text(
-        encoding="utf-8"
-    )
-    assert "{{< include Full_Run_Results.qmd >}}" in meeting
-    assert "meeting-version: true" in meeting
-    assert "table_design_cells.tex" in common
-    assert "::: {.archival-only}" in common
-    assert "table_design_cells.tex" not in meeting
+    assert not (repository / "documents/Full_Run_Results_Meeting.qmd").exists()
+    assert not (repository / "documents/meeting-version.lua").exists()
+    assert "# Executive Summary" in report
+    assert "toc: false" in report
+    assert "table_design_cells.tex" not in report
+    assert "::: {.archival-only}" not in report
+    assert "meeting-version: true" not in report
 
 
 def test_report_contains_implementation_specific_dml_limitation() -> None:
